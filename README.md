@@ -6,7 +6,7 @@
 
 ## 截图
 
-> 截图占位：这里后续放主菜单和游戏场景截图。
+![](https://github.com/user-attachments/assets/85be4f99-2fe7-4c32-9995-229286d6606f)
 
 ## 技术栈
 
