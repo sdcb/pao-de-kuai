@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "language": "zh-CN",
+  "description": "跑得快第一期音效资源说明。usage 用于说明每个 wav 推荐绑定的游戏事件或界面场景。",
+  "sounds": [
+    {
+      "file": "ui_button_click.wav",
+      "name": "普通按钮点击",
+      "category": "界面",
+      "priority": "P0",
+      "usage": "普通按钮、图标按钮、菜单项被点击时播放，例如开始游戏、设置、帮助、返回。",
+      "recommendedVolume": 0.55,
+      "loop": false
+    },
+    {
+      "file": "ui_confirm.wav",
+      "name": "确认操作",
+      "category": "界面",
+      "priority": "P1",
+      "usage": "确认类操作成功时播放，例如确认退出、确认重开、保存设置、开始新一局。",
+      "recommendedVolume": 0.60,
+      "loop": false
+    },
+    {
+      "file": "ui_cancel.wav",
+      "name": "取消操作",
+      "category": "界面",
+      "priority": "P1",
+      "usage": "取消、返回、关闭弹窗、放弃当前选择时播放。",
+      "recommendedVolume": 0.55,
+      "loop": false
+    },
+    {
+      "file": "ui_toast.wav",
+      "name": "提示弹出",
+      "category": "界面",
+      "priority": "P1",
+      "usage": "普通 toast 或轻提示出现时播放，例如设置已保存、已自动选中推荐牌、没有更多提示。",
+      "recommendedVolume": 0.45,
+      "loop": false
+    },
+    {
+      "file": "ui_pause.wav",
+      "name": "暂停",
+      "category": "界面",
+      "priority": "P1",
+      "usage": "打开 PauseOverlay 或游戏进入暂停状态时播放。",
+      "recommendedVolume": 0.50,
+      "loop": false
+    },
+    {
+      "file": "ui_resume.wav",
+      "name": "继续",
+      "category": "界面",
+      "priority": "P1",
+      "usage": "关闭 PauseOverlay、从暂停状态回到牌局时播放。",
+      "recommendedVolume": 0.50,
+      "loop": false
+    },
+    {
+      "file": "card_select.wav",
+      "name": "选中纸牌",
+      "category": "纸牌操作",
+      "priority": "P0",
+      "usage": "玩家点击手牌并让牌上移、进入选中状态时播放。",
+      "recommendedVolume": 0.50,
+      "loop": false
+    },
+    {
+      "file": "card_deselect.wav",
+      "name": "取消选中纸牌",
+      "category": "纸牌操作",
+      "priority": "P0",
+      "usage": "玩家再次点击已选中的手牌，或清空选择、重选手牌时播放。",
+      "recommendedVolume": 0.48,
+      "loop": false
+    },
+    {
+      "file": "card_deal.wav",
+      "name": "单张发牌",
+      "category": "纸牌操作",
+      "priority": "P0",
+      "usage": "发出单张牌、补牌、初始化手牌时的单次纸牌滑动声。连续发牌时可重复播放，但要控制间隔和音量。",
+      "recommendedVolume": 0.42,
+      "loop": false
+    },
+    {
+      "file": "card_play.wav",
+      "name": "出牌落桌",
+      "category": "纸牌操作",
+      "priority": "P0",
+      "usage": "玩家或 AI 成功出牌，牌组移动到桌面出牌区时播放。单张、对子、顺子、连对都可共用。",
+      "recommendedVolume": 0.62,
+      "loop": false
+    },
+    {
+      "file": "card_pass.wav",
+      "name": "不要",
+      "category": "纸牌操作",
+      "priority": "P0",
+      "usage": "玩家或 AI 选择不要、过牌、无法压过上家时播放。",
+      "recommendedVolume": 0.52,
+      "loop": false
+    },
+    {
+      "file": "card_hint.wav",
+      "name": "提示推荐牌",
+      "category": "规则反馈",
+      "priority": "P0",
+      "usage": "玩家点击提示按钮，系统高亮一组可出的牌时播放。",
+      "recommendedVolume": 0.50,
+      "loop": false
+    },
+    {
+      "file": "game_invalid_move.wav",
+      "name": "出牌不合法",
+      "category": "规则反馈",
+      "priority": "P0",
+      "usage": "玩家选择的牌型不合法、压不过上家、数量不匹配，或当前不能出牌时播放。建议同时显示 InvalidMoveToast 说明原因。",
+      "recommendedVolume": 0.58,
+      "loop": false
+    },
+    {
+      "file": "game_turn_prompt.wav",
+      "name": "轮到你",
+      "category": "规则反馈",
+      "priority": "P0",
+      "usage": "轮到玩家操作时播放，尤其适合玩家停顿较久、AI 连续出牌后重新轮到玩家的场景。",
+      "recommendedVolume": 0.52,
+      "loop": false
+    },
+    {
+      "file": "game_round_start.wav",
+      "name": "一局开始",
+      "category": "牌局流程",
+      "priority": "P1",
+      "usage": "从 StartScene 进入 GameScene、ResultScene 点击再来一局、洗牌发牌动画开始时播放。",
+      "recommendedVolume": 0.50,
+      "loop": false
+    },
+    {
+      "file": "game_round_end.wav",
+      "name": "一局结束",
+      "category": "牌局流程",
+      "priority": "P1",
+      "usage": "最后一手牌打出后、进入 ResultScene 前播放，用于提示本局已经结束。",
+      "recommendedVolume": 0.55,
+      "loop": false
+    },
+    {
+      "file": "event_bomb.wav",
+      "name": "炸弹",
+      "category": "高潮事件",
+      "priority": "P1",
+      "usage": "玩家或 AI 打出炸弹时播放。建议配合桌面震动、牌面高亮、AI 评论或大字提示。",
+      "recommendedVolume": 0.75,
+      "loop": false
+    },
+    {
+      "file": "event_spring.wav",
+      "name": "关圆鸡/春天",
+      "category": "高潮事件",
+      "priority": "P1",
+      "usage": "触发关圆鸡、春天、翻倍结算等特殊胜利事件时播放。",
+      "recommendedVolume": 0.70,
+      "loop": false
+    },
+    {
+      "file": "event_win.wav",
+      "name": "胜利",
+      "category": "结算",
+      "priority": "P1",
+      "usage": "玩家赢得本局、ResultScene 显示胜利结果时播放。",
+      "recommendedVolume": 0.68,
+      "loop": false
+    },
+    {
+      "file": "event_lose.wav",
+      "name": "失败",
+      "category": "结算",
+      "priority": "P1",
+      "usage": "玩家本局未获胜、ResultScene 显示失败或惜败结果时播放。",
+      "recommendedVolume": 0.58,
+      "loop": false
+    },
+    {
+      "file": "event_ai_talk.wav",
+      "name": "AI 评论气泡",
+      "category": "AI 氛围",
+      "priority": "P2",
+      "usage": "AI 玩家文字气泡出现、AI 发表短评论、夸玩家或吐槽自己手牌时播放。后续接入语音时也可作为气泡弹出的轻提示音。",
+      "recommendedVolume": 0.42,
+      "loop": false
+    }
+  ]
+}

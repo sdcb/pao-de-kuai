@@ -1,0 +1,27 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "vs2026-release",
+      "displayName": "Visual Studio 2026 x64 Release",
+      "generator": "NMake Makefiles",
+      "binaryDir": "${sourceDir}/build/vs2026-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PDK_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vs2026-release",
+      "configurePreset": "vs2026-release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "vs2026-release",
+      "configurePreset": "vs2026-release"
+    }
+  ]
+}
