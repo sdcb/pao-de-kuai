@@ -24,6 +24,7 @@ constexpr float FixedCardScale = 1.5f;
 constexpr float DealSourceCenterX = 640.0f;
 constexpr float DealSourceCenterY = 330.0f;
 constexpr float SortAnimationSpeed = 2.4f;
+constexpr float RoundResultDelaySeconds = 0.75f;
 
 std::string PlayerName(rules::PlayerId id) {
     switch (id) {
@@ -55,6 +56,7 @@ void GameScene::OnEnter() {
     }
     game_.StartNewRound(app_.Settings().playerName, mock_ ? 20260606u : std::random_device{}());
     recordedRound_ = false;
+    roundResultPending_ = false;
     todayScores_ = stats::StatStore().SummarizeDay(stats::TodayDateKey()).scores;
     playerHandBeforeSort_ = game_.Players()[0].hand;
     handsSorted_ = false;
@@ -62,6 +64,7 @@ void GameScene::OnEnter() {
     sortAnimation_ = 0.0f;
     playAnimation_ = 0.0f;
     bombAnimation_ = 0.0f;
+    roundResultDelay_ = 0.0f;
     dealSoundCount_ = 0;
     dragSelecting_ = false;
     dragMoved_ = false;
@@ -98,6 +101,7 @@ void GameScene::Update(float dt) {
     }
     const bool hadEvents = !game_.Events().empty();
     ConsumeEvents();
+    UpdateRoundResultDelay(dt);
 
     // Button enablement can query rule search, so update it only after game or
     // interaction state changes instead of doing that work every frame/mouse move.
@@ -335,7 +339,13 @@ void GameScene::DrawAiArea(graphics::RenderContext& context, rules::PlayerId pla
             target.x = Lerp(DealSourceCenterX - target.width * 0.5f, target.x, t);
             target.y = Lerp(DealSourceCenterY - target.height * 0.5f, target.y, t);
         }
-        DrawCardBack(context, app_.CardAtlas(), target);
+        // After the round ends the result overlay is intentionally delayed, so
+        // reveal the AI leftovers here to let the player inspect what was held.
+        if (game_.IsRoundOver()) {
+            DrawCard(context, app_.CardAtlas(), state.hand[static_cast<std::size_t>(i)], target);
+        } else {
+            DrawCardBack(context, app_.CardAtlas(), target);
+        }
     }
 }
 
@@ -437,6 +447,8 @@ void GameScene::ConsumeEvents() {
         case game::GameEventType::RoundEnded:
             app_.Audio().Play(audio::SoundId::RoundEnd);
             app_.Audio().Play(event.player == rules::PlayerId::Player ? audio::SoundId::Win : audio::SoundId::Lose);
+            roundResultPending_ = true;
+            roundResultDelay_ = 0.0f;
             break;
         case game::GameEventType::Talk:
             if (event.player != rules::PlayerId::Player) {
@@ -451,18 +463,36 @@ void GameScene::ConsumeEvents() {
         }
     }
     game_.ClearEvents();
+}
 
-    if (game_.IsRoundOver() && !recordedRound_) {
-        const stats::RoundRecord record = game_.LastRoundRecord();
-        if (!app_.ViewerMode()) {
-            app_.Recorder().AppendToday(record);
-        }
-        for (int i = 0; i < 3; ++i) {
-            todayScores_[i] += record.scores[i];
-        }
-        app_.PushOverlay(std::make_unique<overlays::RoundResultOverlay>(app_, record));
-        recordedRound_ = true;
+void GameScene::UpdateRoundResultDelay(float dt) {
+    if (!roundResultPending_ || recordedRound_) {
+        return;
     }
+
+    // Keep the final table visible briefly so the last played cards and revealed
+    // AI hands can be read before the modal result screen covers them.
+    roundResultDelay_ += dt;
+    if (roundResultDelay_ >= RoundResultDelaySeconds) {
+        ShowRoundResultOverlay();
+    }
+}
+
+void GameScene::ShowRoundResultOverlay() {
+    if (!game_.IsRoundOver() || recordedRound_) {
+        return;
+    }
+
+    const stats::RoundRecord record = game_.LastRoundRecord();
+    if (!app_.ViewerMode()) {
+        app_.Recorder().AppendToday(record);
+    }
+    for (int i = 0; i < 3; ++i) {
+        todayScores_[i] += record.scores[i];
+    }
+    app_.PushOverlay(std::make_unique<overlays::RoundResultOverlay>(app_, record));
+    recordedRound_ = true;
+    roundResultPending_ = false;
 }
 
 } // namespace pdk::scenes

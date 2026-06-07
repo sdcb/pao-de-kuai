@@ -194,17 +194,29 @@ bool GameState::ApplyHint() {
         return false;
     }
 
-    selectedIndices_.clear();
-    hintIndices_.clear();
+    std::set<int> recommendedIndices;
+    std::vector<int> recommendedHints;
     for (std::size_t i = 0; i < players_[0].hand.size(); ++i) {
         for (rules::Card card : choice.cards) {
             if (SameCard(players_[0].hand[i], card)) {
-                selectedIndices_.insert(static_cast<int>(i));
-                hintIndices_.push_back(static_cast<int>(i));
+                const int index = static_cast<int>(i);
+                recommendedIndices.insert(index);
+                recommendedHints.push_back(index);
             }
         }
     }
-    toast_ = "已按 AI 逻辑选中推荐牌";
+
+    // Hint click acts like a toggle for the exact recommended cards: switch to
+    // the recommendation when selection differs, clear it when already selected.
+    if (selectedIndices_ == recommendedIndices) {
+        selectedIndices_.clear();
+        hintIndices_.clear();
+        toast_ = "已取消提示选择";
+    } else {
+        selectedIndices_ = std::move(recommendedIndices);
+        hintIndices_ = std::move(recommendedHints);
+        toast_ = "已按 AI 逻辑选中推荐牌";
+    }
     AddEvent(GameEvent{GameEventType::Hint, rules::PlayerId::Player, choice.reason, choice.cards});
     return true;
 }

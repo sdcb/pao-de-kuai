@@ -36,6 +36,8 @@ private:
     void LayoutActionButtons();
     bool HitBackButton(float x, float y) const;
     void ConsumeEvents();
+    void UpdateRoundResultDelay(float dt);
+    void ShowRoundResultOverlay();
 
     app::App& app_;
     game::GameState game_;
@@ -46,6 +48,7 @@ private:
     bool dragSelecting_{false};
     bool dragMoved_{false};
     bool recordedRound_{false};
+    bool roundResultPending_{false};
     bool mock_{false};
     bool actionButtonsDirty_{true};
     bool lastInteractionReady_{false};
@@ -57,6 +60,7 @@ private:
     float sortAnimation_{0.0f};
     float playAnimation_{0.0f};
     float bombAnimation_{0.0f};
+    float roundResultDelay_{0.0f};
     rules::PlayerId lastAnimatedPlayer_{rules::PlayerId::Player};
 };
 

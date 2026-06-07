@@ -78,3 +78,30 @@ TEST_CASE("hint passes directly when player cannot beat and pass is blocked when
     REQUIRE_FALSE(canBeat.Events().empty());
     CHECK(canBeat.Events().back().type == game::GameEventType::InvalidMove);
 }
+
+TEST_CASE("hint switches to recommendation or toggles it off when already selected") {
+    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three), C(rules::Rank::Five)},
+            rules::Cards{C(rules::Rank::Six)},
+            rules::Cards{C(rules::Rank::Seven)}
+        },
+        rules::PlayerId::Player,
+        fourLead,
+        rules::PlayerId::Ai1);
+
+    state.TogglePlayerCard(0);
+    REQUIRE(state.SelectedIndices().contains(0));
+
+    REQUIRE(state.ApplyHint());
+    CHECK_FALSE(state.SelectedIndices().contains(0));
+    CHECK(state.SelectedIndices().contains(1));
+    CHECK(state.HintIndices().size() == 1);
+    CHECK(state.HintIndices()[0] == 1);
+
+    REQUIRE(state.ApplyHint());
+    CHECK(state.SelectedIndices().empty());
+    CHECK(state.HintIndices().empty());
+}
