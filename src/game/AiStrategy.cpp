@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
+#include <vector>
 
 namespace pdk::game {
 namespace {
@@ -9,6 +11,7 @@ namespace {
 struct Candidate {
     rules::Cards cards;
     rules::HandPattern pattern;
+    rules::Cards remainder;
     int score{};
 };
 
@@ -28,6 +31,230 @@ int PatternBaseScore(rules::PatternType type) {
     return 0;
 }
 
+std::map<rules::Rank, int> CountRanks(const rules::Cards& cards) {
+    std::map<rules::Rank, int> counts;
+    for (rules::Card card : cards) {
+        counts[card.rank]++;
+    }
+    return counts;
+}
+
+bool IsConsecutive(const std::vector<rules::Rank>& ranks) {
+    if (ranks.empty()) {
+        return false;
+    }
+    for (rules::Rank rank : ranks) {
+        if (rank == rules::Rank::Two) {
+            return false;
+        }
+    }
+    for (std::size_t i = 1; i < ranks.size(); ++i) {
+        if (rules::RankValue(ranks[i]) != rules::RankValue(ranks[i - 1]) + 1) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int BestConsecutiveRunScore(std::vector<rules::Rank> ranks, int minLength, int perRankScore) {
+    if (static_cast<int>(ranks.size()) < minLength) {
+        return 0;
+    }
+    int best = 0;
+    for (std::size_t start = 0; start < ranks.size(); ++start) {
+        for (std::size_t end = start; end < ranks.size(); ++end) {
+            std::vector<rules::Rank> run(ranks.begin() + static_cast<std::ptrdiff_t>(start),
+                ranks.begin() + static_cast<std::ptrdiff_t>(end + 1));
+            if (!IsConsecutive(run)) {
+                break;
+            }
+            const int length = static_cast<int>(run.size());
+            if (length >= minLength) {
+                best = std::max(best, length * perRankScore + rules::RankValue(run.back()) * 4);
+            }
+        }
+    }
+    return best;
+}
+
+std::map<rules::Rank, int> CoreUsage(const rules::Cards& cards, const rules::HandPattern& pattern) {
+    std::map<rules::Rank, int> core;
+    const auto playedCounts = CountRanks(cards);
+    switch (pattern.type) {
+    case rules::PatternType::TripleWithOne:
+    case rules::PatternType::TripleWithPair:
+        core[pattern.mainRank] = 3;
+        break;
+    case rules::PatternType::Plane: {
+        std::vector<rules::Rank> tripleRanks;
+        for (const auto& [rank, count] : playedCounts) {
+            if (rank != rules::Rank::Two && count >= 3) {
+                tripleRanks.push_back(rank);
+            }
+        }
+        bool found = false;
+        for (std::size_t start = 0; start < tripleRanks.size() && !found; ++start) {
+            for (std::size_t end = start; end < tripleRanks.size(); ++end) {
+                const int length = static_cast<int>(end - start + 1);
+                if (length > pattern.groupCount) {
+                    break;
+                }
+                std::vector<rules::Rank> run(tripleRanks.begin() + static_cast<std::ptrdiff_t>(start),
+                    tripleRanks.begin() + static_cast<std::ptrdiff_t>(end + 1));
+                if (!IsConsecutive(run)) {
+                    break;
+                }
+                if (length == pattern.groupCount && run.back() == pattern.mainRank) {
+                    for (rules::Rank rank : run) {
+                        core[rank] = 3;
+                    }
+                    found = true;
+                    break;
+                }
+            }
+        }
+        break;
+    }
+    case rules::PatternType::Invalid:
+        break;
+    case rules::PatternType::Single:
+    case rules::PatternType::Pair:
+    case rules::PatternType::Straight:
+    case rules::PatternType::ConsecutivePairs:
+    case rules::PatternType::Bomb:
+        return playedCounts;
+    }
+    return core;
+}
+
+int GroupDisruptionPenalty(
+    const std::map<rules::Rank, int>& beforeCounts,
+    const rules::Cards& played,
+    const rules::HandPattern& pattern) {
+    const auto playedCounts = CountRanks(played);
+    const auto coreUsage = CoreUsage(played, pattern);
+    int penalty = 0;
+
+    for (const auto& [rank, beforeCount] : beforeCounts) {
+        const int used = playedCounts.contains(rank) ? playedCounts.at(rank) : 0;
+        if (used == 0) {
+            continue;
+        }
+
+        const int coreUsed = coreUsage.contains(rank) ? coreUsage.at(rank) : 0;
+        const int kickerUsed = std::max(0, used - coreUsed);
+        if (kickerUsed > 0) {
+            if (beforeCount >= 4) {
+                penalty += 900;
+            } else if (beforeCount == 3) {
+                penalty += 620;
+            } else if (beforeCount == 2) {
+                penalty += 360;
+            }
+            penalty += rules::RankValue(rank) * 8;
+        }
+
+        if (beforeCount >= 4 && used > 0 && used < 4) {
+            penalty += 900;
+        } else if (beforeCount == 3 && used > 0 && used < 3) {
+            penalty += 520;
+        } else if (beforeCount == 2 && used == 1) {
+            penalty += 320;
+        }
+    }
+
+    return penalty;
+}
+
+int EvaluateRemainingHand(const rules::Cards& cards) {
+    if (cards.empty()) {
+        return 6000;
+    }
+
+    const auto counts = CountRanks(cards);
+    int score = -static_cast<int>(cards.size()) * 10;
+    int singleCount = 0;
+    std::vector<rules::Rank> straightRanks;
+    std::vector<rules::Rank> pairRanks;
+    std::vector<rules::Rank> tripleRanks;
+
+    for (const auto& [rank, count] : counts) {
+        if (count == 1) {
+            singleCount++;
+            score -= 130 - rules::RankValue(rank) * 4;
+        } else if (count == 2) {
+            score += 220 + rules::RankValue(rank) * 5;
+        } else if (count == 3) {
+            score += 430 + rules::RankValue(rank) * 7;
+        } else if (count >= 4) {
+            score += 900 + rules::RankValue(rank) * 10;
+        }
+
+        if (rank != rules::Rank::Two) {
+            straightRanks.push_back(rank);
+        }
+        if (count >= 2 && rank != rules::Rank::Two) {
+            pairRanks.push_back(rank);
+        }
+        if (count >= 3 && rank != rules::Rank::Two) {
+            tripleRanks.push_back(rank);
+        }
+    }
+
+    score -= singleCount * singleCount * 35;
+    score += BestConsecutiveRunScore(straightRanks, 5, 95);
+    score += BestConsecutiveRunScore(pairRanks, 2, 115);
+    score += BestConsecutiveRunScore(tripleRanks, 2, 190);
+    if (cards.size() <= 2) {
+        score += 320;
+    }
+    return score;
+}
+
+int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
+    const int leaves = static_cast<int>(candidate.remainder.size());
+    int score = 0;
+
+    if (context.leading && context.nextPlayerRemainingCards == 1) {
+        if (candidate.pattern.type == rules::PatternType::Single) {
+            score -= 900;
+            score += rules::RankValue(candidate.pattern.mainRank) * 55;
+        } else {
+            score += 420 + candidate.pattern.cardCount * 25;
+        }
+    }
+
+    if (context.minOpponentRemainingCards > 0 && context.minOpponentRemainingCards <= 2) {
+        score += candidate.pattern.cardCount * 35;
+    }
+
+    if (candidate.pattern.type == rules::PatternType::Bomb) {
+        const bool critical = leaves == 0 || leaves <= 2 ||
+            (context.minOpponentRemainingCards > 0 && context.minOpponentRemainingCards <= 2);
+        score += 180;
+        if (critical) {
+            score += 850;
+        } else {
+            score -= context.leading ? 250 : 500;
+        }
+        if (!context.leading && context.previous.type != rules::PatternType::Bomb && !critical) {
+            score -= 550;
+        }
+    }
+
+    return score;
+}
+
+rules::Cards RemainingAfterPlay(const rules::Cards& hand, std::uint64_t mask) {
+    rules::Cards remaining;
+    for (int i = 0; i < static_cast<int>(hand.size()); ++i) {
+        if ((mask & (1ull << i)) == 0) {
+            remaining.push_back(hand[static_cast<std::size_t>(i)]);
+        }
+    }
+    return remaining;
+}
+
 std::vector<Candidate> GenerateCandidates(const rules::Cards& hand, const AiContext& context) {
     std::vector<Candidate> candidates;
     const int n = static_cast<int>(hand.size());
@@ -35,6 +262,7 @@ std::vector<Candidate> GenerateCandidates(const rules::Cards& hand, const AiCont
         return candidates;
     }
 
+    const auto handCounts = CountRanks(hand);
     const std::uint64_t limit = 1ull << n;
     for (std::uint64_t mask = 1; mask < limit; ++mask) {
         rules::Cards cards;
@@ -52,23 +280,25 @@ std::vector<Candidate> GenerateCandidates(const rules::Cards& hand, const AiCont
             continue;
         }
 
-        const int leaves = n - static_cast<int>(cards.size());
+        rules::Cards remainder = RemainingAfterPlay(hand, mask);
+        const int leaves = static_cast<int>(remainder.size());
+        const int disruption = GroupDisruptionPenalty(handCounts, cards, validation.pattern);
         int score = PatternBaseScore(validation.pattern.type);
-        score += static_cast<int>(cards.size()) * 20;
-        score -= rules::RankValue(validation.pattern.mainRank);
+        score += static_cast<int>(cards.size()) * (context.leading ? 28 : 12);
+        score -= rules::RankValue(validation.pattern.mainRank) * (context.leading ? 2 : 10);
+        score += EvaluateRemainingHand(remainder);
+        score -= disruption * (context.leading ? 2 : 3);
         if (leaves == 0) {
-            score += 3000;
+            score += 100000;
         } else if (leaves <= 2) {
-            score += 250;
-        }
-        if (!context.leading && validation.pattern.type == rules::PatternType::Bomb &&
-            context.previous.type != rules::PatternType::Bomb && leaves > 0) {
-            score -= 550;
+            score += 450;
         }
         if (!context.leading) {
-            score -= rules::RankValue(validation.pattern.mainRank) * 2;
+            score += EvaluateRemainingHand(remainder);
         }
-        candidates.push_back(Candidate{cards, validation.pattern, score});
+        Candidate candidate{cards, validation.pattern, remainder, score};
+        candidate.score += TacticalAdjustment(candidate, context);
+        candidates.push_back(std::move(candidate));
     }
 
     return candidates;

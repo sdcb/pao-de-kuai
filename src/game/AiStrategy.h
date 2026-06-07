@@ -20,6 +20,9 @@ struct AiContext {
     bool leading{true};
     rules::HandPattern previous;
     int ownRemainingCards{0};
+    int currentPlayerIndex{0};
+    int nextPlayerRemainingCards{0};
+    int minOpponentRemainingCards{0};
     std::array<int, 3> remainingCards{0, 0, 0};
 };
 

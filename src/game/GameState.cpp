@@ -324,9 +324,18 @@ AiContext GameState::MakeAiContext(rules::PlayerId player) const {
     if (lastPattern_) {
         context.previous = *lastPattern_;
     }
-    context.ownRemainingCards = static_cast<int>(players_[Index(player)].hand.size());
+    const int currentIndex = Index(player);
+    context.ownRemainingCards = static_cast<int>(players_[currentIndex].hand.size());
+    context.currentPlayerIndex = currentIndex;
     for (int i = 0; i < 3; ++i) {
         context.remainingCards[i] = static_cast<int>(players_[i].hand.size());
+    }
+    context.nextPlayerRemainingCards = static_cast<int>(players_[Index(NextPlayer(player))].hand.size());
+    context.minOpponentRemainingCards = std::numeric_limits<int>::max();
+    for (int i = 0; i < 3; ++i) {
+        if (i != currentIndex) {
+            context.minOpponentRemainingCards = std::min(context.minOpponentRemainingCards, context.remainingCards[i]);
+        }
     }
     return context;
 }
