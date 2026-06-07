@@ -176,3 +176,90 @@ TEST_CASE("drag selection toggles off when the chosen group is already selected"
     CHECK(state.SelectedIndices().empty());
     CHECK(state.HintIndices().empty());
 }
+
+TEST_CASE("drag selection adds kickers to an existing triple core") {
+    game::GameState tripleOneState;
+    tripleOneState.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{
+                C(rules::Rank::Three),
+                C(rules::Rank::Three, rules::Suit::Hearts),
+                C(rules::Rank::Three, rules::Suit::Diamonds),
+                C(rules::Rank::Seven),
+                C(rules::Rank::Nine)
+            },
+            rules::Cards{C(rules::Rank::Ace)},
+            rules::Cards{C(rules::Rank::King)}
+        },
+        rules::PlayerId::Player,
+        std::nullopt,
+        rules::PlayerId::Ai1);
+
+    REQUIRE(tripleOneState.SelectBestPatternFromDraggedCards({0, 1, 2}));
+    REQUIRE(tripleOneState.SelectBestPatternFromDraggedCards({3}));
+    CHECK(tripleOneState.SelectedIndices().size() == 4);
+    for (int i = 0; i < 4; ++i) {
+        CHECK(tripleOneState.SelectedIndices().contains(i));
+    }
+    CHECK_FALSE(tripleOneState.SelectedIndices().contains(4));
+    CHECK(tripleOneState.PlaySelected());
+
+    game::GameState tripleTwoState;
+    tripleTwoState.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{
+                C(rules::Rank::Four),
+                C(rules::Rank::Four, rules::Suit::Hearts),
+                C(rules::Rank::Four, rules::Suit::Diamonds),
+                C(rules::Rank::Seven),
+                C(rules::Rank::Nine),
+                C(rules::Rank::Jack)
+            },
+            rules::Cards{C(rules::Rank::Ace)},
+            rules::Cards{C(rules::Rank::King)}
+        },
+        rules::PlayerId::Player,
+        std::nullopt,
+        rules::PlayerId::Ai1);
+
+    REQUIRE(tripleTwoState.SelectBestPatternFromDraggedCards({0, 1, 2}));
+    REQUIRE(tripleTwoState.SelectBestPatternFromDraggedCards({3, 4}));
+    CHECK(tripleTwoState.SelectedIndices().size() == 5);
+    for (int i = 0; i < 5; ++i) {
+        CHECK(tripleTwoState.SelectedIndices().contains(i));
+    }
+    CHECK_FALSE(tripleTwoState.SelectedIndices().contains(5));
+    CHECK(tripleTwoState.PlaySelected());
+}
+
+TEST_CASE("drag selection adds wings to an existing plane core") {
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{
+                C(rules::Rank::Three),
+                C(rules::Rank::Three, rules::Suit::Hearts),
+                C(rules::Rank::Three, rules::Suit::Diamonds),
+                C(rules::Rank::Four),
+                C(rules::Rank::Four, rules::Suit::Hearts),
+                C(rules::Rank::Four, rules::Suit::Diamonds),
+                C(rules::Rank::Seven),
+                C(rules::Rank::Nine),
+                C(rules::Rank::Jack)
+            },
+            rules::Cards{C(rules::Rank::Ace)},
+            rules::Cards{C(rules::Rank::King)}
+        },
+        rules::PlayerId::Player,
+        std::nullopt,
+        rules::PlayerId::Ai1);
+
+    REQUIRE(state.SelectBestPatternFromDraggedCards({0, 1, 2, 3, 4, 5}));
+    REQUIRE(state.SelectBestPatternFromDraggedCards({6, 7}));
+    CHECK(state.SelectedIndices().size() == 8);
+    for (int i = 0; i < 8; ++i) {
+        CHECK(state.SelectedIndices().contains(i));
+    }
+    CHECK_FALSE(state.SelectedIndices().contains(8));
+    CHECK(state.PlaySelected());
+}

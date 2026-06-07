@@ -514,6 +514,11 @@ bool GameState::SelectBestPatternFromDraggedCards(const std::vector<int>& handIn
         rules::HandPattern pattern;
         int score{};
     };
+    struct IndexedCandidate {
+        std::set<int> indices;
+        rules::HandPattern pattern;
+        int score{};
+    };
 
     const rules::Cards& hand = players_[0].hand;
     const int n = static_cast<int>(hand.size());
@@ -527,22 +532,29 @@ bool GameState::SelectBestPatternFromDraggedCards(const std::vector<int>& handIn
         return false;
     }
 
-    std::vector<Candidate> candidates;
-    const std::uint64_t limit = n >= 63 ? 0 : (1ull << n);
-    for (std::uint64_t mask = 1; mask < limit; ++mask) {
-        rules::Cards cards;
-        bool outsideDragPath = false;
-        for (int i = 0; i < n; ++i) {
-            if ((mask & (1ull << i)) != 0) {
-                if (!inDragPath[static_cast<std::size_t>(i)]) {
-                    outsideDragPath = true;
-                    break;
-                }
-                cards.push_back(hand[static_cast<std::size_t>(i)]);
-            }
+    std::vector<int> dragIndices;
+    dragIndices.reserve(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i) {
+        if (inDragPath[static_cast<std::size_t>(i)]) {
+            dragIndices.push_back(i);
         }
-        if (outsideDragPath) {
-            continue;
+    }
+
+    const std::uint64_t dragLimit = dragIndices.size() >= 63 ? 0 : (1ull << dragIndices.size());
+    auto scorePattern = [](const rules::HandPattern& pattern) {
+        return pattern.cardCount * 100000
+            + DragPatternTieBreaker(pattern.type)
+            + rules::RankValue(pattern.mainRank);
+    };
+
+    std::vector<Candidate> candidates;
+    for (std::uint64_t mask = 1; mask < dragLimit; ++mask) {
+        rules::Cards cards;
+        cards.reserve(dragIndices.size());
+        for (std::size_t i = 0; i < dragIndices.size(); ++i) {
+            if ((mask & (1ull << i)) != 0) {
+                cards.push_back(hand[static_cast<std::size_t>(dragIndices[i])]);
+            }
         }
 
         rules::HandPattern pattern;
@@ -557,41 +569,85 @@ bool GameState::SelectBestPatternFromDraggedCards(const std::vector<int>& handIn
             continue;
         }
 
-        const int score = pattern.cardCount * 100000
-            + DragPatternTieBreaker(pattern.type)
-            + rules::RankValue(pattern.mainRank);
-        candidates.push_back(Candidate{cards, pattern, score});
+        candidates.push_back(Candidate{cards, pattern, scorePattern(pattern)});
     }
 
-    if (candidates.empty()) {
+    std::vector<IndexedCandidate> additiveCandidates;
+    if (!selectedIndices_.empty()) {
+        // When a core group is already selected, dragging over loose cards should
+        // first try to complete a larger legal move such as three-with-two or a
+        // plane with wings. The dragged cards alone may not be a valid pattern.
+        for (std::uint64_t mask = 1; mask < dragLimit; ++mask) {
+            std::set<int> indices = selectedIndices_;
+            for (std::size_t i = 0; i < dragIndices.size(); ++i) {
+                if ((mask & (1ull << i)) != 0) {
+                    indices.insert(dragIndices[i]);
+                }
+            }
+            if (indices == selectedIndices_) {
+                continue;
+            }
+
+            rules::Cards cards;
+            cards.reserve(indices.size());
+            for (int index : indices) {
+                cards.push_back(hand[static_cast<std::size_t>(index)]);
+            }
+            const auto validation = rules_.ValidateLeadMove(cards, n);
+            if (!validation.ok) {
+                continue;
+            }
+
+            additiveCandidates.push_back(IndexedCandidate{std::move(indices), validation.pattern, scorePattern(validation.pattern)});
+        }
+    }
+
+    if (candidates.empty() && additiveCandidates.empty()) {
         return false;
     }
 
-    const Candidate& chosen = *std::max_element(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
-        return lhs.score < rhs.score;
-    });
     std::set<int> chosenIndices;
-    std::vector<int> chosenHints;
-    for (std::size_t i = 0; i < hand.size(); ++i) {
-        for (rules::Card card : chosen.cards) {
-            if (SameCard(hand[i], card)) {
-                const int index = static_cast<int>(i);
-                chosenIndices.insert(index);
-                chosenHints.push_back(index);
+    rules::HandPattern chosenPattern{};
+    if (!candidates.empty()) {
+        const Candidate& chosen = *std::max_element(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
+            return lhs.score < rhs.score;
+        });
+        chosenPattern = chosen.pattern;
+        for (std::size_t i = 0; i < hand.size(); ++i) {
+            for (rules::Card card : chosen.cards) {
+                if (SameCard(hand[i], card)) {
+                    const int index = static_cast<int>(i);
+                    chosenIndices.insert(index);
+                }
             }
         }
     }
 
     // Repeating the same drag gesture toggles the selected group off, matching
     // hint-button behavior for an already selected recommendation.
-    if (selectedIndices_ == chosenIndices) {
+    if (!chosenIndices.empty() && selectedIndices_ == chosenIndices) {
         selectedIndices_.clear();
         hintIndices_.clear();
         toast_ = "已取消拖拽选择";
     } else {
-        selectedIndices_ = std::move(chosenIndices);
-        hintIndices_ = std::move(chosenHints);
-        toast_ = "已按拖拽路线选中 " + DragPatternDescription(chosen.pattern);
+        std::set<int> finalIndices = chosenIndices;
+        rules::HandPattern finalPattern = chosenPattern;
+        if (!selectedIndices_.empty()) {
+            if (!additiveCandidates.empty()) {
+                const IndexedCandidate& additive = *std::max_element(additiveCandidates.begin(), additiveCandidates.end(), [](const IndexedCandidate& lhs, const IndexedCandidate& rhs) {
+                    return lhs.score < rhs.score;
+                });
+                finalIndices = additive.indices;
+                finalPattern = additive.pattern;
+            } else {
+                finalIndices = selectedIndices_;
+                finalIndices.insert(chosenIndices.begin(), chosenIndices.end());
+            }
+        }
+
+        selectedIndices_ = std::move(finalIndices);
+        hintIndices_.assign(selectedIndices_.begin(), selectedIndices_.end());
+        toast_ = "已按拖拽路线选中 " + DragPatternDescription(finalPattern);
     }
     return true;
 }
