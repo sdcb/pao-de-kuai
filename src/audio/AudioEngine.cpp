@@ -1,11 +1,13 @@
 #include "audio/AudioEngine.h"
 
+#include "audio/AudioDecoder.h"
 #include "audio/SoundCatalog.h"
-#include "audio/WavLoader.h"
 #include "resources/ResourceLoader.h"
 
 #include <algorithm>
 #include <atomic>
+
+#include <mfapi.h>
 
 namespace pdk::audio {
 
@@ -40,11 +42,22 @@ AudioEngine::~AudioEngine() {
         engine_->Release();
         engine_ = nullptr;
     }
+    if (mediaFoundationStarted_) {
+        MFShutdown();
+        mediaFoundationStarted_ = false;
+    }
 }
 
 bool AudioEngine::Initialize() {
     if (available_) {
         return true;
+    }
+    if (!mediaFoundationStarted_) {
+        if (FAILED(MFStartup(MF_VERSION))) {
+            available_ = false;
+            return false;
+        }
+        mediaFoundationStarted_ = true;
     }
     if (FAILED(XAudio2Create(&engine_, 0, XAUDIO2_DEFAULT_PROCESSOR))) {
         available_ = false;
@@ -66,9 +79,9 @@ void AudioEngine::LoadAllFromResources() {
     }
     for (const SoundCatalogEntry& entry : SoundCatalog()) {
         const auto bytes = resources::LoadResourceBytes(entry.resourceId);
-        WavData wav;
-        if (ParseWav(bytes, wav)) {
-            sounds_[entry.id] = LoadedSound{std::move(wav), entry.recommendedVolume};
+        AudioData audio;
+        if (DecodeMp3ToPcm(bytes, audio)) {
+            sounds_[entry.id] = LoadedSound{std::move(audio), entry.recommendedVolume};
         }
     }
 }
@@ -87,12 +100,12 @@ void AudioEngine::Play(SoundId id) {
     }
 
     auto active = std::make_unique<ActiveVoice>();
-    if (FAILED(engine_->CreateSourceVoice(&active->voice, &it->second.wav.format, 0, XAUDIO2_DEFAULT_FREQ_RATIO, active.get()))) {
+    if (FAILED(engine_->CreateSourceVoice(&active->voice, &it->second.audio.format, 0, XAUDIO2_DEFAULT_FREQ_RATIO, active.get()))) {
         return;
     }
     XAUDIO2_BUFFER buffer{};
-    buffer.AudioBytes = static_cast<UINT32>(it->second.wav.pcm.size());
-    buffer.pAudioData = it->second.wav.pcm.data();
+    buffer.AudioBytes = static_cast<UINT32>(it->second.audio.pcm.size());
+    buffer.pAudioData = it->second.audio.pcm.data();
     buffer.Flags = XAUDIO2_END_OF_STREAM;
     if (FAILED(active->voice->SubmitSourceBuffer(&buffer))) {
         return;

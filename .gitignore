@@ -2,3 +2,4 @@ build/
 stat/
 *.user
 *.log
+appsettings.json

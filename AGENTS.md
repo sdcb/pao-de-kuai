@@ -41,9 +41,9 @@ ctest --preset vs2026-release --output-on-failure
 
 ## 资源与数据策略
 
-- 所有运行资源通过 `.rc` 嵌入：牌图集、图标和 wav 文件。
+- 所有运行资源通过 `.rc` 嵌入：牌图集、图标和 mp3 文件。
 - 精灵和音频布局不依赖运行时 JSON metadata。可替换的资源元数据集中放在 `src/resources/` 或 `src/audio/` 的代码中。
-- 音频文件保持独立 wav 资源，不合并成音频精灵。
+- 音频文件保持独立 mp3 资源，不合并成音频精灵。
 - 进入 GameScene 前的重资源加载应放在 LoadingScene。
 - `appsettings.json` 保存玩家名、主音量、窗口大小。不要重新引入已移除的 `cardScale` 或 `animationSpeed` 字段。
 - 统计数据按每局详细记录写入 `stat/yyyyMMdd.json`；不要存缓存总分。显示时从记录聚合日、月、历史统计。

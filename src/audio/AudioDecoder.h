@@ -8,11 +8,11 @@
 
 namespace pdk::audio {
 
-struct WavData {
+struct AudioData {
     WAVEFORMATEX format{};
     std::vector<std::uint8_t> pcm;
 };
 
-bool ParseWav(std::span<const std::uint8_t> bytes, WavData& out);
+bool DecodeMp3ToPcm(std::span<const std::uint8_t> bytes, AudioData& out);
 
 } // namespace pdk::audio

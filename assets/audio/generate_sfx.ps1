@@ -1,6 +1,8 @@
 param(
     [string]$OutputDir = (Split-Path -Parent $PSCommandPath),
-    [int]$SampleRate = 44100
+    [int]$SampleRate = 44100,
+    [int]$BitrateKbps = 64,
+    [string]$FfmpegPath = "ffmpeg"
 )
 
 Set-StrictMode -Version Latest
@@ -147,6 +149,26 @@ function Write-Wav {
     }
 }
 
+function Convert-WavToMp3 {
+    param(
+        [string]$WavPath,
+        [string]$Mp3Path
+    )
+
+    & $FfmpegPath -hide_banner -loglevel error -y `
+        -i $WavPath `
+        -ac 1 `
+        -ar $script:SampleRate `
+        -b:a "$($BitrateKbps)k" `
+        -map_metadata -1 `
+        -id3v2_version 0 `
+        $Mp3Path
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "ffmpeg failed while converting $WavPath to $Mp3Path. Install ffmpeg or pass -FfmpegPath."
+    }
+}
+
 function New-Sfx {
     param(
         [string]$Name,
@@ -156,40 +178,51 @@ function New-Sfx {
 
     $buffer = New-Buffer $Duration
     & $Build $buffer
-    $path = Join-Path $OutputDir $Name
-    Write-Wav $path $buffer
+    $mp3Path = Join-Path $OutputDir $Name
+    $tempWav = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName() + ".wav")
+    try {
+        Write-Wav $tempWav $buffer
+        Convert-WavToMp3 $tempWav $mp3Path
+    }
+    finally {
+        if (Test-Path -LiteralPath $tempWav) {
+            Remove-Item -LiteralPath $tempWav -Force
+        }
+    }
     Write-Host "Generated $Name"
 }
 
 $defs = @(
-    @{ Name = 'ui_button_click.wav'; Duration = 0.090; Build = { param($b) Add-Sine $b 0.000 0.035 980 640 0.36 0.001 0.025; Add-Noise $b 0.000 0.020 0.09 0.001 0.012 } },
-    @{ Name = 'ui_confirm.wav'; Duration = 0.180; Build = { param($b) Add-Sine $b 0.000 0.070 660 760 0.24 0.004 0.035; Add-Sine $b 0.065 0.090 880 980 0.28 0.004 0.040 } },
-    @{ Name = 'ui_cancel.wav'; Duration = 0.160; Build = { param($b) Add-Sine $b 0.000 0.080 520 410 0.28 0.004 0.045; Add-Sine $b 0.045 0.080 390 300 0.18 0.004 0.040 } },
-    @{ Name = 'ui_toast.wav'; Duration = 0.220; Build = { param($b) Add-Sine $b 0.000 0.075 740 740 0.20 0.003 0.040; Add-Sine $b 0.055 0.095 1110 1110 0.16 0.003 0.050 } },
-    @{ Name = 'ui_pause.wav'; Duration = 0.180; Build = { param($b) Add-Sine $b 0.000 0.070 520 520 0.25 0.003 0.045; Add-Sine $b 0.055 0.070 390 390 0.22 0.003 0.045 } },
-    @{ Name = 'ui_resume.wav'; Duration = 0.180; Build = { param($b) Add-Sine $b 0.000 0.070 390 390 0.20 0.003 0.045; Add-Sine $b 0.055 0.080 590 660 0.26 0.003 0.045 } },
+    @{ Name = 'ui_button_click.mp3'; Duration = 0.090; Build = { param($b) Add-Sine $b 0.000 0.035 980 640 0.36 0.001 0.025; Add-Noise $b 0.000 0.020 0.09 0.001 0.012 } },
+    @{ Name = 'ui_confirm.mp3'; Duration = 0.180; Build = { param($b) Add-Sine $b 0.000 0.070 660 760 0.24 0.004 0.035; Add-Sine $b 0.065 0.090 880 980 0.28 0.004 0.040 } },
+    @{ Name = 'ui_cancel.mp3'; Duration = 0.160; Build = { param($b) Add-Sine $b 0.000 0.080 520 410 0.28 0.004 0.045; Add-Sine $b 0.045 0.080 390 300 0.18 0.004 0.040 } },
+    @{ Name = 'ui_toast.mp3'; Duration = 0.220; Build = { param($b) Add-Sine $b 0.000 0.075 740 740 0.20 0.003 0.040; Add-Sine $b 0.055 0.095 1110 1110 0.16 0.003 0.050 } },
+    @{ Name = 'ui_pause.mp3'; Duration = 0.180; Build = { param($b) Add-Sine $b 0.000 0.070 520 520 0.25 0.003 0.045; Add-Sine $b 0.055 0.070 390 390 0.22 0.003 0.045 } },
+    @{ Name = 'ui_resume.mp3'; Duration = 0.180; Build = { param($b) Add-Sine $b 0.000 0.070 390 390 0.20 0.003 0.045; Add-Sine $b 0.055 0.080 590 660 0.26 0.003 0.045 } },
 
-    @{ Name = 'card_select.wav'; Duration = 0.110; Build = { param($b) Add-Sine $b 0.000 0.055 620 880 0.32 0.002 0.030; Add-Sine $b 0.018 0.060 1240 1480 0.11 0.002 0.030 } },
-    @{ Name = 'card_deselect.wav'; Duration = 0.110; Build = { param($b) Add-Sine $b 0.000 0.065 620 360 0.25 0.002 0.035; Add-Sine $b 0.010 0.055 930 620 0.10 0.002 0.030 } },
-    @{ Name = 'card_deal.wav'; Duration = 0.120; Build = { param($b) Add-Noise $b 0.000 0.075 0.22 0.001 0.035; Add-Sine $b 0.010 0.045 1500 900 0.07 0.001 0.030 } },
-    @{ Name = 'card_play.wav'; Duration = 0.240; Build = { param($b) Add-Noise $b 0.000 0.105 0.33 0.001 0.060; Add-Sine $b 0.000 0.090 180 120 0.30 0.001 0.070; Add-Noise $b 0.075 0.080 0.12 0.001 0.050 } },
-    @{ Name = 'card_pass.wav'; Duration = 0.230; Build = { param($b) Add-Sine $b 0.000 0.110 440 300 0.24 0.005 0.075; Add-Sine $b 0.055 0.100 330 260 0.16 0.005 0.070 } },
-    @{ Name = 'card_hint.wav'; Duration = 0.320; Build = { param($b) Add-Sine $b 0.000 0.060 660 660 0.18 0.003 0.035; Add-Sine $b 0.070 0.060 820 820 0.20 0.003 0.035; Add-Sine $b 0.140 0.085 990 1120 0.24 0.003 0.050 } },
+    @{ Name = 'card_select.mp3'; Duration = 0.110; Build = { param($b) Add-Sine $b 0.000 0.055 620 880 0.32 0.002 0.030; Add-Sine $b 0.018 0.060 1240 1480 0.11 0.002 0.030 } },
+    @{ Name = 'card_deselect.mp3'; Duration = 0.110; Build = { param($b) Add-Sine $b 0.000 0.065 620 360 0.25 0.002 0.035; Add-Sine $b 0.010 0.055 930 620 0.10 0.002 0.030 } },
+    @{ Name = 'card_deal.mp3'; Duration = 0.120; Build = { param($b) Add-Noise $b 0.000 0.075 0.22 0.001 0.035; Add-Sine $b 0.010 0.045 1500 900 0.07 0.001 0.030 } },
+    @{ Name = 'card_play.mp3'; Duration = 0.240; Build = { param($b) Add-Noise $b 0.000 0.105 0.33 0.001 0.060; Add-Sine $b 0.000 0.090 180 120 0.30 0.001 0.070; Add-Noise $b 0.075 0.080 0.12 0.001 0.050 } },
+    @{ Name = 'card_pass.mp3'; Duration = 0.230; Build = { param($b) Add-Sine $b 0.000 0.110 440 300 0.24 0.005 0.075; Add-Sine $b 0.055 0.100 330 260 0.16 0.005 0.070 } },
+    @{ Name = 'card_hint.mp3'; Duration = 0.320; Build = { param($b) Add-Sine $b 0.000 0.060 660 660 0.18 0.003 0.035; Add-Sine $b 0.070 0.060 820 820 0.20 0.003 0.035; Add-Sine $b 0.140 0.085 990 1120 0.24 0.003 0.050 } },
 
-    @{ Name = 'game_invalid_move.wav'; Duration = 0.340; Build = { param($b) Add-Sine $b 0.000 0.095 190 170 0.32 0.002 0.050; Add-Sine $b 0.115 0.115 170 135 0.34 0.002 0.070; Add-Noise $b 0.000 0.040 0.08 0.001 0.020 } },
-    @{ Name = 'game_turn_prompt.wav'; Duration = 0.420; Build = { param($b) Add-Sine $b 0.000 0.115 620 700 0.20 0.006 0.065; Add-Sine $b 0.105 0.150 930 1040 0.22 0.006 0.080; Add-Sine $b 0.210 0.120 1240 1240 0.11 0.006 0.070 } },
-    @{ Name = 'game_round_start.wav'; Duration = 0.700; Build = { param($b) Add-Noise $b 0.000 0.500 0.16 0.010 0.120; Add-Sine $b 0.050 0.090 420 560 0.12 0.004 0.060; Add-Sine $b 0.200 0.110 520 690 0.14 0.004 0.070; Add-Sine $b 0.360 0.130 640 840 0.16 0.004 0.080 } },
-    @{ Name = 'game_round_end.wav'; Duration = 0.500; Build = { param($b) Add-Sine $b 0.000 0.120 540 540 0.20 0.004 0.075; Add-Sine $b 0.100 0.130 720 720 0.21 0.004 0.080; Add-Sine $b 0.210 0.150 900 900 0.18 0.004 0.100 } },
+    @{ Name = 'game_invalid_move.mp3'; Duration = 0.340; Build = { param($b) Add-Sine $b 0.000 0.095 190 170 0.32 0.002 0.050; Add-Sine $b 0.115 0.115 170 135 0.34 0.002 0.070; Add-Noise $b 0.000 0.040 0.08 0.001 0.020 } },
+    @{ Name = 'game_turn_prompt.mp3'; Duration = 0.420; Build = { param($b) Add-Sine $b 0.000 0.115 620 700 0.20 0.006 0.065; Add-Sine $b 0.105 0.150 930 1040 0.22 0.006 0.080; Add-Sine $b 0.210 0.120 1240 1240 0.11 0.006 0.070 } },
+    @{ Name = 'game_round_start.mp3'; Duration = 0.700; Build = { param($b) Add-Noise $b 0.000 0.500 0.16 0.010 0.120; Add-Sine $b 0.050 0.090 420 560 0.12 0.004 0.060; Add-Sine $b 0.200 0.110 520 690 0.14 0.004 0.070; Add-Sine $b 0.360 0.130 640 840 0.16 0.004 0.080 } },
+    @{ Name = 'game_round_end.mp3'; Duration = 0.500; Build = { param($b) Add-Sine $b 0.000 0.120 540 540 0.20 0.004 0.075; Add-Sine $b 0.100 0.130 720 720 0.21 0.004 0.080; Add-Sine $b 0.210 0.150 900 900 0.18 0.004 0.100 } },
 
-    @{ Name = 'event_bomb.wav'; Duration = 0.950; Build = { param($b) Add-Sine $b 0.000 0.260 95 55 0.70 0.002 0.220; Add-Noise $b 0.015 0.300 0.48 0.001 0.220; Add-Sine $b 0.080 0.400 48 38 0.35 0.001 0.320; Add-Noise $b 0.320 0.320 0.13 0.001 0.250 } },
-    @{ Name = 'event_spring.wav'; Duration = 0.950; Build = { param($b) Add-Sine $b 0.000 0.100 520 620 0.22 0.004 0.060; Add-Sine $b 0.105 0.105 660 760 0.24 0.004 0.065; Add-Sine $b 0.215 0.120 820 960 0.26 0.004 0.075; Add-Sine $b 0.345 0.210 1040 1240 0.28 0.004 0.130; Add-Sine $b 0.360 0.320 1560 1560 0.08 0.004 0.200 } },
-    @{ Name = 'event_win.wav'; Duration = 1.100; Build = { param($b) Add-Sine $b 0.000 0.120 660 660 0.23 0.006 0.070; Add-Sine $b 0.115 0.120 820 820 0.24 0.006 0.070; Add-Sine $b 0.230 0.135 990 990 0.25 0.006 0.080; Add-Sine $b 0.370 0.260 1320 1320 0.30 0.006 0.170; Add-Sine $b 0.390 0.360 1980 1980 0.08 0.006 0.230 } },
-    @{ Name = 'event_lose.wav'; Duration = 0.900; Build = { param($b) Add-Sine $b 0.000 0.170 520 480 0.21 0.006 0.110; Add-Sine $b 0.160 0.190 390 350 0.20 0.006 0.130; Add-Sine $b 0.340 0.230 300 260 0.17 0.006 0.170 } },
-    @{ Name = 'event_ai_talk.wav'; Duration = 0.280; Build = { param($b) Add-Sine $b 0.000 0.060 760 900 0.18 0.003 0.035; Add-Sine $b 0.055 0.075 1080 1180 0.14 0.003 0.045; Add-Noise $b 0.000 0.030 0.045 0.001 0.015 } }
+    @{ Name = 'event_bomb.mp3'; Duration = 0.950; Build = { param($b) Add-Sine $b 0.000 0.260 95 55 0.70 0.002 0.220; Add-Noise $b 0.015 0.300 0.48 0.001 0.220; Add-Sine $b 0.080 0.400 48 38 0.35 0.001 0.320; Add-Noise $b 0.320 0.320 0.13 0.001 0.250 } },
+    @{ Name = 'event_spring.mp3'; Duration = 0.950; Build = { param($b) Add-Sine $b 0.000 0.100 520 620 0.22 0.004 0.060; Add-Sine $b 0.105 0.105 660 760 0.24 0.004 0.065; Add-Sine $b 0.215 0.120 820 960 0.26 0.004 0.075; Add-Sine $b 0.345 0.210 1040 1240 0.28 0.004 0.130; Add-Sine $b 0.360 0.320 1560 1560 0.08 0.004 0.200 } },
+    @{ Name = 'event_win.mp3'; Duration = 1.100; Build = { param($b) Add-Sine $b 0.000 0.120 660 660 0.23 0.006 0.070; Add-Sine $b 0.115 0.120 820 820 0.24 0.006 0.070; Add-Sine $b 0.230 0.135 990 990 0.25 0.006 0.080; Add-Sine $b 0.370 0.260 1320 1320 0.30 0.006 0.170; Add-Sine $b 0.390 0.360 1980 1980 0.08 0.006 0.230 } },
+    @{ Name = 'event_lose.mp3'; Duration = 0.900; Build = { param($b) Add-Sine $b 0.000 0.170 520 480 0.21 0.006 0.110; Add-Sine $b 0.160 0.190 390 350 0.20 0.006 0.130; Add-Sine $b 0.340 0.230 300 260 0.17 0.006 0.170 } },
+    @{ Name = 'event_ai_talk.mp3'; Duration = 0.280; Build = { param($b) Add-Sine $b 0.000 0.060 760 900 0.18 0.003 0.035; Add-Sine $b 0.055 0.075 1080 1180 0.14 0.003 0.045; Add-Noise $b 0.000 0.030 0.045 0.001 0.015 } }
 )
 
 foreach ($def in $defs) {
     New-Sfx $def.Name $def.Duration $def.Build
 }
+
+Get-ChildItem -LiteralPath $OutputDir -Filter *.wav | Remove-Item -Force
 
 Write-Host "Done. Output: $OutputDir"

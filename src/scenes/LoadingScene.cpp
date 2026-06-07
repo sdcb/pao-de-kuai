@@ -11,7 +11,7 @@ namespace pdk::scenes {
 LoadingScene::LoadingScene(app::App& app, LoadingTarget target) : app_(app), target_(target) {}
 
 void LoadingScene::OnEnter() {
-    item_ = target_ == LoadingTarget::Game ? "加载牌图和 21 个 wav 音效" : "加载统计数据";
+    item_ = target_ == LoadingTarget::Game ? "加载牌图和 21 个 mp3 音效" : "加载统计数据";
     progress_ = 0.08f;
 }
 

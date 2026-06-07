@@ -75,9 +75,9 @@ set(PDK_APP_SOURCES
     src/app/App.cpp
     src/app/Dpi.cpp
     src/app/Window.cpp
+    src/audio/AudioDecoder.cpp
     src/audio/AudioEngine.cpp
     src/audio/SoundCatalog.cpp
-    src/audio/WavLoader.cpp
     src/graphics/D2DContext.cpp
     src/graphics/SpriteAtlas.cpp
     src/graphics/TextRenderer.cpp

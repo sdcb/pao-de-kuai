@@ -21,12 +21,12 @@
 
 ```text
 .
-├── assets/                  # 扑克牌图集、图标、音效 wav
+├── assets/                  # 扑克牌图集、图标、音效 mp3
 │   └── audio/               # 音效资源和生成脚本
 ├── spec/                    # 项目规格与计划文档
 ├── src/
 │   ├── app/                 # App 主流程、Win32 窗口、DPI、入口 WinMain
-│   ├── audio/               # XAudio2 音频引擎、音效目录、wav 加载
+│   ├── audio/               # XAudio2 音频引擎、音效目录、mp3 加载
 │   ├── core/                # 场景/覆盖层基类、场景管理、几何、计时、补间
 │   ├── game/                # 游戏状态、AI 出牌策略、玩家模型、对局记录
 │   ├── graphics/            # Direct2D 渲染上下文、文本渲染、WIC 图片加载、图集封装
@@ -62,7 +62,7 @@ ctest --preset vs2026-release --output-on-failure
 
 - `appsettings.json` 默认按当前工作目录读写。
 - 对局记录和统计由 `stats::StatStore` 管理。
-- wav/png 等运行资源通过 Windows `.rc` 嵌入程序。
+- mp3/png 等运行资源通过 Windows `.rc` 嵌入程序。
 
 ## License
 
