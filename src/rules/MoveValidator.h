@@ -18,5 +18,6 @@ MoveValidation ValidateFollow(
     const HandPattern& previous,
     int handSizeBeforePlay = -1);
 bool CanBeat(const HandPattern& candidate, const HandPattern& previous);
+bool HasAnyFollowMove(const Cards& hand, const HandPattern& previous, int handSizeBeforePlay = -1);
 
 } // namespace pdk::rules

@@ -68,6 +68,9 @@ void GameScene::OnEnter() {
     dragStartCard_ = -1;
     dragPath_.clear();
     lastAnimatedPlayer_ = rules::PlayerId::Player;
+    actionButtonsDirty_ = true;
+    lastInteractionReady_ = InteractionReady();
+    UpdateActionButtons();
 }
 
 void GameScene::Update(float dt) {
@@ -83,6 +86,7 @@ void GameScene::Update(float dt) {
             handsSorted_ = true;
             sortAnimation_ = 1.0f;
             app_.Audio().Play(audio::SoundId::Hint);
+            actionButtonsDirty_ = true;
         }
     } else {
         sortAnimation_ = std::max(0.0f, sortAnimation_ - dt * SortAnimationSpeed);
@@ -92,7 +96,18 @@ void GameScene::Update(float dt) {
     if (InteractionReady()) {
         game_.Update(dt);
     }
+    const bool hadEvents = !game_.Events().empty();
     ConsumeEvents();
+
+    // Button enablement can query rule search, so update it only after game or
+    // interaction state changes instead of doing that work every frame/mouse move.
+    const bool ready = InteractionReady();
+    if (hadEvents || ready != lastInteractionReady_) {
+        actionButtonsDirty_ = true;
+    }
+    if (actionButtonsDirty_) {
+        UpdateActionButtons();
+    }
 }
 
 void GameScene::Render(graphics::RenderContext& context) {
@@ -114,8 +129,6 @@ void GameScene::Render(graphics::RenderContext& context) {
     DrawPlayerHand(context);
     DrawDealPile(context);
 
-    RefreshButtons();
-    LayoutActionButtons();
     for (const Button& button : buttons_) {
         DrawButton(context, button);
     }
@@ -139,8 +152,6 @@ void GameScene::Render(graphics::RenderContext& context) {
 }
 
 bool GameScene::OnMouseMove(float x, float y) {
-    RefreshButtons();
-    LayoutActionButtons();
     UpdateButtonHover(buttons_, x, y);
     const int card = HitPlayerCard(x, y);
     if (dragSelecting_ && card >= 0 && InteractionReady()) {
@@ -175,8 +186,9 @@ bool GameScene::OnMouseDown(float x, float y) {
         return true;
     }
 
-    RefreshButtons();
-    LayoutActionButtons();
+    if (actionButtonsDirty_) {
+        UpdateActionButtons();
+    }
     const int hit = HitButton(buttons_, x, y);
     if (hit < 0) {
         return false;
@@ -192,6 +204,8 @@ bool GameScene::OnMouseDown(float x, float y) {
         game_.PlaySelected();
     }
     ConsumeEvents();
+    actionButtonsDirty_ = true;
+    UpdateActionButtons();
     return true;
 }
 
@@ -221,12 +235,16 @@ bool GameScene::OnMouseUp(float x, float y) {
             game_.TogglePlayerCard(dragStartCard_);
             app_.Audio().Play(wasSelected ? audio::SoundId::DeselectCard : audio::SoundId::SelectCard);
         }
+        actionButtonsDirty_ = true;
     }
 
     dragSelecting_ = false;
     dragMoved_ = false;
     dragStartCard_ = -1;
     dragPath_.clear();
+    if (actionButtonsDirty_) {
+        UpdateActionButtons();
+    }
     return true;
 }
 
@@ -330,13 +348,18 @@ void GameScene::DrawDealPile(graphics::RenderContext& context) {
     DrawCardBack(context, app_.CardAtlas(), {DealSourceCenterX - cardW * 0.5f, DealSourceCenterY - cardH * 0.5f, cardW, cardH});
 }
 
-void GameScene::RefreshButtons() {
+void GameScene::UpdateActionButtons() {
+    LayoutActionButtons();
     const bool ready = InteractionReady();
+    // Render and hover paths read these cached values only; state-changing
+    // callbacks mark the cache dirty when a recompute is needed.
     buttons_[0].text = game_.Autoplay() ? "取消托管" : "托管";
     buttons_[0].enabled = ready;
     buttons_[1].enabled = ready && game_.CanCurrentPlayerPass();
     buttons_[2].enabled = ready && game_.IsHumanTurn();
     buttons_[3].enabled = ready && game_.IsHumanTurn() && !game_.SelectedIndices().empty();
+    lastInteractionReady_ = ready;
+    actionButtonsDirty_ = false;
 }
 
 void GameScene::LayoutActionButtons() {

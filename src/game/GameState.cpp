@@ -344,10 +344,9 @@ bool GameState::HasPlayableFollow(rules::PlayerId player) const {
     if (CurrentPlayerLeads() || !lastPattern_) {
         return false;
     }
-    const AiMoveChoice choice = const_cast<AiPlayer&>(aiPlayers_[Index(player)]).ChooseMove(
-        players_[Index(player)].hand,
-        MakeAiContext(player));
-    return !choice.pass;
+    const rules::Cards& hand = players_[Index(player)].hand;
+    // UI callers use this for pass/button state; keep it independent of AI strategy.
+    return rules::HasAnyFollowMove(hand, *lastPattern_, static_cast<int>(hand.size()));
 }
 
 float GameState::NextThinkDelay() {

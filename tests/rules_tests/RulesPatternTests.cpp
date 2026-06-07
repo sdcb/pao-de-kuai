@@ -214,3 +214,37 @@ TEST_CASE("lead validation allows short final plane but follow validation does n
     const auto follow = rules::ValidateFollow(shortPlane, previous, static_cast<int>(shortPlane.size()));
     CHECK_FALSE(follow.ok);
 }
+
+TEST_CASE("follow existence check uses rules without ai scoring") {
+    const auto singleFour = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    CHECK(rules::HasAnyFollowMove({C(rules::Rank::Five)}, singleFour, 1));
+    CHECK_FALSE(rules::HasAnyFollowMove({C(rules::Rank::Three)}, singleFour, 1));
+
+    const auto singleAce = rules::IdentifyPattern({C(rules::Rank::Ace)}).pattern;
+    CHECK(rules::HasAnyFollowMove({
+        C(rules::Rank::Three),
+        C(rules::Rank::Three, rules::Suit::Hearts),
+        C(rules::Rank::Three, rules::Suit::Diamonds),
+        C(rules::Rank::Three, rules::Suit::Clubs)
+    }, singleAce, 4));
+
+    const auto straightSix = rules::IdentifyPattern({
+        C(rules::Rank::Three), C(rules::Rank::Four), C(rules::Rank::Five),
+        C(rules::Rank::Six), C(rules::Rank::Seven), C(rules::Rank::Eight)
+    }).pattern;
+    CHECK_FALSE(rules::HasAnyFollowMove({
+        C(rules::Rank::Ten), C(rules::Rank::Jack), C(rules::Rank::Queen), C(rules::Rank::King), C(rules::Rank::Ace)
+    }, straightSix, 5));
+
+    const auto planeThreeGroups = rules::IdentifyPattern({
+        C(rules::Rank::Three), C(rules::Rank::Three, rules::Suit::Hearts), C(rules::Rank::Three, rules::Suit::Diamonds),
+        C(rules::Rank::Four), C(rules::Rank::Four, rules::Suit::Hearts), C(rules::Rank::Four, rules::Suit::Diamonds),
+        C(rules::Rank::Five), C(rules::Rank::Five, rules::Suit::Hearts), C(rules::Rank::Five, rules::Suit::Diamonds),
+        C(rules::Rank::Six), C(rules::Rank::Seven), C(rules::Rank::Eight)
+    }).pattern;
+    CHECK_FALSE(rules::HasAnyFollowMove({
+        C(rules::Rank::Four), C(rules::Rank::Four, rules::Suit::Hearts), C(rules::Rank::Four, rules::Suit::Diamonds),
+        C(rules::Rank::Five), C(rules::Rank::Five, rules::Suit::Hearts), C(rules::Rank::Five, rules::Suit::Diamonds),
+        C(rules::Rank::Seven), C(rules::Rank::Eight)
+    }, planeThreeGroups, 8));
+}

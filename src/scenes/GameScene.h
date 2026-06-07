@@ -28,7 +28,7 @@ private:
     void DrawPlayedCards(graphics::RenderContext& context);
     void DrawAiArea(graphics::RenderContext& context, rules::PlayerId player, const core::Rect& area);
     void DrawDealPile(graphics::RenderContext& context);
-    void RefreshButtons();
+    void UpdateActionButtons();
     bool InteractionReady() const;
     int HitPlayerCard(float x, float y) const;
     core::Rect CardRect(int index) const;
@@ -47,6 +47,8 @@ private:
     bool dragMoved_{false};
     bool recordedRound_{false};
     bool mock_{false};
+    bool actionButtonsDirty_{true};
+    bool lastInteractionReady_{false};
     std::array<int, 3> todayScores_{0, 0, 0};
     rules::Cards playerHandBeforeSort_;
     bool handsSorted_{true};
