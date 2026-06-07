@@ -6,6 +6,7 @@ endif()
 
 set(CMAKE_TRY_COMPILE_CONFIGURATION Release)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version for third-party dependencies")
 
 project(PaoDeKuai VERSION 0.1.0 LANGUAGES C CXX RC)
 

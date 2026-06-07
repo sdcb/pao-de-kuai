@@ -8,6 +8,7 @@
       "binaryDir": "${sourceDir}/build/vs2026-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
         "PDK_BUILD_TESTS": "ON"
       }
     }
