@@ -163,7 +163,13 @@ if(PDK_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest_src)
 
     add_executable(rules_tests
-        tests/rules_tests/RulesTests.cpp
+        tests/rules_tests/TestMain.cpp
+        tests/rules_tests/RulesPatternTests.cpp
+        tests/rules_tests/ScoringTests.cpp
+        tests/rules_tests/GameStateTests.cpp
+        tests/rules_tests/AiStrategyTests.cpp
+        tests/rules_tests/DragSelectionTests.cpp
+        tests/rules_tests/StatsTests.cpp
     )
     target_link_libraries(rules_tests PRIVATE pdk_core doctest::doctest)
     target_compile_definitions(rules_tests PRIVATE

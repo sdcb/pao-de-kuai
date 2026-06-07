@@ -96,7 +96,7 @@ ui_overlay_return_menu
 ui_overlay_result
 ```
 
-`rules_tests` 运行 `tests/rules_tests/RulesTests.cpp` 中的 doctest 用例。
+`rules_tests` 运行 `tests/rules_tests/` 下的 doctest 用例，仍产出单个 `rules_tests.exe`。
 
 UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到指定场景或覆盖层，更新/渲染固定帧数，然后通过 WIC 保存 JPEG。这些是渲染冒烟测试，不做像素差异比对。
 
@@ -111,6 +111,15 @@ UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到
 ```
 
 ## rules_tests 用例说明
+
+测试源码按领域拆分在 `tests/rules_tests/`：
+
+- `RulesPatternTests.cpp`：牌组、牌型识别、比较和出牌校验。
+- `ScoringTests.cpp`：计分、春天和炸弹固定分。
+- `GameStateTests.cpp`：游戏状态机、出牌顺序、提示和不要约束。
+- `AiStrategyTests.cpp`：基础 AI 选牌策略。
+- `DragSelectionTests.cpp`：鼠标拖拽选牌。
+- `StatsTests.cpp`：设置和统计 JSON。
 
 `fixed deck has 48 cards with only spade two and no club ace`
 
@@ -151,6 +160,22 @@ UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到
 `hint passes directly when player cannot beat and pass is blocked when player can beat`
 
 验证玩家要不起时提示会直接不要；要得起时不要会被拒绝。
+
+`ai triple with two keeps an existing pair as a pair`
+
+验证 AI 三带二优先带孤张，不拆已有对子。
+
+`ai plane uses singleton kickers before breaking pairs or triples`
+
+验证 AI 飞机带牌优先使用孤张，不拆对子或三张。
+
+`ai follow chooses a higher singleton when it preserves a pair`
+
+验证 AI 跟牌时以剩余手牌质量优先，不为了最低点数拆对子。
+
+`ai lead avoids a small singleton when next player has one card`
+
+验证下家只剩 1 张时，AI 领出不会打小单张。
 
 `drag selection picks best lead pattern from dragged cards and ignores previous move`
 
