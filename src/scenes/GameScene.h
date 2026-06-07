@@ -35,20 +35,19 @@ private:
     core::Rect CardRectFor(int index, int count) const;
     core::Rect AiCardRectFor(int index, int count, const core::Rect& area) const;
     void LayoutActionButtons();
-    bool HitBackButton(float x, float y) const;
     void ConsumeEvents();
     void UpdateRoundResultDelay(float dt);
     void ShowRoundResultOverlay();
 
     app::App& app_;
     game::GameState game_;
+    Button backButton_;
     std::vector<Button> buttons_;
     std::vector<int> dragPath_;
     int hoverCard_{-1};
     int dragStartCard_{-1};
     bool dragSelecting_{false};
     bool dragMoved_{false};
-    bool backButtonHover_{false};
     bool recordedRound_{false};
     bool roundResultPending_{false};
     bool mock_{false};

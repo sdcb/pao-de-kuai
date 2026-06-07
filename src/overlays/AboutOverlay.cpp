@@ -27,18 +27,16 @@ void AboutOverlay::Render(graphics::RenderContext& context) {
         "如果你喜欢这个项目，欢迎到 GitHub 给一个 star ⭐。";
     context.DrawTextUtf8(text, {330.0f, 245.0f, 620.0f, 250.0f}, 21.0f, scenes::Color(0.90f, 0.95f, 0.86f), DWRITE_TEXT_ALIGNMENT_CENTER);
 
-    for (const auto& button : buttons_) {
-        scenes::DrawButton(context, button);
-    }
+    scenes::ButtonGroup::DrawAll(context, buttons_);
 }
 
 bool AboutOverlay::OnMouseMove(float x, float y) {
-    scenes::UpdateButtonHover(buttons_, x, y);
+    scenes::ButtonGroup::UpdateHover(buttons_, x, y);
     return true;
 }
 
 bool AboutOverlay::OnMouseDown(float x, float y) {
-    if (scenes::HitButton(buttons_, x, y) >= 0) {
+    if (scenes::ButtonGroup::Hit(buttons_, x, y) >= 0) {
         app_.Audio().Play(audio::SoundId::Resume);
         app_.CloseTopOverlay();
     }

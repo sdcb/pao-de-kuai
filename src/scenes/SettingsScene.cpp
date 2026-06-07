@@ -31,18 +31,16 @@ void SettingsScene::Render(graphics::RenderContext& context) {
     context.DrawTextUtf8("牌大小和动画速度使用固定手感，不再写入 appsettings.json", {320.0f, 330.0f, 640.0f, 32.0f}, 18.0f, Color(0.70f, 0.82f, 0.74f));
     context.DrawTextUtf8("玩家名从 appsettings.json 读取，默认 李姐", {320.0f, 375.0f, 640.0f, 32.0f}, 18.0f, Color(0.70f, 0.82f, 0.74f));
 
-    for (const Button& button : buttons_) {
-        DrawButton(context, button);
-    }
+    ButtonGroup::DrawAll(context, buttons_);
 }
 
 bool SettingsScene::OnMouseMove(float x, float y) {
-    UpdateButtonHover(buttons_, x, y);
+    ButtonGroup::UpdateHover(buttons_, x, y);
     return true;
 }
 
 bool SettingsScene::OnMouseDown(float x, float y) {
-    const int hit = HitButton(buttons_, x, y);
+    const int hit = ButtonGroup::Hit(buttons_, x, y);
     if (hit == 0) {
         app_.Audio().Play(audio::SoundId::Cancel);
         app_.ShowStart();

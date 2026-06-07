@@ -76,6 +76,7 @@ int FindCardIndex(const rules::Cards& cards, rules::Card card) {
 } // namespace
 
 GameScene::GameScene(app::App& app, bool mock) : app_(app), mock_(mock) {
+    backButton_ = {{24.0f, 24.0f, 44.0f, 44.0f}, "⬅️", ButtonShape::Circle, 24.0f};
     buttons_ = {
         {{790.0f, 612.0f, 100.0f, 42.0f}, "托管"},
         {{902.0f, 612.0f, 90.0f, 42.0f}, "不要"},
@@ -104,7 +105,7 @@ void GameScene::OnEnter() {
     dealSoundCount_ = 0;
     dragSelecting_ = false;
     dragMoved_ = false;
-    backButtonHover_ = false;
+    backButton_.hover = false;
     dragStartCard_ = -1;
     dragPath_.clear();
     lastAnimatedPlayer_ = rules::PlayerId::Player;
@@ -172,13 +173,8 @@ void GameScene::Render(graphics::RenderContext& context) {
     DrawPlayerHand(context);
     DrawDealPile(context);
 
-    for (const Button& button : buttons_) {
-        DrawButton(context, button);
-    }
-    const D2D1_COLOR_F backFill = backButtonHover_ ? Color(0.86f, 0.72f, 0.28f) : Color(0.18f, 0.42f, 0.34f);
-    context.FillEllipse({24.0f, 24.0f, 44.0f, 44.0f}, backFill);
-    context.StrokeEllipse({24.0f, 24.0f, 44.0f, 44.0f}, Color(0.92f, 0.87f, 0.62f), 1.5f);
-    context.DrawTextUtf8("⬅️", {24.0f, 23.0f, 44.0f, 44.0f}, 24.0f, Color(0.98f, 0.98f, 0.90f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    ButtonGroup::DrawAll(context, buttons_);
+    backButton_.Draw(context);
 
     const std::string current = "当前轮到: " + PlayerName(game_.CurrentPlayer());
     context.DrawTextUtf8(current, {510.0f, 28.0f, 260.0f, 36.0f}, 21.0f, Color(0.95f, 0.96f, 0.83f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -196,8 +192,8 @@ void GameScene::Render(graphics::RenderContext& context) {
 }
 
 bool GameScene::OnMouseMove(float x, float y) {
-    backButtonHover_ = HitBackButton(x, y);
-    UpdateButtonHover(buttons_, x, y);
+    backButton_.UpdateHover(x, y);
+    ButtonGroup::UpdateHover(buttons_, x, y);
     const int card = HitPlayerCard(x, y);
     if (dragSelecting_ && card >= 0 && InteractionReady()) {
         if (dragPath_.empty() || dragPath_.back() != card) {
@@ -212,7 +208,7 @@ bool GameScene::OnMouseMove(float x, float y) {
 }
 
 bool GameScene::OnMouseDown(float x, float y) {
-    if (HitBackButton(x, y)) {
+    if (backButton_.HitTest(x, y)) {
         app_.Audio().Play(audio::SoundId::ButtonClick);
         app_.PushOverlay(std::make_unique<overlays::ReturnToMenuOverlay>(app_));
         return true;
@@ -234,7 +230,7 @@ bool GameScene::OnMouseDown(float x, float y) {
     if (actionButtonsDirty_) {
         UpdateActionButtons();
     }
-    const int hit = HitButton(buttons_, x, y);
+    const int hit = ButtonGroup::Hit(buttons_, x, y);
     if (hit < 0) {
         return false;
     }
@@ -478,12 +474,6 @@ core::Rect GameScene::AiCardRectFor(int index, int, const core::Rect& area) cons
     const float step = VisibleStepForWidth(cardW);
     const float x = area.x + (AiFullHandHorizontalPadding * 0.5f) + static_cast<float>(index) * step;
     return {x, area.y + AiCardTopOffset, cardW, cardH};
-}
-
-bool GameScene::HitBackButton(float x, float y) const {
-    const float dx = x - 46.0f;
-    const float dy = y - 46.0f;
-    return dx * dx + dy * dy <= 22.0f * 22.0f;
 }
 
 void GameScene::ConsumeEvents() {

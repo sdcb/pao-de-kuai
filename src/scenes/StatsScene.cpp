@@ -42,18 +42,16 @@ void StatsScene::Render(graphics::RenderContext& context) {
     block("本月", month_, 465.0f);
     block("历史", history_, 850.0f);
 
-    for (const Button& button : buttons_) {
-        DrawButton(context, button);
-    }
+    ButtonGroup::DrawAll(context, buttons_);
 }
 
 bool StatsScene::OnMouseMove(float x, float y) {
-    UpdateButtonHover(buttons_, x, y);
+    ButtonGroup::UpdateHover(buttons_, x, y);
     return true;
 }
 
 bool StatsScene::OnMouseDown(float x, float y) {
-    if (HitButton(buttons_, x, y) >= 0) {
+    if (ButtonGroup::Hit(buttons_, x, y) >= 0) {
         app_.Audio().Play(audio::SoundId::Cancel);
         app_.ShowStart();
         return true;

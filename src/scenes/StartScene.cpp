@@ -31,18 +31,16 @@ void StartScene::Render(graphics::RenderContext& context) {
     context.FillRect({0.0f, 0.0f, 1280.0f, 720.0f}, StartGreen);
     context.DrawTextUtf8("极客版跑得快", {0.0f, 120.0f, 1280.0f, 72.0f}, 52.0f, Color(0.96f, 0.88f, 0.44f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     context.DrawTextUtf8("单机三人场  48 张固定规则", {0.0f, 190.0f, 1280.0f, 34.0f}, 21.0f, Color(0.82f, 0.92f, 0.80f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-    for (const Button& button : buttons_) {
-        DrawButton(context, button);
-    }
+    ButtonGroup::DrawAll(context, buttons_);
 }
 
 bool StartScene::OnMouseMove(float x, float y) {
-    UpdateButtonHover(buttons_, x, y);
+    ButtonGroup::UpdateHover(buttons_, x, y);
     return true;
 }
 
 bool StartScene::OnMouseDown(float x, float y) {
-    const int hit = HitButton(buttons_, x, y);
+    const int hit = ButtonGroup::Hit(buttons_, x, y);
     if (hit < 0) {
         return false;
     }

@@ -34,18 +34,16 @@ void RoundResultOverlay::Render(graphics::RenderContext& context) {
         text << "触发关圆鸡 / 春天\n";
     }
     context.DrawTextUtf8(text.str(), {420.0f, 260.0f, 440.0f, 180.0f}, 22.0f, scenes::Color(0.95f, 0.96f, 0.86f));
-    for (const auto& button : buttons_) {
-        scenes::DrawButton(context, button);
-    }
+    scenes::ButtonGroup::DrawAll(context, buttons_);
 }
 
 bool RoundResultOverlay::OnMouseMove(float x, float y) {
-    scenes::UpdateButtonHover(buttons_, x, y);
+    scenes::ButtonGroup::UpdateHover(buttons_, x, y);
     return true;
 }
 
 bool RoundResultOverlay::OnMouseDown(float x, float y) {
-    const int hit = scenes::HitButton(buttons_, x, y);
+    const int hit = scenes::ButtonGroup::Hit(buttons_, x, y);
     if (hit == 0) {
         app_.Audio().Play(audio::SoundId::Confirm);
         app_.StartGame();

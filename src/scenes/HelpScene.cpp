@@ -29,18 +29,16 @@ void HelpScene::Render(graphics::RenderContext& context) {
         "炸弹立即 +20，另外两家各 -10，结算也会展示且不参与春天翻倍。\n"
         "托管会用基础 AI 代替玩家行动，可随时取消。";
     context.DrawTextUtf8(text, {135.0f, 165.0f, 1010.0f, 380.0f}, 22.0f, Color(0.90f, 0.95f, 0.86f));
-    for (const Button& button : buttons_) {
-        DrawButton(context, button);
-    }
+    ButtonGroup::DrawAll(context, buttons_);
 }
 
 bool HelpScene::OnMouseMove(float x, float y) {
-    UpdateButtonHover(buttons_, x, y);
+    ButtonGroup::UpdateHover(buttons_, x, y);
     return true;
 }
 
 bool HelpScene::OnMouseDown(float x, float y) {
-    if (HitButton(buttons_, x, y) >= 0) {
+    if (ButtonGroup::Hit(buttons_, x, y) >= 0) {
         app_.Audio().Play(audio::SoundId::Cancel);
         app_.ShowStart();
         return true;
