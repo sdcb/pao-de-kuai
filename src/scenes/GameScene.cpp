@@ -410,6 +410,13 @@ void GameScene::UpdateActionButtons() {
     const bool ready = InteractionReady();
     // Render and hover paths read these cached values only; state-changing
     // callbacks mark the cache dirty when a recompute is needed.
+    const bool showActionButtons = !ready || game_.IsHumanTurn();
+    for (Button& button : buttons_) {
+        button.visible = showActionButtons;
+        if (!button.visible) {
+            button.hover = false;
+        }
+    }
     buttons_[0].text = game_.Autoplay() ? "取消托管" : "托管";
     buttons_[0].enabled = ready;
     buttons_[1].enabled = ready && game_.CanCurrentPlayerPass();

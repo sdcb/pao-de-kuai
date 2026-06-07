@@ -15,6 +15,7 @@ namespace pdk::scenes {
 struct Button {
     core::Rect rect;
     std::string text;
+    bool visible{true};
     bool enabled{true};
     bool hover{false};
 };
@@ -29,6 +30,9 @@ inline void DrawPanel(graphics::RenderContext& context, const core::Rect& rect, 
 }
 
 inline void DrawButton(graphics::RenderContext& context, const Button& button) {
+    if (!button.visible) {
+        return;
+    }
     D2D1_COLOR_F fill = button.enabled
         ? (button.hover ? Color(0.86f, 0.72f, 0.28f) : Color(0.18f, 0.42f, 0.34f))
         : Color(0.16f, 0.18f, 0.17f);
@@ -86,7 +90,7 @@ inline void DrawCardBack(graphics::RenderContext& context, graphics::SpriteAtlas
 
 inline int HitButton(const std::vector<Button>& buttons, float x, float y) {
     for (std::size_t i = 0; i < buttons.size(); ++i) {
-        if (buttons[i].enabled && buttons[i].rect.Contains(x, y)) {
+        if (buttons[i].visible && buttons[i].enabled && buttons[i].rect.Contains(x, y)) {
             return static_cast<int>(i);
         }
     }
@@ -95,7 +99,7 @@ inline int HitButton(const std::vector<Button>& buttons, float x, float y) {
 
 inline void UpdateButtonHover(std::vector<Button>& buttons, float x, float y) {
     for (Button& button : buttons) {
-        button.hover = button.enabled && button.rect.Contains(x, y);
+        button.hover = button.visible && button.enabled && button.rect.Contains(x, y);
     }
 }
 
