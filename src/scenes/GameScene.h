@@ -33,6 +33,7 @@ private:
     int HitPlayerCard(float x, float y) const;
     core::Rect CardRect(int index) const;
     core::Rect CardRectFor(int index, int count) const;
+    core::Rect AiCardRectFor(int index, int count, const core::Rect& area) const;
     void LayoutActionButtons();
     bool HitBackButton(float x, float y) const;
     void ConsumeEvents();
@@ -47,13 +48,14 @@ private:
     int dragStartCard_{-1};
     bool dragSelecting_{false};
     bool dragMoved_{false};
+    bool backButtonHover_{false};
     bool recordedRound_{false};
     bool roundResultPending_{false};
     bool mock_{false};
     bool actionButtonsDirty_{true};
     bool lastInteractionReady_{false};
     std::array<int, 3> todayScores_{0, 0, 0};
-    rules::Cards playerHandBeforeSort_;
+    std::array<rules::Cards, 3> handsBeforeSort_;
     bool handsSorted_{true};
     float dealElapsed_{0.0f};
     int dealSoundCount_{0};

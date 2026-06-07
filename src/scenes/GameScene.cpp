@@ -20,11 +20,16 @@ bool ContainsIndex(const std::vector<int>& values, int index) {
 constexpr D2D1_COLOR_F TableGreen = {0.04f, 0.30f, 0.18f, 1.0f};
 constexpr float DealCardInterval = 1.0f / 6.0f;
 constexpr int DealSoundCount = 16;
+constexpr int FullHandCardCount = 16;
 constexpr float FixedCardScale = 1.5f;
 constexpr float DealSourceCenterX = 640.0f;
 constexpr float DealSourceCenterY = 330.0f;
 constexpr float SortAnimationSpeed = 2.4f;
 constexpr float RoundResultDelaySeconds = 0.75f;
+constexpr float PlayerCardBaseWidth = 70.0f;
+constexpr float PlayerCardBaseHeight = 98.0f;
+constexpr float AiFullHandHorizontalPadding = 52.0f;
+constexpr float AiCardTopOffset = 45.0f;
 
 std::string PlayerName(rules::PlayerId id) {
     switch (id) {
@@ -37,6 +42,35 @@ std::string PlayerName(rules::PlayerId id) {
 
 float Lerp(float from, float to, float t) {
     return from + (to - from) * std::clamp(t, 0.0f, 1.0f);
+}
+
+float AtlasAspectRatio() {
+    const resources::CardAtlasInfo& info = resources::GetCardAtlasInfo();
+    return static_cast<float>(info.cardHeight) / static_cast<float>(info.cardWidth);
+}
+
+float VisibleStepForWidth(float cardWidth) {
+    const resources::CardAtlasInfo& info = resources::GetCardAtlasInfo();
+    // mainX is the atlas-defined safe visible strip; stepping by this scaled
+    // width prevents the next card from revealing the large right-side suit.
+    return cardWidth * static_cast<float>(info.mainX) / static_cast<float>(info.cardWidth);
+}
+
+float CardRowWidth(int count, float cardWidth) {
+    if (count <= 0) {
+        return 0.0f;
+    }
+    return cardWidth + static_cast<float>(count - 1) * VisibleStepForWidth(cardWidth);
+}
+
+int FindCardIndex(const rules::Cards& cards, rules::Card card) {
+    const auto it = std::find_if(cards.begin(), cards.end(), [card](rules::Card existing) {
+        return existing.rank == card.rank && existing.suit == card.suit;
+    });
+    if (it == cards.end()) {
+        return -1;
+    }
+    return static_cast<int>(std::distance(cards.begin(), it));
 }
 
 } // namespace
@@ -58,7 +92,9 @@ void GameScene::OnEnter() {
     recordedRound_ = false;
     roundResultPending_ = false;
     todayScores_ = stats::StatStore().SummarizeDay(stats::TodayDateKey()).scores;
-    playerHandBeforeSort_ = game_.Players()[0].hand;
+    for (int i = 0; i < 3; ++i) {
+        handsBeforeSort_[i] = game_.Players()[i].hand;
+    }
     handsSorted_ = false;
     dealElapsed_ = 0.0f;
     sortAnimation_ = 0.0f;
@@ -68,6 +104,7 @@ void GameScene::OnEnter() {
     dealSoundCount_ = 0;
     dragSelecting_ = false;
     dragMoved_ = false;
+    backButtonHover_ = false;
     dragStartCard_ = -1;
     dragPath_.clear();
     lastAnimatedPlayer_ = rules::PlayerId::Player;
@@ -84,7 +121,9 @@ void GameScene::Update(float dt) {
             dealSoundCount_++;
         }
         if (dealElapsed_ >= static_cast<float>(DealSoundCount) * DealCardInterval + 0.1f) {
-            playerHandBeforeSort_ = game_.Players()[0].hand;
+            for (int i = 0; i < 3; ++i) {
+                handsBeforeSort_[i] = game_.Players()[i].hand;
+            }
             game_.SortHands();
             handsSorted_ = true;
             sortAnimation_ = 1.0f;
@@ -123,8 +162,8 @@ void GameScene::Render(graphics::RenderContext& context) {
     context.FillEllipse({70.0f, 88.0f, 1140.0f, 470.0f}, TableGreen);
     context.StrokeEllipse({70.0f, 88.0f, 1140.0f, 470.0f}, Color(0.72f, 0.64f, 0.34f, 0.55f), 3.0f);
 
-    DrawAiArea(context, rules::PlayerId::Ai1, {95.0f, 24.0f, 400.0f, 92.0f});
-    DrawAiArea(context, rules::PlayerId::Ai2, {785.0f, 24.0f, 400.0f, 92.0f});
+    DrawAiArea(context, rules::PlayerId::Ai1, {95.0f, 24.0f, 400.0f, 132.0f});
+    DrawAiArea(context, rules::PlayerId::Ai2, {785.0f, 24.0f, 400.0f, 132.0f});
     if (bombAnimation_ > 0.0f) {
         const float pulse = 1.0f + bombAnimation_ * 0.08f;
         context.StrokeEllipse({70.0f - 8.0f * pulse, 88.0f - 8.0f * pulse, 1140.0f + 16.0f * pulse, 470.0f + 16.0f * pulse}, Color(0.98f, 0.74f, 0.18f, bombAnimation_), 5.0f);
@@ -136,7 +175,8 @@ void GameScene::Render(graphics::RenderContext& context) {
     for (const Button& button : buttons_) {
         DrawButton(context, button);
     }
-    context.FillEllipse({24.0f, 24.0f, 44.0f, 44.0f}, Color(0.18f, 0.42f, 0.34f));
+    const D2D1_COLOR_F backFill = backButtonHover_ ? Color(0.86f, 0.72f, 0.28f) : Color(0.18f, 0.42f, 0.34f);
+    context.FillEllipse({24.0f, 24.0f, 44.0f, 44.0f}, backFill);
     context.StrokeEllipse({24.0f, 24.0f, 44.0f, 44.0f}, Color(0.92f, 0.87f, 0.62f), 1.5f);
     context.DrawTextUtf8("⬅️", {24.0f, 23.0f, 44.0f, 44.0f}, 24.0f, Color(0.98f, 0.98f, 0.90f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
@@ -156,6 +196,7 @@ void GameScene::Render(graphics::RenderContext& context) {
 }
 
 bool GameScene::OnMouseMove(float x, float y) {
+    backButtonHover_ = HitBackButton(x, y);
     UpdateButtonHover(buttons_, x, y);
     const int card = HitPlayerCard(x, y);
     if (dragSelecting_ && card >= 0 && InteractionReady()) {
@@ -266,12 +307,10 @@ void GameScene::DrawPlayerHand(graphics::RenderContext& context) {
             DrawCard(context, app_.CardAtlas(), hand[static_cast<std::size_t>(i)], rect);
             continue;
         } else if (sortAnimation_ > 0.0f) {
-            auto it = std::find_if(playerHandBeforeSort_.begin(), playerHandBeforeSort_.end(), [card = hand[static_cast<std::size_t>(i)]](rules::Card oldCard) {
-                return oldCard.rank == card.rank && oldCard.suit == card.suit;
-            });
-            if (it != playerHandBeforeSort_.end()) {
-                const int oldIndex = static_cast<int>(std::distance(playerHandBeforeSort_.begin(), it));
-                const core::Rect from = CardRectFor(oldIndex, static_cast<int>(playerHandBeforeSort_.size()));
+            const rules::Cards& oldHand = handsBeforeSort_[rules::PlayerIndex(rules::PlayerId::Player)];
+            const int oldIndex = FindCardIndex(oldHand, hand[static_cast<std::size_t>(i)]);
+            if (oldIndex >= 0) {
+                const core::Rect from = CardRectFor(oldIndex, static_cast<int>(oldHand.size()));
                 const float t = 1.0f - sortAnimation_;
                 rect.x = Lerp(from.x, rect.x, t);
                 rect.y = Lerp(from.y, rect.y, t);
@@ -289,8 +328,8 @@ void GameScene::DrawPlayedCards(graphics::RenderContext& context) {
     }
     const float cardW = 87.0f;
     const float cardH = 123.0f;
-    const float overlap = 51.0f;
-    const float totalW = static_cast<float>(cards.size()) * overlap + cardW;
+    const float step = VisibleStepForWidth(cardW);
+    const float totalW = CardRowWidth(static_cast<int>(cards.size()), cardW);
     float x = 640.0f - totalW * 0.5f;
     core::Point source{640.0f, 562.0f};
     if (lastAnimatedPlayer_ == rules::PlayerId::Ai1) {
@@ -314,7 +353,7 @@ void GameScene::DrawPlayedCards(graphics::RenderContext& context) {
             drawRect.y = cy - drawRect.height * 0.5f;
         }
         DrawCard(context, app_.CardAtlas(), card, drawRect);
-        x += overlap;
+        x += step;
     }
 }
 
@@ -328,16 +367,24 @@ void GameScene::DrawAiArea(graphics::RenderContext& context, rules::PlayerId pla
     }
     context.DrawTextUtf8(text.str(), {area.x + 16.0f, area.y + 12.0f, area.width - 32.0f, 28.0f}, 19.0f, Color(0.94f, 0.96f, 0.84f));
     const int count = static_cast<int>(state.hand.size());
-    const float cardW = 32.0f;
-    const float cardH = 45.0f;
-    const float available = area.width - 52.0f - cardW;
-    const float gap = count <= 1 ? 0.0f : std::min(24.0f, available / static_cast<float>(count - 1));
     for (int i = 0; i < count; ++i) {
-        core::Rect target{area.x + 18.0f + i * gap, area.y + 45.0f, cardW, cardH};
+        core::Rect target = AiCardRectFor(i, count, area);
         if (!handsSorted_) {
             const float t = std::clamp((dealElapsed_ - static_cast<float>(i) * DealCardInterval) / DealCardInterval, 0.0f, 1.0f);
             target.x = Lerp(DealSourceCenterX - target.width * 0.5f, target.x, t);
             target.y = Lerp(DealSourceCenterY - target.height * 0.5f, target.y, t);
+        } else if (sortAnimation_ > 0.0f) {
+            const int playerIndex = rules::PlayerIndex(player);
+            const rules::Cards& oldHand = handsBeforeSort_[playerIndex];
+            const int oldIndex = FindCardIndex(oldHand, state.hand[static_cast<std::size_t>(i)]);
+            if (oldIndex >= 0) {
+                // AI cards stay face-down, but their backs still move from the
+                // dealt order to the sorted order so all hands feel consistent.
+                const core::Rect from = AiCardRectFor(oldIndex, static_cast<int>(oldHand.size()), area);
+                const float t = 1.0f - sortAnimation_;
+                target.x = Lerp(from.x, target.x, t);
+                target.y = Lerp(from.y, target.y, t);
+            }
         }
         // After the round ends the result overlay is intentionally delayed, so
         // reveal the AI leftovers here to let the player inspect what was held.
@@ -373,7 +420,7 @@ void GameScene::UpdateActionButtons() {
 }
 
 void GameScene::LayoutActionButtons() {
-    const core::Rect first = CardRect(0);
+    const core::Rect first = CardRectFor(0, FullHandCardCount);
     const float x = first.x;
     const float y = first.y - 52.0f;
     buttons_[0].rect = {x, y, 100.0f, 42.0f};
@@ -407,12 +454,23 @@ core::Rect GameScene::CardRect(int index) const {
 
 core::Rect GameScene::CardRectFor(int index, int count) const {
     const float scale = FixedCardScale;
-    const float cardW = 70.0f * scale;
-    const float cardH = 98.0f * scale;
-    const float overlap = 34.0f * scale;
-    const float totalW = count <= 0 ? 0.0f : (static_cast<float>(count - 1) * overlap + cardW);
+    const float cardW = PlayerCardBaseWidth * scale;
+    const float cardH = PlayerCardBaseHeight * scale;
+    const float step = VisibleStepForWidth(cardW);
+    const float totalW = CardRowWidth(count, cardW);
     const float startX = 640.0f - totalW * 0.5f;
-    return {startX + index * overlap, 612.0f - cardH, cardW, cardH};
+    return {startX + index * step, 612.0f - cardH, cardW, cardH};
+}
+
+core::Rect GameScene::AiCardRectFor(int index, int, const core::Rect& area) const {
+    const resources::CardAtlasInfo& info = resources::GetCardAtlasInfo();
+    const float visibleRatio = static_cast<float>(info.mainX) / static_cast<float>(info.cardWidth);
+    const float fullHandWidth = area.width - AiFullHandHorizontalPadding;
+    const float cardW = fullHandWidth / (1.0f + static_cast<float>(FullHandCardCount - 1) * visibleRatio);
+    const float cardH = cardW * AtlasAspectRatio();
+    const float step = VisibleStepForWidth(cardW);
+    const float x = area.x + (AiFullHandHorizontalPadding * 0.5f) + static_cast<float>(index) * step;
+    return {x, area.y + AiCardTopOffset, cardW, cardH};
 }
 
 bool GameScene::HitBackButton(float x, float y) const {
