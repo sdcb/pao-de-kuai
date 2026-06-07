@@ -25,9 +25,12 @@ endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# CMake 3.22 does not know the CXX26 feature table yet. Keep the requested
-# project setting on newer CMake, and use GCC's current C++26 switch locally.
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.25")
+# CMake 3.22 does not know the CXX26 feature table yet. Newer CMake versions
+# still do not map CXX26 to MSVC, while CXX23 selects MSVC's current preview
+# standard switch.
+if(MSVC)
+    set(CMAKE_CXX_STANDARD 23)
+elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.25")
     set(CMAKE_CXX_STANDARD 26)
 else()
     set(CMAKE_CXX_STANDARD 23)
