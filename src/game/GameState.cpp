@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <sstream>
 
 namespace pdk::game {
@@ -39,6 +40,76 @@ int DragPatternTieBreaker(rules::PatternType type) {
     case rules::PatternType::Invalid: break;
     }
     return 0;
+}
+
+std::map<rules::Rank, int> CountRanks(const rules::Cards& cards) {
+    std::map<rules::Rank, int> counts;
+    for (rules::Card card : cards) {
+        counts[card.rank]++;
+    }
+    return counts;
+}
+
+bool IsConsecutiveRanks(const std::vector<rules::Rank>& ranks) {
+    if (ranks.empty()) {
+        return false;
+    }
+    for (std::size_t i = 1; i < ranks.size(); ++i) {
+        if (rules::RankValue(ranks[i]) != rules::RankValue(ranks[i - 1]) + 1) {
+            return false;
+        }
+    }
+    return ranks.back() != rules::Rank::Two;
+}
+
+rules::Rank MaxRank(const std::vector<rules::Rank>& ranks) {
+    return *std::max_element(ranks.begin(), ranks.end(), [](rules::Rank lhs, rules::Rank rhs) {
+        return rules::RankValue(lhs) < rules::RankValue(rhs);
+    });
+}
+
+std::optional<rules::HandPattern> IdentifyDragOnlyPattern(const rules::Cards& cards) {
+    const int total = static_cast<int>(cards.size());
+    const auto counts = CountRanks(cards);
+    if (total == 3 && counts.size() == 1) {
+        return rules::HandPattern{rules::PatternType::TripleWithOne, cards.front().rank, total, 1, true};
+    }
+
+    if (total < 6 || total % 3 != 0) {
+        return std::nullopt;
+    }
+
+    std::vector<rules::Rank> tripleRanks;
+    tripleRanks.reserve(counts.size());
+    for (const auto& [rank, count] : counts) {
+        if (rank == rules::Rank::Two || count != 3) {
+            return std::nullopt;
+        }
+        tripleRanks.push_back(rank);
+    }
+    std::sort(tripleRanks.begin(), tripleRanks.end(), [](rules::Rank lhs, rules::Rank rhs) {
+        return rules::RankValue(lhs) < rules::RankValue(rhs);
+    });
+    if (!IsConsecutiveRanks(tripleRanks)) {
+        return std::nullopt;
+    }
+    return rules::HandPattern{
+        rules::PatternType::Plane,
+        MaxRank(tripleRanks),
+        total,
+        static_cast<int>(tripleRanks.size()),
+        true
+    };
+}
+
+std::string DragPatternDescription(const rules::HandPattern& pattern) {
+    if (pattern.type == rules::PatternType::TripleWithOne && pattern.cardCount == 3) {
+        return "三张 " + rules::RankName(pattern.mainRank);
+    }
+    if (pattern.type == rules::PatternType::Plane && pattern.cardCount == pattern.groupCount * 3) {
+        return "飞机主体 " + rules::RankName(pattern.mainRank);
+    }
+    return rules::PatternDescription(pattern);
 }
 
 } // namespace
@@ -268,15 +339,23 @@ bool GameState::SelectBestPatternFromDraggedCards(const std::vector<int>& handIn
         if (outsideDragPath) {
             continue;
         }
+
+        rules::HandPattern pattern;
         const auto validation = rules_.ValidateLeadMove(cards, n);
-        if (!validation.ok) {
+        if (validation.ok) {
+            pattern = validation.pattern;
+        } else if (const auto dragOnlyPattern = IdentifyDragOnlyPattern(cards)) {
+            // Drag selection is a visual grouping helper, not a promise that the
+            // current selection can be played; PlaySelected still enforces rules.
+            pattern = *dragOnlyPattern;
+        } else {
             continue;
         }
 
-        const int score = validation.pattern.cardCount * 100000
-            + DragPatternTieBreaker(validation.pattern.type)
-            + rules::RankValue(validation.pattern.mainRank);
-        candidates.push_back(Candidate{cards, validation.pattern, score});
+        const int score = pattern.cardCount * 100000
+            + DragPatternTieBreaker(pattern.type)
+            + rules::RankValue(pattern.mainRank);
+        candidates.push_back(Candidate{cards, pattern, score});
     }
 
     if (candidates.empty()) {
@@ -286,17 +365,29 @@ bool GameState::SelectBestPatternFromDraggedCards(const std::vector<int>& handIn
     const Candidate& chosen = *std::max_element(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
         return lhs.score < rhs.score;
     });
-    selectedIndices_.clear();
-    hintIndices_.clear();
+    std::set<int> chosenIndices;
+    std::vector<int> chosenHints;
     for (std::size_t i = 0; i < hand.size(); ++i) {
         for (rules::Card card : chosen.cards) {
             if (SameCard(hand[i], card)) {
-                selectedIndices_.insert(static_cast<int>(i));
-                hintIndices_.push_back(static_cast<int>(i));
+                const int index = static_cast<int>(i);
+                chosenIndices.insert(index);
+                chosenHints.push_back(index);
             }
         }
     }
-    toast_ = "已按拖拽路线选中 " + rules::PatternDescription(chosen.pattern);
+
+    // Repeating the same drag gesture toggles the selected group off, matching
+    // hint-button behavior for an already selected recommendation.
+    if (selectedIndices_ == chosenIndices) {
+        selectedIndices_.clear();
+        hintIndices_.clear();
+        toast_ = "已取消拖拽选择";
+    } else {
+        selectedIndices_ = std::move(chosenIndices);
+        hintIndices_ = std::move(chosenHints);
+        toast_ = "已按拖拽路线选中 " + DragPatternDescription(chosen.pattern);
+    }
     return true;
 }
 
