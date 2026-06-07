@@ -333,6 +333,8 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     hintIndices_.clear();
     bombs_.clear();
     lastCards_.clear();
+    playedCards_.clear();
+    passObservations_.fill(std::nullopt);
     lastPattern_.reset();
     passCount_ = 0;
     roundOver_ = false;
@@ -664,6 +666,8 @@ void GameState::TestSetRound(
     lastMovePlayer_ = lastMovePlayer;
     lastPattern_ = previousPattern;
     lastCards_.clear();
+    playedCards_.clear();
+    passObservations_.fill(std::nullopt);
     passCount_ = 0;
     roundOver_ = false;
     autoplay_ = false;
@@ -701,6 +705,8 @@ AiContext GameState::MakeAiContext(rules::PlayerId player) const {
             context.minOpponentRemainingCards = std::min(context.minOpponentRemainingCards, context.remainingCards[i]);
         }
     }
+    context.playedCards = playedCards_;
+    context.passObservations = passObservations_;
     return context;
 }
 
@@ -724,10 +730,33 @@ void GameState::AdvanceTurn() {
     }
 }
 
+void GameState::RecordPassObservation(rules::PlayerId player, const rules::HandPattern& pattern) {
+    const int index = Index(player);
+    PassObservation observation{pattern, static_cast<int>(players_[index].hand.size())};
+    std::optional<PassObservation>& existing = passObservations_[static_cast<std::size_t>(index)];
+
+    if (existing && existing->pattern.type == rules::PatternType::Single && pattern.type == rules::PatternType::Single) {
+        // For singles, a lower failed-to-beat rank is stronger information:
+        // failing to beat Q proves K/A/2 are unavailable, while failing to beat K
+        // still leaves open the possibility that the player has a K.
+        if (rules::RankValue(pattern.mainRank) < rules::RankValue(existing->pattern.mainRank)) {
+            existing = observation;
+        }
+        return;
+    }
+
+    if (existing && existing->pattern.type == rules::PatternType::Single && pattern.type != rules::PatternType::Single) {
+        return;
+    }
+
+    existing = observation;
+}
+
 void GameState::PlayCards(rules::PlayerId player, const rules::Cards& cards, const rules::HandPattern& pattern, int disruptionPenalty) {
     const bool wasFollowing = !CurrentPlayerLeads();
     RemoveCardsFromHand(player, cards);
     players_[Index(player)].hasPlayedCards = true;
+    playedCards_.insert(playedCards_.end(), cards.begin(), cards.end());
     lastCards_ = cards;
     lastPattern_ = pattern;
     lastMovePlayer_ = player;
@@ -777,6 +806,7 @@ bool GameState::Pass(rules::PlayerId player) {
     }
 
     passCount_++;
+    RecordPassObservation(player, *lastPattern_);
     const std::string message = PlayerDisplayName(players_, player) + " 不要";
     toast_ = message;
     AddEvent(GameEvent{GameEventType::Passed, player, message, {}});

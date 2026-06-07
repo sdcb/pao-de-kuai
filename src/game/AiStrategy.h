@@ -18,6 +18,13 @@ struct AiMoveChoice {
     int disruptionPenalty{0};
 };
 
+struct PassObservation {
+    // Reliable because this game enforces "must play if you can beat it";
+    // a legal pass proves the player could not beat this pattern at that time.
+    rules::HandPattern pattern;
+    int remainingCards{0};
+};
+
 struct AiContext {
     bool leading{true};
     rules::HandPattern previous;
@@ -26,6 +33,8 @@ struct AiContext {
     int nextPlayerRemainingCards{0};
     int minOpponentRemainingCards{0};
     std::array<int, 3> remainingCards{0, 0, 0};
+    rules::Cards playedCards;
+    std::array<std::optional<PassObservation>, 3> passObservations{};
 };
 
 class AiStrategy {

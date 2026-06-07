@@ -212,9 +212,80 @@ int EvaluateRemainingHand(const rules::Cards& cards) {
     return score;
 }
 
+int TotalCardsOfRank(rules::Rank rank) {
+    if (rank == rules::Rank::Two) {
+        return 1;
+    }
+    if (rank == rules::Rank::Ace) {
+        return 3;
+    }
+    return 4;
+}
+
+int CountRank(const rules::Cards& cards, rules::Rank rank) {
+    int count = 0;
+    for (rules::Card card : cards) {
+        if (card.rank == rank) {
+            count++;
+        }
+    }
+    return count;
+}
+
+int UnknownRankCount(const Candidate& candidate, const AiContext& context, rules::Rank rank) {
+    const int known = CountRank(context.playedCards, rank)
+        + CountRank(candidate.cards, rank)
+        + CountRank(candidate.remainder, rank);
+    return std::max(0, TotalCardsOfRank(rank) - known);
+}
+
+int UnknownHigherControlCount(const Candidate& candidate, const AiContext& context, rules::Rank rank) {
+    int count = 0;
+    if (rank < rules::Rank::King) {
+        count += UnknownRankCount(candidate, context, rules::Rank::King);
+    }
+    if (rank < rules::Rank::Ace) {
+        count += UnknownRankCount(candidate, context, rules::Rank::Ace);
+    }
+    if (rank < rules::Rank::Two) {
+        count += UnknownRankCount(candidate, context, rules::Rank::Two);
+    }
+    return count;
+}
+
+int ProvenSingleControlBonus(const Candidate& candidate, const AiContext& context) {
+    if (candidate.pattern.type != rules::PatternType::Single ||
+        candidate.pattern.mainRank >= rules::Rank::Ace) {
+        return 0;
+    }
+
+    int best = 0;
+    const int candidateRank = rules::RankValue(candidate.pattern.mainRank);
+    for (int i = 0; i < static_cast<int>(context.passObservations.size()); ++i) {
+        if (i == context.currentPlayerIndex || context.remainingCards[i] <= 0) {
+            continue;
+        }
+        const std::optional<PassObservation>& observation = context.passObservations[static_cast<std::size_t>(i)];
+        if (!observation || observation->pattern.type != rules::PatternType::Single) {
+            continue;
+        }
+
+        const int failedRank = rules::RankValue(observation->pattern.mainRank);
+        if (candidateRank >= failedRank) {
+            // Consume only same-pattern information: failing to beat Q single
+            // proves Q/K below A can be useful leads, but says nothing about
+            // pairs, straights, or wing choices.
+            best = std::max(best, 760 - (candidateRank - failedRank) * 35);
+        }
+    }
+    return best;
+}
+
 int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
     const int leaves = static_cast<int>(candidate.remainder.size());
     int score = 0;
+    const bool urgentDefense = context.nextPlayerRemainingCards == 1 ||
+        (context.minOpponentRemainingCards > 0 && context.minOpponentRemainingCards <= 2);
 
     if (context.leading && context.nextPlayerRemainingCards == 1) {
         if (candidate.pattern.type == rules::PatternType::Single) {
@@ -227,6 +298,38 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
 
     if (context.minOpponentRemainingCards > 0 && context.minOpponentRemainingCards <= 2) {
         score += candidate.pattern.cardCount * 35;
+    }
+
+    if (context.leading && !urgentDefense && leaves > 3) {
+        const int rankValue = rules::RankValue(candidate.pattern.mainRank);
+        if (candidate.pattern.type == rules::PatternType::Single) {
+            // Normal lead turns should usually burn low loose cards first. Without
+            // this guard the remainder evaluator can prefer throwing away A/2 just
+            // because the leftover low cards still form a pretty-looking structure.
+            score -= rankValue * 42;
+            if (rankValue >= rules::RankValue(rules::Rank::Ace)) {
+                score -= 520;
+            }
+            if (candidate.pattern.mainRank == rules::Rank::King || candidate.pattern.mainRank == rules::Rank::Ace) {
+                const int unknownHigher = UnknownHigherControlCount(candidate, context, candidate.pattern.mainRank);
+                if (unknownHigher == 0) {
+                    score += 260;
+                } else if (unknownHigher == 1) {
+                    score += 120;
+                }
+            }
+        } else if (candidate.pattern.type == rules::PatternType::Pair) {
+            score -= rankValue * 18;
+            if (rankValue >= rules::RankValue(rules::Rank::Ace)) {
+                score -= 360;
+            }
+        } else {
+            score -= rankValue * 3;
+        }
+    }
+
+    if (context.leading && !urgentDefense) {
+        score += ProvenSingleControlBonus(candidate, context);
     }
 
     if (candidate.pattern.type == rules::PatternType::Bomb) {

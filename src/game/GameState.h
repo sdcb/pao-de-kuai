@@ -66,6 +66,8 @@ public:
     const rules::Cards& LastCards() const { return lastCards_; }
     const std::optional<rules::HandPattern>& LastPattern() const { return lastPattern_; }
     rules::PlayerId LastMovePlayer() const { return lastMovePlayer_; }
+    const rules::Cards& PlayedCards() const { return playedCards_; }
+    const std::array<std::optional<PassObservation>, 3>& PassObservations() const { return passObservations_; }
     const std::set<int>& SelectedIndices() const { return selectedIndices_; }
     const std::vector<int>& HintIndices() const { return hintIndices_; }
     const std::vector<GameEvent>& Events() const { return events_; }
@@ -100,6 +102,7 @@ private:
     bool HasPlayableFollow(rules::PlayerId player) const;
     float NextThinkDelay();
     void AdvanceTurn();
+    void RecordPassObservation(rules::PlayerId player, const rules::HandPattern& pattern);
     void PlayCards(rules::PlayerId player, const rules::Cards& cards, const rules::HandPattern& pattern, int disruptionPenalty = 0);
     bool Pass(rules::PlayerId player);
     void FinishRound(rules::PlayerId winner);
@@ -118,6 +121,8 @@ private:
     rules::PlayerId lastMovePlayer_{rules::PlayerId::Player};
     std::optional<rules::HandPattern> lastPattern_;
     rules::Cards lastCards_;
+    rules::Cards playedCards_;
+    std::array<std::optional<PassObservation>, 3> passObservations_{};
     int passCount_{0};
     bool roundOver_{true};
     bool autoplay_{false};

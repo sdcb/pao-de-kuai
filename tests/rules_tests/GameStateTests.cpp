@@ -129,6 +129,86 @@ TEST_CASE("hint switches to recommendation or toggles it off when already select
     CHECK(state.HintIndices().empty());
 }
 
+TEST_CASE("game state tracks played cards and clears observations for a fresh test round") {
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three), C(rules::Rank::Four)},
+            rules::Cards{C(rules::Rank::Ace)},
+            rules::Cards{C(rules::Rank::King)}
+        },
+        rules::PlayerId::Player,
+        std::nullopt,
+        rules::PlayerId::Player);
+
+    state.TogglePlayerCard(0);
+    REQUIRE(state.PlaySelected());
+    REQUIRE(state.PlayedCards().size() == 1);
+    CHECK(state.PlayedCards().front().rank == rules::Rank::Three);
+
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Ace)},
+            rules::Cards{C(rules::Rank::King)}
+        },
+        rules::PlayerId::Player,
+        std::nullopt,
+        rules::PlayerId::Player);
+
+    CHECK(state.PlayedCards().empty());
+    for (const auto& observation : state.PassObservations()) {
+        CHECK_FALSE(observation.has_value());
+    }
+}
+
+TEST_CASE("game state records pass observations from mandatory-play rule") {
+    const auto queenLead = rules::IdentifyPattern({C(rules::Rank::Queen)}).pattern;
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Jack)},
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Four)}
+        },
+        rules::PlayerId::Player,
+        queenLead,
+        rules::PlayerId::Ai1);
+
+    REQUIRE(state.PassHuman());
+    const auto& observation = state.PassObservations()[rules::PlayerIndex(rules::PlayerId::Player)];
+    REQUIRE(observation.has_value());
+    CHECK(observation->pattern.type == rules::PatternType::Single);
+    CHECK(observation->pattern.mainRank == rules::Rank::Queen);
+    CHECK(observation->remainingCards == 1);
+}
+
+TEST_CASE("ai pass observations survive the relaunch lead") {
+    const auto queenLead = rules::IdentifyPattern({C(rules::Rank::Queen)}).pattern;
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Ace)},
+            rules::Cards{C(rules::Rank::Jack)},
+            rules::Cards{C(rules::Rank::Ten)}
+        },
+        rules::PlayerId::Ai2,
+        queenLead,
+        rules::PlayerId::Player);
+
+    state.Update(1.0f);
+    state.Update(1.0f);
+
+    CHECK(state.CurrentPlayer() == rules::PlayerId::Player);
+    CHECK_FALSE(state.LastPattern().has_value());
+    const auto& ai1Observation = state.PassObservations()[rules::PlayerIndex(rules::PlayerId::Ai1)];
+    const auto& ai2Observation = state.PassObservations()[rules::PlayerIndex(rules::PlayerId::Ai2)];
+    REQUIRE(ai1Observation.has_value());
+    REQUIRE(ai2Observation.has_value());
+    CHECK(ai1Observation->pattern.mainRank == rules::Rank::Queen);
+    CHECK(ai2Observation->pattern.mainRank == rules::Rank::Queen);
+}
+
 TEST_CASE("ai bomb talk ignores existing normal talk cooldown") {
     game::GameState state;
     state.TestSetRound(

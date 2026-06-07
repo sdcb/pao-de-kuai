@@ -105,3 +105,74 @@ TEST_CASE("ai lead avoids a small singleton when next player has one card") {
     CHECK(CountRank(choice.cards, rules::Rank::Three) == 0);
     CHECK(CountRank(choice.cards, rules::Rank::Ace) == 1);
 }
+
+TEST_CASE("ai normal lead does not throw high control singleton first") {
+    game::BasicAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Three),
+        C(rules::Rank::Three, rules::Suit::Hearts),
+        C(rules::Rank::Six),
+        C(rules::Rank::Seven),
+        C(rules::Rank::Seven, rules::Suit::Hearts),
+        C(rules::Rank::Seven, rules::Suit::Diamonds),
+        C(rules::Rank::Eight),
+        C(rules::Rank::Nine),
+        C(rules::Rank::Ten),
+        C(rules::Rank::Ace)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size()), 10, 10));
+
+    CHECK_FALSE(choice.pass);
+    const bool throwsAceSingleton = choice.pattern.type == rules::PatternType::Single && choice.pattern.mainRank == rules::Rank::Ace;
+    CHECK_FALSE(throwsAceSingleton);
+    CHECK(CountRank(choice.cards, rules::Rank::Ace) == 0);
+    CHECK(choice.pattern.mainRank < rules::Rank::Ace);
+}
+
+TEST_CASE("ai lead uses proven safe singleton and keeps higher control cards") {
+    game::BasicAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Queen),
+        C(rules::Rank::King),
+        C(rules::Rank::Ace),
+        C(rules::Rank::Two)
+    };
+    game::AiContext context = LeadContext(static_cast<int>(hand.size()), 10, 10);
+    context.currentPlayerIndex = 1;
+    context.remainingCards = {10, static_cast<int>(hand.size()), 10};
+    context.passObservations[0] = game::PassObservation{
+        rules::HandPattern{rules::PatternType::Single, rules::Rank::Queen, 1},
+        10
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::Queen);
+    CHECK(CountRank(choice.cards, rules::Rank::Ace) == 0);
+    CHECK(CountRank(choice.cards, rules::Rank::Two) == 0);
+}
+
+TEST_CASE("ai urgent lead can still use high singleton despite safe singleton observation") {
+    game::BasicAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Queen),
+        C(rules::Rank::King),
+        C(rules::Rank::Ace)
+    };
+    game::AiContext context = LeadContext(static_cast<int>(hand.size()), 1, 1);
+    context.currentPlayerIndex = 1;
+    context.remainingCards = {1, static_cast<int>(hand.size()), 8};
+    context.passObservations[2] = game::PassObservation{
+        rules::HandPattern{rules::PatternType::Single, rules::Rank::Queen, 1},
+        8
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::Ace);
+}
