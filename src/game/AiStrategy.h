@@ -14,6 +14,8 @@ struct AiMoveChoice {
     rules::Cards cards;
     rules::HandPattern pattern;
     std::string reason;
+    // Strategy metadata for flavor text; gameplay validation still uses cards/pattern.
+    int disruptionPenalty{0};
 };
 
 struct AiContext {

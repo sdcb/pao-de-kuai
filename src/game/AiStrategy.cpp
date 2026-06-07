@@ -12,6 +12,7 @@ struct Candidate {
     rules::Cards cards;
     rules::HandPattern pattern;
     rules::Cards remainder;
+    int disruptionPenalty{};
     int score{};
 };
 
@@ -296,7 +297,7 @@ std::vector<Candidate> GenerateCandidates(const rules::Cards& hand, const AiCont
         if (!context.leading) {
             score += EvaluateRemainingHand(remainder);
         }
-        Candidate candidate{cards, validation.pattern, remainder, score};
+        Candidate candidate{cards, validation.pattern, remainder, disruption, score};
         candidate.score += TacticalAdjustment(candidate, context);
         candidates.push_back(std::move(candidate));
     }
@@ -323,7 +324,7 @@ AiMoveChoice BasicAiStrategy::ChooseMove(const rules::Cards& hand, const AiConte
     });
 
     const Candidate& chosen = candidates.front();
-    return AiMoveChoice{false, chosen.cards, chosen.pattern, "基础 AI 推荐 " + rules::PatternName(chosen.pattern.type)};
+    return AiMoveChoice{false, chosen.cards, chosen.pattern, "基础 AI 推荐 " + rules::PatternName(chosen.pattern.type), chosen.disruptionPenalty};
 }
 
 } // namespace pdk::game

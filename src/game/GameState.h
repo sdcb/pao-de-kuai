@@ -9,6 +9,7 @@
 #include <optional>
 #include <random>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace pdk::game {
@@ -30,6 +31,25 @@ struct GameEvent {
     rules::PlayerId player{rules::PlayerId::Player};
     std::string message;
     rules::Cards cards;
+};
+
+enum class TalkKind {
+    NormalPlay,
+    Pass,
+    BombPlay,
+    AlmostOut,
+    ForcedBreakGoodHand,
+    CannotBeatBigMove,
+    BigMoveTaunt,
+    HumanGoodBomb,
+    HumanGoodStraight,
+    HumanGoodPlane,
+    HumanGoodConsecutivePairs,
+    RoundEndGoodStraight,
+    RoundEndGoodPlane,
+    RoundEndGoodBomb,
+    RoundEndGoodConsecutivePairs,
+    Count
 };
 
 class GameState {
@@ -80,13 +100,16 @@ private:
     bool HasPlayableFollow(rules::PlayerId player) const;
     float NextThinkDelay();
     void AdvanceTurn();
-    void PlayCards(rules::PlayerId player, const rules::Cards& cards, const rules::HandPattern& pattern);
+    void PlayCards(rules::PlayerId player, const rules::Cards& cards, const rules::HandPattern& pattern, int disruptionPenalty = 0);
     bool Pass(rules::PlayerId player);
     void FinishRound(rules::PlayerId winner);
     void RemoveCardsFromHand(rules::PlayerId player, const rules::Cards& cards);
     rules::Cards SelectedCards() const;
     void AddEvent(GameEvent event);
-    void MaybeTalk(rules::PlayerId player, const std::string& trigger);
+    void MaybeTalk(rules::PlayerId player, TalkKind kind, bool force = false);
+    void MaybeTalkAboutHumanMove(const rules::HandPattern& pattern);
+    void MaybeTalkAboutRoundEndGoodHands(rules::PlayerId winner);
+    std::string ChooseTalkText(TalkKind kind);
 
     rules::PaoDeKuaiRules rules_;
     std::array<PlayerState, 3> players_;
@@ -111,6 +134,7 @@ private:
     std::string talkText_;
     rules::PlayerId talkPlayer_{rules::PlayerId::Ai1};
     stats::RoundRecord lastRoundRecord_;
+    std::array<int, static_cast<std::size_t>(TalkKind::Count)> lastTalkIndices_{};
 };
 
 } // namespace pdk::game
