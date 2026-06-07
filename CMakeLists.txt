@@ -4,6 +4,9 @@ if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 
+set(CMAKE_TRY_COMPILE_CONFIGURATION Release)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 project(PaoDeKuai VERSION 0.1.0 LANGUAGES C CXX RC)
 
 option(PDK_BUILD_TESTS "Build rule tests" ON)
@@ -11,7 +14,6 @@ option(PDK_BUILD_TESTS "Build rule tests" ON)
 include(FetchContent)
 
 if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     add_compile_options(
         "$<$<COMPILE_LANGUAGE:C>:/utf-8>"
         "$<$<COMPILE_LANGUAGE:CXX>:/utf-8>"

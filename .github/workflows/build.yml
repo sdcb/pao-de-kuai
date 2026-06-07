@@ -1,0 +1,58 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Windows ${{ matrix.arch }}
+    runs-on: windows-2025-vs2026
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            vcvars_arch: x64
+            build_dir: build/vs2026-x64
+            run_tests: true
+          - arch: x86
+            vcvars_arch: x86
+            build_dir: build/vs2026-x86
+            run_tests: true
+          - arch: arm64
+            vcvars_arch: x64_arm64
+            build_dir: build/vs2026-arm64
+            run_tests: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.vcvars_arch }}
+          cmake -S . -B ${{ matrix.build_dir }} -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DPDK_BUILD_TESTS=ON
+
+      - name: Build
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.vcvars_arch }}
+          cmake --build ${{ matrix.build_dir }}
+
+      - name: Test
+        if: ${{ matrix.run_tests }}
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.vcvars_arch }}
+          ctest --test-dir ${{ matrix.build_dir }} --output-on-failure
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pao-de-kuai-${{ matrix.arch }}
+          path: ${{ matrix.build_dir }}/pao_de_kuai.exe
+          if-no-files-found: error
