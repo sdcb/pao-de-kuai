@@ -24,6 +24,14 @@ float ClampFloat(double value, float min, float max) {
     return std::clamp(static_cast<float>(value), min, max);
 }
 
+std::string JsonString(const cJSON* object, const char* key) {
+    const cJSON* value = cJSON_GetObjectItemCaseSensitive(object, key);
+    if (cJSON_IsString(value) && value->valuestring) {
+        return value->valuestring;
+    }
+    return {};
+}
+
 } // namespace
 
 AppSettings LoadAppSettings(const std::string& path) {
@@ -51,6 +59,21 @@ AppSettings LoadAppSettings(const std::string& path) {
     if (const cJSON* value = cJSON_GetObjectItemCaseSensitive(root, "windowHeight"); cJSON_IsNumber(value)) {
         settings.windowHeight = std::max(720, value->valueint);
     }
+    const cJSON* providers = cJSON_GetObjectItemCaseSensitive(root, "aiProviders");
+    if (cJSON_IsObject(providers)) {
+        const cJSON* item = nullptr;
+        cJSON_ArrayForEach(item, providers) {
+            if (!cJSON_IsObject(item) || !item->string) {
+                continue;
+            }
+            AiProviderSettings provider;
+            provider.type = JsonString(item, "type");
+            provider.endpoint = JsonString(item, "endpoint");
+            provider.apiKey = JsonString(item, "apiKey");
+            provider.model = JsonString(item, "model");
+            settings.aiProviders[item->string] = std::move(provider);
+        }
+    }
 
     cJSON_Delete(root);
     return settings;
@@ -62,6 +85,18 @@ bool SaveAppSettings(const AppSettings& settings, const std::string& path) {
     cJSON_AddNumberToObject(root, "masterVolume", settings.masterVolume);
     cJSON_AddNumberToObject(root, "windowWidth", settings.windowWidth);
     cJSON_AddNumberToObject(root, "windowHeight", settings.windowHeight);
+    if (!settings.aiProviders.empty()) {
+        cJSON* providers = cJSON_CreateObject();
+        for (const auto& [name, provider] : settings.aiProviders) {
+            cJSON* item = cJSON_CreateObject();
+            cJSON_AddStringToObject(item, "type", provider.type.c_str());
+            cJSON_AddStringToObject(item, "endpoint", provider.endpoint.c_str());
+            cJSON_AddStringToObject(item, "apiKey", provider.apiKey.c_str());
+            cJSON_AddStringToObject(item, "model", provider.model.c_str());
+            cJSON_AddItemToObject(providers, name.c_str(), item);
+        }
+        cJSON_AddItemToObject(root, "aiProviders", providers);
+    }
 
     char* text = cJSON_Print(root);
     cJSON_Delete(root);

@@ -71,6 +71,21 @@ add_library(pdk_core STATIC ${PDK_CORE_SOURCES})
 target_include_directories(pdk_core PUBLIC src)
 target_link_libraries(pdk_core PUBLIC cjson_static)
 
+add_library(pdk_ai STATIC
+    src/ai/PdkAiClient.cpp
+    src/ai/WinHttpJsonClient.cpp
+)
+target_include_directories(pdk_ai PUBLIC src)
+target_link_libraries(pdk_ai PUBLIC pdk_core cjson_static)
+target_link_libraries(pdk_ai PRIVATE winhttp)
+target_compile_definitions(pdk_ai PRIVATE
+    WINVER=0x0602
+    _WIN32_WINNT=0x0602
+    UNICODE
+    _UNICODE
+    NOMINMAX
+)
+
 set(PDK_APP_SOURCES
     src/app/App.cpp
     src/app/Dpi.cpp
@@ -115,7 +130,7 @@ target_link_libraries(pdk_app PUBLIC
     mfplat mfreadwrite mfuuid gdi32 user32 comdlg32
 )
 
-foreach(target pdk_core pdk_app cjson_static)
+foreach(target pdk_core pdk_ai pdk_app cjson_static)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -123,6 +138,7 @@ endforeach()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_VERSION VERSION_LESS "3.25")
     target_compile_options(pdk_core PUBLIC -std=c++2c)
+    target_compile_options(pdk_ai PUBLIC -std=c++2c)
     target_compile_options(pdk_app PUBLIC -std=c++2c)
 endif()
 
@@ -162,7 +178,7 @@ if(PDK_BUILD_TESTS)
     )
     FetchContent_MakeAvailable(doctest_src)
 
-    add_executable(rules_tests
+    add_executable(unit_tests
         tests/rules_tests/TestMain.cpp
         tests/rules_tests/RulesPatternTests.cpp
         tests/rules_tests/ScoringTests.cpp
@@ -170,21 +186,39 @@ if(PDK_BUILD_TESTS)
         tests/rules_tests/AiStrategyTests.cpp
         tests/rules_tests/DragSelectionTests.cpp
         tests/rules_tests/StatsTests.cpp
+        tests/ai_client_tests/AiClientUnitTests.cpp
     )
-    target_link_libraries(rules_tests PRIVATE pdk_core doctest::doctest)
-    target_compile_definitions(rules_tests PRIVATE
+    target_link_libraries(unit_tests PRIVATE pdk_ai doctest::doctest)
+    target_compile_definitions(unit_tests PRIVATE
         DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
         PDK_ENABLE_TEST_HOOKS
     )
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_link_options(rules_tests PRIVATE -static-libstdc++ -static-libgcc)
+        target_link_options(unit_tests PRIVATE -static-libstdc++ -static-libgcc)
         if(CMAKE_VERSION VERSION_LESS "3.25")
-            target_compile_options(rules_tests PRIVATE -std=c++2c)
+            target_compile_options(unit_tests PRIVATE -std=c++2c)
+        endif()
+    endif()
+
+    add_executable(ai_client_tests
+        tests/rules_tests/TestMain.cpp
+        tests/ai_client_tests/AiClientIntegrationTests.cpp
+    )
+    target_link_libraries(ai_client_tests PRIVATE pdk_ai doctest::doctest)
+    target_compile_definitions(ai_client_tests PRIVATE
+        DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
+    )
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_link_options(ai_client_tests PRIVATE -static-libstdc++ -static-libgcc)
+        if(CMAKE_VERSION VERSION_LESS "3.25")
+            target_compile_options(ai_client_tests PRIVATE -std=c++2c)
         endif()
     endif()
 
     enable_testing()
-    add_test(NAME rules_tests COMMAND rules_tests)
+    add_test(NAME unit_tests COMMAND unit_tests)
+    add_test(NAME ai_client_tests COMMAND ai_client_tests)
+    set_tests_properties(ai_client_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
     add_test(NAME ui_scene_start COMMAND scene_viewer --scene start --screenshot ${CMAKE_BINARY_DIR}/ui-start.jpg --quality 75)
     add_test(NAME ui_scene_game_deal COMMAND scene_viewer --scene game --mock deal --screenshot ${CMAKE_BINARY_DIR}/ui-game-deal.jpg --quality 75)
     add_test(NAME ui_scene_game COMMAND scene_viewer --scene game --screenshot ${CMAKE_BINARY_DIR}/ui-game.jpg --quality 75)
