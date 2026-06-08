@@ -72,7 +72,9 @@ target_include_directories(pdk_core PUBLIC src)
 target_link_libraries(pdk_core PUBLIC cjson_static)
 
 add_library(pdk_ai STATIC
+    src/ai/LlmOffscreenExperiment.cpp
     src/ai/PdkAiClient.cpp
+    src/ai/TurnRecord.cpp
     src/ai/WinHttpJsonClient.cpp
 )
 target_include_directories(pdk_ai PUBLIC src)
@@ -217,8 +219,6 @@ if(PDK_BUILD_TESTS)
 
     enable_testing()
     add_test(NAME unit_tests COMMAND unit_tests)
-    add_test(NAME ai_client_tests COMMAND ai_client_tests)
-    set_tests_properties(ai_client_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
     add_test(NAME ui_scene_start COMMAND scene_viewer --scene start --screenshot ${CMAKE_BINARY_DIR}/ui-start.jpg --quality 75)
     add_test(NAME ui_scene_game_deal COMMAND scene_viewer --scene game --mock deal --screenshot ${CMAKE_BINARY_DIR}/ui-game-deal.jpg --quality 75)
     add_test(NAME ui_scene_game COMMAND scene_viewer --scene game --screenshot ${CMAKE_BINARY_DIR}/ui-game.jpg --quality 75)

@@ -9,35 +9,51 @@
 
 namespace pdk::ai {
 
-struct PdkAiOption {
-    int index{};
-    std::string summary;
+struct PdkAiToolCall {
+    std::string id;
+    std::string name{"choose_move"};
+    std::string argumentsJson;
+};
+
+struct PdkAiMessage {
+    std::string role;
+    std::string content;
+    std::string reasoningContent;
+    std::string toolCallId;
+    std::string name;
+    std::vector<PdkAiToolCall> toolCalls;
+};
+
+struct PdkAiMove {
+    std::string action;
+    std::vector<std::string> ranks;
+    std::string talk;
 };
 
 struct PdkAiRequest {
     stats::AiProviderSettings provider;
-    std::string systemPrompt;
-    std::string contextText;
-    std::vector<PdkAiOption> options;
-    std::filesystem::path logPath;
+    std::vector<PdkAiMessage> messages;
+    std::filesystem::path requestLogPath;
+    std::filesystem::path responseLogPath;
+    int timeoutMs{30000};
 };
 
 struct PdkAiResponse {
     bool ok{false};
-    int selectedIndex{-1};
-    std::string talk;
+    PdkAiMove move;
     std::string reasoningContent;
-    std::string rawContent;
+    PdkAiMessage assistantMessage;
     std::string rawResponse;
     std::string errorMessage;
 };
 
 class PdkAiClient {
 public:
-    PdkAiResponse Choose(const PdkAiRequest& request) const;
+    PdkAiResponse ChooseMove(const PdkAiRequest& request) const;
 
     static std::string BuildRequestJson(const PdkAiRequest& request);
-    static PdkAiResponse ParseResponse(std::string responseBody, const std::vector<PdkAiOption>& options);
+    static PdkAiResponse ParseResponse(std::string responseBody);
+    static std::string BuildToolResultJson(const PdkAiMove& move, bool accepted, const std::string& reason);
 
 private:
     WinHttpJsonClient http_;

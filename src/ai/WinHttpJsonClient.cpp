@@ -281,12 +281,6 @@ void WinHttpJsonClient::WriteDebugLog(const HttpJsonRequest& request, const Http
     out << "  \"endpoint\": ";
     WriteJsonString(out, SanitizeError(request.endpoint, request.bearerToken));
     out << ",\n";
-    out << "  \"requestHeaders\": {\n";
-    out << "    \"Content-Type\": \"application/json\"";
-    if (!request.bearerToken.empty()) {
-        out << ",\n    \"Authorization\": \"Bearer ***\"";
-    }
-    out << "\n  },\n";
     out << "  \"requestBody\": ";
     WriteJsonBody(out, request.body, request.bearerToken);
     out << ",\n";

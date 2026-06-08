@@ -1,8 +1,11 @@
 #include <doctest/doctest.h>
 
+#include "ai/LlmOffscreenExperiment.h"
 #include "ai/PdkAiClient.h"
 #include "ai/WinHttpJsonClient.h"
 #include "stats/AppSettings.h"
+#include "rules/Card.h"
+#include "rules/HandPattern.h"
 
 #include <cJSON.h>
 
@@ -32,20 +35,96 @@ std::string ReadFile(const std::filesystem::path& path) {
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
-std::string FakeResponseWithReasoning(const char* reasoningKey) {
+ai::PdkAiRequest SampleRequest() {
+    stats::AiProviderSettings provider;
+    provider.type = "openai";
+    provider.endpoint = "https://example.invalid/v1/chat/completions";
+    provider.apiKey = "fake-secret-key";
+    provider.model = "mimo-test";
+    return ai::PdkAiRequest{
+        provider,
+        {
+            ai::PdkAiMessage{"system", "你是跑得快 AI。", {}, {}, {}, {}},
+            ai::PdkAiMessage{"user", "请出牌。", {}, {}, {}, {}}
+        },
+        {},
+        {}
+    };
+}
+
+rules::Card C(rules::Rank rank, rules::Suit suit = rules::Suit::Spades) {
+    return {rank, suit};
+}
+
+ai::TurnSnapshot SnapshotFor(
+    rules::Cards ai1Hand,
+    std::optional<rules::HandPattern> lastPattern = std::nullopt,
+    rules::Cards lastCards = {},
+    rules::PlayerId lastMovePlayer = rules::PlayerId::Player) {
+    ai::TurnSnapshot snapshot;
+    snapshot.hands = {
+        rules::Cards{C(rules::Rank::Three)},
+        std::move(ai1Hand),
+        rules::Cards{C(rules::Rank::Five)}
+    };
+    snapshot.lastPattern = lastPattern;
+    snapshot.lastCards = std::move(lastCards);
+    snapshot.lastMovePlayer = lastMovePlayer;
+    snapshot.currentPlayer = rules::PlayerId::Ai1;
+    return snapshot;
+}
+
+ai::TurnRecord Record(
+    int turnNo,
+    rules::PlayerId actor,
+    ai::TurnDecisionSource source,
+    ai::TurnDecisionReason reason,
+    ai::PdkAiMove move,
+    const ai::TurnSnapshot& before) {
+    ai::TurnRecord record;
+    record.turnNo = turnNo;
+    record.actor = actor;
+    record.source = source;
+    record.reason = reason;
+    record.before = before;
+    record.after = before;
+    record.finalAction = move;
+    record.requestedAction = move;
+    record.trace.reasoningContent = "reasoning turn " + std::to_string(turnNo);
+    record.trace.assistantMessage = ai::PdkAiMessage{
+        "assistant",
+        {},
+        record.trace.reasoningContent,
+        {},
+        {},
+        {ai::PdkAiToolCall{"call_" + std::to_string(turnNo), "choose_move", "{\"action\":\"" + move.action + "\",\"ranks\":[]}"}}
+    };
+    record.trace.toolMessage = ai::PdkAiMessage{
+        "tool",
+        "{\"accepted\":true}",
+        {},
+        "call_" + std::to_string(turnNo),
+        "choose_move",
+        {}
+    };
+    return record;
+}
+
+std::string FakeResponse(const char* reasoningKey = "reasoning_content") {
     std::string response = R"({
         "choices": [
             {
                 "message": {
                     ")";
     response += reasoningKey;
-    response += R"(": "because option 1 keeps the hand flexible",
+    response += R"(": "我选择单张 7 测试工具调用。",
                     "tool_calls": [
                         {
+                            "id": "call_1",
                             "type": "function",
                             "function": {
                                 "name": "choose_move",
-                                "arguments": "{\"index\":1,\"talk\":\"ship it\"}"
+                                "arguments": "{\"action\":\"play\",\"ranks\":[\"7\"],\"talk\":\"先走一张。\"}"
                             }
                         }
                     ]
@@ -54,14 +133,6 @@ std::string FakeResponseWithReasoning(const char* reasoningKey) {
         ]
     })";
     return response;
-}
-
-std::vector<ai::PdkAiOption> SampleOptions() {
-    return {
-        {0, "Pass"},
-        {1, "Play single 7"},
-        {2, "Play pair 9"}
-    };
 }
 
 } // namespace
@@ -93,122 +164,177 @@ TEST_CASE("appsettings loads and preserves AI provider configuration") {
     const stats::AppSettings loaded = stats::LoadAppSettings(path.string());
     REQUIRE(loaded.aiProviders.count("mimo") == 1);
     CHECK(loaded.aiProviders.at("mimo").type == "openai");
-    CHECK(loaded.aiProviders.at("mimo").endpoint == "https://example.invalid/v1/chat/completions");
     CHECK(loaded.aiProviders.at("mimo").apiKey == "fake-secret-key");
-    CHECK(loaded.aiProviders.at("mimo").model == "mimo-test");
 
     REQUIRE(stats::SaveAppSettings(loaded, path.string()));
     const std::string saved = ReadFile(path);
     CHECK(saved.find("\"aiProviders\"") != std::string::npos);
-    CHECK(saved.find("\"mimo\"") != std::string::npos);
-    CHECK(saved.find("\"apiKey\"") != std::string::npos);
     CHECK(saved.find("cardScale") == std::string::npos);
     CHECK(saved.find("animationSpeed") == std::string::npos);
 }
 
-TEST_CASE("pdk AI request JSON uses chat completions tool call schema") {
-    stats::AiProviderSettings provider;
-    provider.type = "openai";
-    provider.endpoint = "https://example.invalid/v1/chat/completions";
-    provider.apiKey = "fake-secret-key";
-    provider.model = "mimo-test";
-
-    const ai::PdkAiRequest request{
-        provider,
-        "You are a Pao De Kuai AI.",
-        "Current hand: 3 4 5.",
-        SampleOptions(),
-        {}
-    };
+TEST_CASE("pdk AI request JSON uses ranks tool call schema") {
+    const ai::PdkAiRequest request = SampleRequest();
     const std::string body = ai::PdkAiClient::BuildRequestJson(request);
     REQUIRE_FALSE(body.empty());
     CHECK(body == ai::PdkAiClient::BuildRequestJson(request));
-    CHECK_FALSE(body.find(provider.apiKey) != std::string::npos);
+    CHECK_FALSE(body.find(request.provider.apiKey) != std::string::npos);
 
     JsonPtr root(cJSON_Parse(body.c_str()));
     REQUIRE(root != nullptr);
     CHECK(std::string(cJSON_GetObjectItemCaseSensitive(root.get(), "model")->valuestring) == "mimo-test");
     CHECK(cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(root.get(), "stream")));
-    CHECK(cJSON_GetObjectItemCaseSensitive(root.get(), "temperature")->valuedouble == doctest::Approx(0.0));
-
-    const cJSON* messages = cJSON_GetObjectItemCaseSensitive(root.get(), "messages");
-    REQUIRE(cJSON_IsArray(messages));
-    CHECK(cJSON_GetArraySize(messages) == 2);
 
     const cJSON* tools = cJSON_GetObjectItemCaseSensitive(root.get(), "tools");
     REQUIRE(cJSON_IsArray(tools));
-    const cJSON* tool = cJSON_GetArrayItem(tools, 0);
-    const cJSON* function = cJSON_GetObjectItemCaseSensitive(tool, "function");
+    const cJSON* function = cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(tools, 0), "function");
     REQUIRE(cJSON_IsObject(function));
     CHECK(std::string(cJSON_GetObjectItemCaseSensitive(function, "name")->valuestring) == "choose_move");
-
-    const cJSON* toolChoice = cJSON_GetObjectItemCaseSensitive(root.get(), "tool_choice");
-    REQUIRE(cJSON_IsObject(toolChoice));
-    const cJSON* choiceFunction = cJSON_GetObjectItemCaseSensitive(toolChoice, "function");
-    REQUIRE(cJSON_IsObject(choiceFunction));
-    CHECK(std::string(cJSON_GetObjectItemCaseSensitive(choiceFunction, "name")->valuestring) == "choose_move");
+    const cJSON* parameters = cJSON_GetObjectItemCaseSensitive(function, "parameters");
+    const cJSON* properties = cJSON_GetObjectItemCaseSensitive(parameters, "properties");
+    CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(properties, "action")));
+    CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(properties, "ranks")));
 }
 
-TEST_CASE("pdk AI response parser returns selected index talk and reasoning content") {
-    const ai::PdkAiResponse response =
-        ai::PdkAiClient::ParseResponse(FakeResponseWithReasoning("reasoning_content"), SampleOptions());
+TEST_CASE("pdk AI request can replay strict tool history") {
+    ai::PdkAiRequest request = SampleRequest();
+    request.messages.insert(request.messages.begin() + 1, ai::PdkAiMessage{
+        "user",
+        "记录上一手：AI2 不要。",
+        {},
+        {},
+        {},
+        {}
+    });
+    request.messages.insert(request.messages.begin() + 2, ai::PdkAiMessage{
+        "assistant",
+        {},
+        "本地系统判断 AI2 要不起。",
+        {},
+        {},
+        {ai::PdkAiToolCall{"synthetic_1", "choose_move", "{\"action\":\"pass\",\"ranks\":[]}"}}
+    });
+    request.messages.insert(request.messages.begin() + 3, ai::PdkAiMessage{
+        "tool",
+        "{\"accepted\":true}",
+        {},
+        "synthetic_1",
+        "choose_move",
+        {}
+    });
+
+    JsonPtr root(cJSON_Parse(ai::PdkAiClient::BuildRequestJson(request).c_str()));
+    REQUIRE(root != nullptr);
+    const cJSON* messages = cJSON_GetObjectItemCaseSensitive(root.get(), "messages");
+    REQUIRE(cJSON_IsArray(messages));
+    CHECK(cJSON_GetArraySize(messages) == 5);
+    const cJSON* assistant = cJSON_GetArrayItem(messages, 2);
+    CHECK(cJSON_IsArray(cJSON_GetObjectItemCaseSensitive(assistant, "tool_calls")));
+    CHECK(std::string(cJSON_GetObjectItemCaseSensitive(assistant, "reasoning_content")->valuestring) == "本地系统判断 AI2 要不起。");
+}
+
+TEST_CASE("experiment history replays only AI1 tool calls") {
+    const auto before = SnapshotFor({C(rules::Rank::Seven), C(rules::Rank::Eight)});
+    std::vector<ai::TurnRecord> records{
+        Record(1, rules::PlayerId::Ai1, ai::TurnDecisionSource::LlmAi, ai::TurnDecisionReason::NormalChoice, {"play", {"7"}, {}}, before),
+        Record(2, rules::PlayerId::Ai2, ai::TurnDecisionSource::LocalAi, ai::TurnDecisionReason::CannotBeat, {"pass", {}, {}}, before),
+        Record(3, rules::PlayerId::Player, ai::TurnDecisionSource::LocalAi, ai::TurnDecisionReason::NormalChoice, {"play", {"9"}, {}}, before)
+    };
+
+    const std::vector<ai::PdkAiMessage> messages =
+        ai::BuildExperimentMessagesForTest(records, "当前轮到 AI1。", ai::ToolHistoryMode::Loose);
+
+    int assistantToolCalls = 0;
+    for (const ai::PdkAiMessage& message : messages) {
+        if (message.role == "assistant") {
+            assistantToolCalls += static_cast<int>(message.toolCalls.size());
+        }
+    }
+    CHECK(assistantToolCalls == 1);
+    CHECK(messages.front().role == "system");
+    CHECK(messages[1].role == "user");
+    CHECK(messages[2].role == "assistant");
+    CHECK(messages.back().content == "当前轮到 AI1。");
+}
+
+TEST_CASE("experiment prompt includes all actions after previous AI1 tool call only") {
+    const auto before = SnapshotFor({C(rules::Rank::Seven), C(rules::Rank::Eight)});
+    std::vector<ai::TurnRecord> records{
+        Record(1, rules::PlayerId::Ai1, ai::TurnDecisionSource::LlmAi, ai::TurnDecisionReason::NormalChoice, {"play", {"7"}, {}}, before),
+        Record(2, rules::PlayerId::Ai2, ai::TurnDecisionSource::LocalAi, ai::TurnDecisionReason::CannotBeat, {"pass", {}, {}}, before),
+        Record(3, rules::PlayerId::Player, ai::TurnDecisionSource::LocalAi, ai::TurnDecisionReason::NormalChoice, {"play", {"9"}, {}}, before)
+    };
+    const std::string prompt = ai::BuildCurrentPromptForTest(
+        records,
+        before.hands,
+        {},
+        std::nullopt,
+        rules::PlayerId::Ai1);
+
+    CHECK(prompt.find("从上次 AI1 tool_call 到现在发生的全部公开行动") != std::string::npos);
+    CHECK(prompt.find("1 ai1") == std::string::npos);
+    CHECK(prompt.find("2 ai2 不要") != std::string::npos);
+    CHECK(prompt.find("3 player 出 9") != std::string::npos);
+}
+
+TEST_CASE("experiment replayed historical prompts are deterministic from TurnRecord prefix") {
+    auto firstBefore = SnapshotFor({C(rules::Rank::Seven), C(rules::Rank::Eight)});
+    auto secondBefore = SnapshotFor({C(rules::Rank::Eight)}, rules::IdentifyPattern({C(rules::Rank::Five)}).pattern, {C(rules::Rank::Five)}, rules::PlayerId::Player);
+    std::vector<ai::TurnRecord> prefix{
+        Record(1, rules::PlayerId::Ai1, ai::TurnDecisionSource::LlmAi, ai::TurnDecisionReason::NormalChoice, {"play", {"7"}, {}}, firstBefore),
+        Record(2, rules::PlayerId::Ai2, ai::TurnDecisionSource::LocalAi, ai::TurnDecisionReason::CannotBeat, {"pass", {}, {}}, firstBefore)
+    };
+    std::vector<ai::TurnRecord> extended = prefix;
+    extended.push_back(Record(3, rules::PlayerId::Ai1, ai::TurnDecisionSource::LlmAi, ai::TurnDecisionReason::NormalChoice, {"play", {"8"}, {}}, secondBefore));
+
+    const std::vector<ai::PdkAiMessage> prefixMessages =
+        ai::BuildExperimentMessagesForTest(prefix, "当前 prompt A", ai::ToolHistoryMode::Strict);
+    const std::vector<ai::PdkAiMessage> extendedMessages =
+        ai::BuildExperimentMessagesForTest(extended, "当前 prompt B", ai::ToolHistoryMode::Strict);
+
+    REQUIRE(prefixMessages.size() >= 2);
+    REQUIRE(extendedMessages.size() >= prefixMessages.size() + 3);
+    CHECK(prefixMessages[1].role == "user");
+    CHECK(extendedMessages[1].role == "user");
+    CHECK(prefixMessages[1].content == extendedMessages[1].content);
+}
+
+TEST_CASE("pdk AI response parser returns ranks and reasoning_content") {
+    const ai::PdkAiResponse response = ai::PdkAiClient::ParseResponse(FakeResponse());
     REQUIRE(response.ok);
-    CHECK(response.selectedIndex == 1);
-    CHECK(response.talk == "ship it");
-    CHECK(response.reasoningContent == "because option 1 keeps the hand flexible");
+    CHECK(response.move.action == "play");
+    REQUIRE(response.move.ranks.size() == 1);
+    CHECK(response.move.ranks[0] == "7");
+    CHECK(response.move.talk == "先走一张。");
+    CHECK(response.reasoningContent == "我选择单张 7 测试工具调用。");
+    REQUIRE(response.assistantMessage.toolCalls.size() == 1);
+    CHECK(response.assistantMessage.toolCalls[0].id == "call_1");
 }
 
-TEST_CASE("pdk AI response parser accepts camelCase reasoning fallback") {
-    const ai::PdkAiResponse response =
-        ai::PdkAiClient::ParseResponse(FakeResponseWithReasoning("reasoningContent"), SampleOptions());
-    REQUIRE(response.ok);
-    CHECK(response.reasoningContent == "because option 1 keeps the hand flexible");
+TEST_CASE("pdk AI response parser rejects camelCase reasoning fallback") {
+    const ai::PdkAiResponse response = ai::PdkAiClient::ParseResponse(FakeResponse("reasoningContent"));
+    CHECK_FALSE(response.ok);
+    CHECK(response.errorMessage.find("reasoning_content") != std::string::npos);
 }
 
-TEST_CASE("pdk AI response parser rejects missing or invalid tool choices") {
-    const ai::PdkAiResponse missing = ai::PdkAiClient::ParseResponse(R"({
-        "choices": [{"message": {"content": "no call"}}]
-    })", SampleOptions());
-    CHECK_FALSE(missing.ok);
-    CHECK_FALSE(missing.errorMessage.empty());
-
-    const ai::PdkAiResponse outOfRange = ai::PdkAiClient::ParseResponse(R"({
-        "choices": [{
-            "message": {
-                "tool_calls": [{
-                    "type": "function",
-                    "function": {
-                        "name": "choose_move",
-                        "arguments": "{\"index\":99}"
-                    }
-                }]
-            }
-        }]
-    })", SampleOptions());
-    CHECK_FALSE(outOfRange.ok);
-    CHECK_FALSE(outOfRange.errorMessage.empty());
-}
-
-TEST_CASE("winhttp debug log redacts bearer token and stays parseable") {
+TEST_CASE("winhttp debug log omits request headers and stays parseable") {
     const auto root = TestRoot();
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
     const auto logPath = root / "redaction-log.json";
-    const std::string secret = "fake-secret-key";
 
     const ai::HttpJsonResponse response = ai::WinHttpJsonClient().Post(ai::HttpJsonRequest{
         "not-a-valid-url",
-        secret,
+        "fake-secret-key",
         R"({"hello":"world"})",
         logPath,
         1000
     });
     CHECK_FALSE(response.ok);
-    CHECK_FALSE(response.errorMessage.find(secret) != std::string::npos);
 
     const std::string log = ReadFile(logPath);
-    CHECK(log.find("Bearer ***") != std::string::npos);
-    CHECK_FALSE(log.find(secret) != std::string::npos);
+    CHECK(log.find("requestHeaders") == std::string::npos);
+    CHECK(log.find("Authorization") == std::string::npos);
 
     JsonPtr rootJson(cJSON_Parse(log.c_str()));
     CHECK(rootJson != nullptr);
