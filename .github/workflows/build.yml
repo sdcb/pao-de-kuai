@@ -16,15 +16,15 @@ jobs:
         include:
           - arch: x64
             vcvars_arch: x64
-            build_dir: build/vs2026-x64
+            build_dir: build-vs2026-x64
             run_tests: true
           - arch: x86
             vcvars_arch: x86
-            build_dir: build/vs2026-x86
+            build_dir: build-vs2026-x86
             run_tests: true
           - arch: arm64
             vcvars_arch: x64_arm64
-            build_dir: build/vs2026-arm64
+            build_dir: build-vs2026-arm64
             run_tests: false
 
     steps:

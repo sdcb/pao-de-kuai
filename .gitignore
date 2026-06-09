@@ -1,4 +1,4 @@
-build/
+build*/
 stat/
 *.user
 *.log

@@ -250,7 +250,7 @@ std::vector<PdkAiMessage> BuildMessages(const game::ExternalAiRequest& request) 
 std::filesystem::path CallPath(const std::filesystem::path& root, int requestId, const char* suffix) {
     std::ostringstream name;
     name << std::setw(4) << std::setfill('0') << requestId << "_" << suffix << ".json";
-    return root / "calls" / name.str();
+    return root / name.str();
 }
 
 game::ExternalAiResult ConvertResult(const PdkAiResponse& response) {
@@ -284,7 +284,7 @@ struct LlmAiController::SharedState {
 LlmAiController::LlmAiController(stats::AiProviderSettings provider)
     : provider_(std::move(provider)),
       state_(std::make_shared<SharedState>()),
-      runRoot_(std::filesystem::path("build") / "vs2026-release" / "ai-ui-runs" / NowStamp()) {}
+      runRoot_(std::filesystem::path("ai-ui-runs") / NowStamp()) {}
 
 LlmAiController::~LlmAiController() {
     Cancel();

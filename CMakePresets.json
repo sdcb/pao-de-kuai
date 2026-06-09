@@ -5,7 +5,7 @@
       "name": "vs2026-release",
       "displayName": "Visual Studio 2026 x64 Release",
       "generator": "NMake Makefiles",
-      "binaryDir": "${sourceDir}/build/vs2026-release",
+      "binaryDir": "${sourceDir}/build-vs2026",
       "environment": {
         "VSLANG": "1033"
       },
