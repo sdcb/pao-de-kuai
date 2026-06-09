@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cctype>
 #include <commctrl.h>
-#include <sstream>
 
 namespace pdk::dialogs {
 namespace {

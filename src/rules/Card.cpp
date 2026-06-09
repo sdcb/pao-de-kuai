@@ -1,7 +1,6 @@
 #include "rules/Card.h"
 
 #include <algorithm>
-#include <sstream>
 
 namespace pdk::rules {
 
@@ -51,14 +50,14 @@ std::string ToString(Card card) {
 }
 
 std::string ToString(const Cards& cards) {
-    std::ostringstream out;
+    std::string out;
     for (std::size_t i = 0; i < cards.size(); ++i) {
         if (i != 0) {
-            out << ' ';
+            out += ' ';
         }
-        out << ToString(cards[i]);
+        out += ToString(cards[i]);
     }
-    return out.str();
+    return out;
 }
 
 void SortByGameOrder(Cards& cards) {

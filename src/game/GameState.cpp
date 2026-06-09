@@ -1,5 +1,6 @@
 #include "game/GameState.h"
 
+#include "core/StringUtil.h"
 #include "stats/StatStore.h"
 
 #include <algorithm>
@@ -8,7 +9,6 @@
 #include <limits>
 #include <map>
 #include <random>
-#include <sstream>
 #include <utility>
 
 namespace pdk::game {
@@ -39,12 +39,12 @@ std::string MoveText(const GameAction& action) {
     if (action.action == "pass") {
         return "不要";
     }
-    std::ostringstream out;
-    out << "出";
+    std::string out = "出";
     for (const std::string& rank : action.ranks) {
-        out << ' ' << rank;
+        out += ' ';
+        out += rank;
     }
-    return out.str();
+    return out;
 }
 
 std::optional<rules::Rank> ParseRank(const std::string& rank) {
@@ -880,16 +880,21 @@ void GameState::AppendRecord(TurnRecord record) {
 
 TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
     TurnDecisionTrace trace;
-    std::ostringstream reasoning;
-    reasoning << "本地记录：" << PlayerLabel(record.actor) << ' ';
+    std::string reasoning = "本地记录：";
+    reasoning += PlayerLabel(record.actor);
+    reasoning += ' ';
     if (record.reason == TurnDecisionReason::CannotBeat) {
-        reasoning << "按规则要不起，只能不要。";
+        reasoning += "按规则要不起，只能不要。";
     } else if (record.reason == TurnDecisionReason::OnlyLegalMove) {
-        reasoning << "只有一种合法选择，直接执行 " << MoveText(record.finalAction) << "。";
+        reasoning += "只有一种合法选择，直接执行 ";
+        reasoning += MoveText(record.finalAction);
+        reasoning += "。";
     } else {
-        reasoning << "执行 " << MoveText(record.finalAction) << "。";
+        reasoning += "执行 ";
+        reasoning += MoveText(record.finalAction);
+        reasoning += "。";
     }
-    trace.reasoningContent = reasoning.str();
+    trace.reasoningContent = reasoning;
     if (externalAi_ && externalAi_->CanHandle(record.actor) &&
         (record.reason == TurnDecisionReason::CannotBeat || record.reason == TurnDecisionReason::OnlyLegalMove)) {
         trace.toolCallId = "synthetic_turn_" + std::to_string(record.turnNo);
@@ -1280,12 +1285,14 @@ void GameState::FinishRound(rules::PlayerId winner) {
         score.spring
     };
 
-    std::ostringstream out;
-    out << (winner == rules::PlayerId::Player ? "胜利" : "失败")
-        << "  本局分: 玩家 " << score.scores[0]
-        << " AI1 " << score.scores[1]
-        << " AI2 " << score.scores[2];
-    toast_ = out.str();
+    toast_.clear();
+    toast_ += winner == rules::PlayerId::Player ? "胜利" : "失败";
+    toast_ += "  本局分: 玩家 ";
+    core::AppendNumber(toast_, score.scores[0]);
+    toast_ += " AI1 ";
+    core::AppendNumber(toast_, score.scores[1]);
+    toast_ += " AI2 ";
+    core::AppendNumber(toast_, score.scores[2]);
     AddEvent(GameEvent{GameEventType::RoundEnded, winner, toast_, {}});
     MaybeTalkAboutRoundEndGoodHands(winner);
 }

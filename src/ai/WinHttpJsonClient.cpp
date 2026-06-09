@@ -1,9 +1,10 @@
 #include "ai/WinHttpJsonClient.h"
 
+#include "core/StringUtil.h"
+
 #include <cJSON.h>
 
 #include <fstream>
-#include <sstream>
 #include <string_view>
 #include <vector>
 
@@ -27,9 +28,10 @@ std::wstring Utf8ToWide(const std::string& value) {
 }
 
 std::string ErrorFromLastError(const char* operation) {
-    std::ostringstream out;
-    out << operation << " failed with Windows error " << GetLastError();
-    return out.str();
+    std::string out = operation;
+    out += " failed with Windows error ";
+    core::AppendNumber(out, GetLastError());
+    return out;
 }
 
 std::string SanitizeError(std::string error, const std::string& secret) {
@@ -45,42 +47,43 @@ std::string SanitizeError(std::string error, const std::string& secret) {
 }
 
 std::string JsonEscape(std::string_view value) {
-    std::ostringstream out;
+    std::string out;
     for (const unsigned char ch : value) {
         switch (ch) {
         case '\\':
-            out << "\\\\";
+            out += "\\\\";
             break;
         case '"':
-            out << "\\\"";
+            out += "\\\"";
             break;
         case '\b':
-            out << "\\b";
+            out += "\\b";
             break;
         case '\f':
-            out << "\\f";
+            out += "\\f";
             break;
         case '\n':
-            out << "\\n";
+            out += "\\n";
             break;
         case '\r':
-            out << "\\r";
+            out += "\\r";
             break;
         case '\t':
-            out << "\\t";
+            out += "\\t";
             break;
         default:
             if (ch < 0x20) {
-                out << "\\u";
                 constexpr char hex[] = "0123456789abcdef";
-                out << '0' << '0' << hex[(ch >> 4) & 0x0F] << hex[ch & 0x0F];
+                out += "\\u00";
+                out += hex[(ch >> 4) & 0x0F];
+                out += hex[ch & 0x0F];
             } else {
-                out << static_cast<char>(ch);
+                out += static_cast<char>(ch);
             }
             break;
         }
     }
-    return out.str();
+    return out;
 }
 
 void WriteJsonString(std::ostream& out, const std::string& value) {
@@ -251,9 +254,8 @@ HttpJsonResponse WinHttpJsonClient::Post(const HttpJsonRequest& request) const {
         }
         response.ok = response.statusCode >= 200 && response.statusCode < 300 && response.errorMessage.empty();
         if (!response.ok && response.errorMessage.empty()) {
-            std::ostringstream out;
-            out << "HTTP status " << response.statusCode;
-            response.errorMessage = out.str();
+            response.errorMessage = "HTTP status ";
+            core::AppendNumber(response.errorMessage, response.statusCode);
         }
     }
 

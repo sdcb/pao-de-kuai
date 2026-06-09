@@ -1,5 +1,6 @@
 #include "ai/LlmOffscreenExperiment.h"
 
+#include "core/StringUtil.h"
 #include "game/AiStrategy.h"
 #include "rules/Deck.h"
 #include "rules/MoveValidator.h"
@@ -12,11 +13,9 @@
 #include <ctime>
 #include <cstdint>
 #include <fstream>
-#include <iomanip>
 #include <map>
 #include <optional>
 #include <random>
-#include <sstream>
 
 namespace pdk::ai {
 namespace {
@@ -52,9 +51,9 @@ std::string NowStamp() {
 #else
     localtime_r(&time, &tm);
 #endif
-    std::ostringstream out;
-    out << std::put_time(&tm, "%Y%m%d-%H%M%S");
-    return out.str();
+    char text[32]{};
+    std::strftime(text, sizeof(text), "%Y%m%d-%H%M%S", &tm);
+    return text;
 }
 
 void WriteTextFile(const std::filesystem::path& path, const std::string& text) {
@@ -85,14 +84,14 @@ TurnSnapshot Snapshot(const SimulationState& state) {
 }
 
 std::string RankList(const std::vector<std::string>& ranks) {
-    std::ostringstream out;
+    std::string out;
     for (std::size_t i = 0; i < ranks.size(); ++i) {
         if (i != 0) {
-            out << ' ';
+            out += ' ';
         }
-        out << ranks[i];
+        out += ranks[i];
     }
-    return out.str();
+    return out;
 }
 
 std::vector<std::string> RanksOf(const rules::Cards& cards) {
@@ -150,14 +149,14 @@ std::string CardsText(const rules::Cards& cards) {
     if (cards.empty()) {
         return "无";
     }
-    std::ostringstream out;
+    std::string out;
     for (std::size_t i = 0; i < cards.size(); ++i) {
         if (i != 0) {
-            out << ' ';
+            out += ' ';
         }
-        out << rules::RankName(cards[i].rank);
+        out += rules::RankName(cards[i].rank);
     }
-    return out.str();
+    return out;
 }
 
 void RecordPassObservation(game::AiContext& context, const TurnRecord& record) {
@@ -218,35 +217,42 @@ std::string RecommendationText(
     const std::vector<game::AiMoveChoice> recommendations =
         localAi.RecommendMoves(snapshot.hands[static_cast<std::size_t>(Index(perspective.self))], context, 3);
 
-    std::ostringstream out;
-    out << "本地决策树 AI 的前 3 个建议（仅供参考，最终由你决定）：\n";
+    std::string out = "本地决策树 AI 的前 3 个建议（仅供参考，最终由你决定）：\n";
     if (recommendations.empty()) {
-        out << "- 无。\n";
-        return out.str();
+        out += "- 无。\n";
+        return out;
     }
     for (std::size_t i = 0; i < recommendations.size(); ++i) {
         const game::AiMoveChoice& choice = recommendations[i];
-        out << "- " << (i + 1) << ". ";
+        out += "- ";
+        core::AppendNumber(out, i + 1);
+        out += ". ";
         if (choice.pass) {
-            out << "不要";
+            out += "不要";
         } else {
-            out << "出 " << CardsText(choice.cards) << "，牌型 " << PatternText(choice.pattern);
+            out += "出 ";
+            out += CardsText(choice.cards);
+            out += "，牌型 ";
+            out += PatternText(choice.pattern);
         }
-        out << "，" << choice.reason << "\n";
+        out += "，";
+        out += choice.reason;
+        out += "\n";
     }
-    return out.str();
+    return out;
 }
 
 std::string SystemPrompt() {
-    std::ostringstream out;
-    out << "你正在扮演三人跑得快中的一名 AI 玩家。\n"
-        << "真实决策时只调用 play_cards 工具。"
-        << "record_forced_move 只会出现在历史中，用来记录规则强制动作，不是本次可调用的策略选择。\n"
-        << "固定规则如下：\n"
-        << rules::SharedGameRulesText() << "\n"
-        << "play_cards 只返回点数，不返回花色；对子、三张、炸弹需要重复点数。"
-        << "如果你返回非法牌或本地不存在的牌，本地裁判会判定失败。";
-    return out.str();
+    std::string out =
+        "你正在扮演三人跑得快中的一名 AI 玩家。\n"
+        "真实决策时只调用 play_cards 工具。"
+        "record_forced_move 只会出现在历史中，用来记录规则强制动作，不是本次可调用的策略选择。\n"
+        "固定规则如下：\n";
+    out += rules::SharedGameRulesText();
+    out += "\n"
+        "play_cards 只返回点数，不返回花色；对子、三张、炸弹需要重复点数。"
+        "如果你返回非法牌或本地不存在的牌，本地裁判会判定失败。";
+    return out;
 }
 
 std::string CurrentPrompt(
@@ -256,17 +262,26 @@ std::string CurrentPrompt(
     const std::optional<rules::HandPattern>& lastPattern,
     rules::PlayerId lastMovePlayer,
     const PromptPerspective& perspective = {}) {
-    std::ostringstream out;
-    out << "现在轮到你决策。\n";
-    out << "你的手牌: " << CardsText(hands[Index(rules::PlayerId::Ai1)]) << "\n";
-    out << "剩余张数: 玩家=" << hands[0].size()
-        << ", 你=" << hands[1].size()
-        << ", 另一名 AI=" << hands[2].size() << "\n";
+    std::string out = "现在轮到你决策。\n";
+    out += "你的手牌: ";
+    out += CardsText(hands[Index(rules::PlayerId::Ai1)]);
+    out += "\n剩余张数: 玩家=";
+    core::AppendNumber(out, hands[0].size());
+    out += ", 你=";
+    core::AppendNumber(out, hands[1].size());
+    out += ", 另一名 AI=";
+    core::AppendNumber(out, hands[2].size());
+    out += "\n";
     if (lastPattern) {
-        out << "当前要压的牌: " << PromptPlayerLabel(lastMovePlayer, perspective) << " "
-            << CardsText(lastCards) << "，牌型 " << PatternText(lastPattern) << "\n";
+        out += "当前要压的牌: ";
+        out += PromptPlayerLabel(lastMovePlayer, perspective);
+        out += " ";
+        out += CardsText(lastCards);
+        out += "，牌型 ";
+        out += PatternText(lastPattern);
+        out += "\n";
     } else {
-        out << "当前是领出，可以主动选择任意合法牌型。\n";
+        out += "当前是领出，可以主动选择任意合法牌型。\n";
     }
     TurnSnapshot snapshot;
     snapshot.hands = hands;
@@ -274,7 +289,7 @@ std::string CurrentPrompt(
     snapshot.lastPattern = lastPattern;
     snapshot.lastMovePlayer = lastMovePlayer;
     snapshot.currentPlayer = perspective.self;
-    out << RecommendationText(snapshot, records, perspective);
+    out += RecommendationText(snapshot, records, perspective);
 
     std::size_t start = 0;
     for (std::size_t i = records.size(); i > 0; --i) {
@@ -283,22 +298,30 @@ std::string CurrentPrompt(
             break;
         }
     }
-    out << "从上次你 tool_call 到现在发生的全部公开行动:\n";
+    out += "从上次你 tool_call 到现在发生的全部公开行动:\n";
     if (start >= records.size()) {
-        out << "- 无，你连续决策。\n";
+        out += "- 无，你连续决策。\n";
     }
     for (std::size_t i = start; i < records.size(); ++i) {
         const TurnRecord& record = records[i];
-        out << "- " << record.turnNo << " " << PromptPlayerLabel(record.actor, perspective) << " "
-            << MoveText(record.finalAction) << "，来源 " << SourceLabel(record.source)
-            << "，原因 " << ReasonLabel(record.reason);
+        out += "- ";
+        core::AppendNumber(out, record.turnNo);
+        out += " ";
+        out += PromptPlayerLabel(record.actor, perspective);
+        out += " ";
+        out += MoveText(record.finalAction);
+        out += "，来源 ";
+        out += SourceLabel(record.source);
+        out += "，原因 ";
+        out += ReasonLabel(record.reason);
         if (record.finalPattern) {
-            out << "，牌型 " << PatternText(record.finalPattern);
+            out += "，牌型 ";
+            out += PatternText(record.finalPattern);
         }
-        out << "\n";
+        out += "\n";
     }
-    out << "请结合完整历史和当前手牌，只调用 play_cards。";
-    return out.str();
+    out += "请结合完整历史和当前手牌，只调用 play_cards。";
+    return out;
 }
 
 std::string CurrentPrompt(const SimulationState& state, const std::vector<TurnRecord>& records) {
@@ -338,16 +361,20 @@ std::string ForcedArgumentsJson(const TurnRecord& record) {
 }
 
 std::string SyntheticReasoning(const TurnRecord& record) {
-    std::ostringstream out;
-    out << "本地记录：";
+    std::string out = "本地记录：";
     if (record.reason == TurnDecisionReason::CannotBeat) {
-        out << PlayerLabel(record.actor) << " 按规则要不起，只能不要。";
+        out += PlayerLabel(record.actor);
+        out += " 按规则要不起，只能不要。";
     } else if (record.reason == TurnDecisionReason::OnlyLegalMove) {
-        out << PlayerLabel(record.actor) << " 只有一种合法选择，直接执行。";
+        out += PlayerLabel(record.actor);
+        out += " 只有一种合法选择，直接执行。";
     } else {
-        out << PlayerLabel(record.actor) << " 使用本地基础策略执行 " << MoveText(record.finalAction) << "。";
+        out += PlayerLabel(record.actor);
+        out += " 使用本地基础策略执行 ";
+        out += MoveText(record.finalAction);
+        out += "。";
     }
-    return out.str();
+    return out;
 }
 
 PdkAiMessage SyntheticAssistantMessage(const TurnRecord& record) {
@@ -631,9 +658,12 @@ bool ValidateLlmMove(
 }
 
 std::filesystem::path CallPath(const std::filesystem::path& root, int callNo, const char* suffix) {
-    std::ostringstream name;
-    name << std::setw(4) << std::setfill('0') << callNo << "_" << suffix << ".json";
-    return root / "calls" / name.str();
+    std::string name;
+    core::AppendPaddedNumber(name, callNo, 4);
+    name += "_";
+    name += suffix;
+    name += ".json";
+    return root / "calls" / name;
 }
 
 TurnRecord MakeLlmRecord(

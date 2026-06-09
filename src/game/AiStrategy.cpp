@@ -1,10 +1,11 @@
 #include "game/AiStrategy.h"
 
+#include "core/StringUtil.h"
+
 #include <algorithm>
 #include <limits>
 #include <map>
 #include <set>
-#include <sstream>
 #include <vector>
 
 namespace pdk::game {
@@ -352,16 +353,21 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
 }
 
 std::string CandidateKey(const Candidate& candidate) {
-    std::ostringstream out;
-    out << rules::PatternName(candidate.pattern.type) << ':'
-        << rules::RankName(candidate.pattern.mainRank) << ':'
-        << candidate.pattern.cardCount << ':'
-        << candidate.pattern.groupCount << ':';
+    std::string out = rules::PatternName(candidate.pattern.type);
+    out += ':';
+    out += rules::RankName(candidate.pattern.mainRank);
+    out += ':';
+    core::AppendNumber(out, candidate.pattern.cardCount);
+    out += ':';
+    core::AppendNumber(out, candidate.pattern.groupCount);
+    out += ':';
     const auto counts = CountRanks(candidate.cards);
     for (const auto& [rank, count] : counts) {
-        out << rules::RankName(rank) << count << ',';
+        out += rules::RankName(rank);
+        core::AppendNumber(out, count);
+        out += ',';
     }
-    return out.str();
+    return out;
 }
 
 rules::Cards RemainingAfterPlay(const rules::Cards& hand, std::uint64_t mask) {

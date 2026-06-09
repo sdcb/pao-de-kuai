@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
-#include <sstream>
+#include <iterator>
 #include <string_view>
 #include <vector>
 #include <windows.h>
@@ -25,9 +25,7 @@ std::string ReadFile(const std::string& path) {
     if (!in) {
         return {};
     }
-    std::ostringstream buffer;
-    buffer << in.rdbuf();
-    return buffer.str();
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
 float ClampFloat(double value, float min, float max) {

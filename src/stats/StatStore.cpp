@@ -3,9 +3,9 @@
 #include <cJSON.h>
 
 #include <chrono>
+#include <ctime>
 #include <fstream>
-#include <iomanip>
-#include <sstream>
+#include <iterator>
 
 namespace pdk::stats {
 namespace {
@@ -15,9 +15,7 @@ std::string ReadFile(const std::filesystem::path& path) {
     if (!in) {
         return {};
     }
-    std::ostringstream buffer;
-    buffer << in.rdbuf();
-    return buffer.str();
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
 std::string LocalDateTime(const char* fmt) {
@@ -29,9 +27,9 @@ std::string LocalDateTime(const char* fmt) {
 #else
     localtime_r(&time, &local);
 #endif
-    std::ostringstream out;
-    out << std::put_time(&local, fmt);
-    return out.str();
+    char text[32]{};
+    std::strftime(text, sizeof(text), fmt, &local);
+    return text;
 }
 
 cJSON* ScoresToJson(const std::array<int, 3>& scores) {

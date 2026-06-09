@@ -3,6 +3,7 @@
 #include "ai/LlmAiController.h"
 #include "app/App.h"
 #include "audio/SoundIds.h"
+#include "core/StringUtil.h"
 #include "overlays/ReturnToMenuOverlay.h"
 #include "overlays/RoundResultOverlay.h"
 #include "overlays/TalkBubbleOverlay.h"
@@ -11,7 +12,6 @@
 #include <algorithm>
 #include <map>
 #include <memory>
-#include <sstream>
 
 namespace pdk::scenes {
 namespace {
@@ -198,9 +198,10 @@ void GameScene::Render(graphics::RenderContext& context) {
 
     const std::string current = "当前轮到: " + PlayerName(game_.CurrentPlayer());
     context.DrawTextUtf8(current, {510.0f, 28.0f, 260.0f, 36.0f}, 21.0f, Color(0.95f, 0.96f, 0.83f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-    std::ostringstream playerInfo;
-    playerInfo << app_.Settings().playerName << "  今日分 " << todayScores_[0];
-    context.DrawTextUtf8(playerInfo.str(), {60.0f, 676.0f, 300.0f, 32.0f}, 20.0f, Color(0.95f, 0.96f, 0.83f));
+    std::string playerInfo = app_.Settings().playerName;
+    playerInfo += "  今日分 ";
+    core::AppendNumber(playerInfo, todayScores_[0]);
+    context.DrawTextUtf8(playerInfo, {60.0f, 676.0f, 300.0f, 32.0f}, 20.0f, Color(0.95f, 0.96f, 0.83f));
     if (game_.LastPattern()) {
         context.DrawTextUtf8("上家: " + PlayerName(game_.LastMovePlayer()) + " " + rules::PatternDescription(*game_.LastPattern()),
             {390.0f, 92.0f, 520.0f, 32.0f}, 18.0f, Color(0.87f, 0.94f, 0.82f), DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -376,12 +377,15 @@ void GameScene::DrawPlayedCards(graphics::RenderContext& context) {
 void GameScene::DrawAiArea(graphics::RenderContext& context, rules::PlayerId player, const core::Rect& area) {
     const auto& state = game_.Players()[rules::PlayerIndex(player)];
     DrawPanel(context, area, Color(0.04f, 0.15f, 0.13f, 0.88f));
-    std::ostringstream text;
-    text << state.name << "  剩 " << state.hand.size() << " 张  今日分 " << todayScores_[rules::PlayerIndex(player)];
+    std::string text = state.name;
+    text += "  剩 ";
+    core::AppendNumber(text, state.hand.size());
+    text += " 张  今日分 ";
+    core::AppendNumber(text, todayScores_[rules::PlayerIndex(player)]);
     if (game_.CurrentPlayer() == player) {
-        text << (game_.ExternalAiPending() ? "  联网思考中" : "  思考中");
+        text += game_.ExternalAiPending() ? "  联网思考中" : "  思考中";
     }
-    context.DrawTextUtf8(text.str(), {area.x + 16.0f, area.y + 12.0f, area.width - 32.0f, 28.0f}, 19.0f, Color(0.94f, 0.96f, 0.84f));
+    context.DrawTextUtf8(text, {area.x + 16.0f, area.y + 12.0f, area.width - 32.0f, 28.0f}, 19.0f, Color(0.94f, 0.96f, 0.84f));
     const int count = static_cast<int>(state.hand.size());
     for (int i = 0; i < count; ++i) {
         core::Rect target = AiCardRectFor(i, count, area);

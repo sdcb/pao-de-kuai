@@ -5,7 +5,6 @@
 #include <limits>
 #include <map>
 #include <optional>
-#include <sstream>
 
 namespace pdk::rules {
 namespace {
@@ -194,12 +193,13 @@ std::string PatternDescription(const HandPattern& pattern) {
     if (!pattern.IsValid()) {
         return PatternName(PatternType::Invalid);
     }
-    std::ostringstream out;
-    out << PatternName(pattern.type) << " " << RankName(pattern.mainRank);
+    std::string out = PatternName(pattern.type);
+    out += ' ';
+    out += RankName(pattern.mainRank);
     if (pattern.lastHandShort) {
-        out << " (最后一手不足带牌)";
+        out += " (最后一手不足带牌)";
     }
-    return out.str();
+    return out;
 }
 
 bool SameComparisonClass(const HandPattern& lhs, const HandPattern& rhs) {

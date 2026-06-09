@@ -2,8 +2,7 @@
 
 #include "app/App.h"
 #include "audio/SoundIds.h"
-
-#include <sstream>
+#include "core/StringUtil.h"
 
 namespace pdk::scenes {
 
@@ -28,15 +27,23 @@ void StatsScene::Render(graphics::RenderContext& context) {
     auto block = [&](const char* title, const stats::StatSummary& summary, float x) {
         DrawPanel(context, {x, 135.0f, 350.0f, 390.0f});
         context.DrawTextUtf8(title, {x + 24.0f, 158.0f, 302.0f, 34.0f}, 25.0f, Color(0.96f, 0.88f, 0.44f));
-        std::ostringstream text;
-        text << "局数: " << summary.rounds << "\n\n";
-        text << "玩家得分: " << summary.scores[0] << "\n";
-        text << "AI1 得分: " << summary.scores[1] << "\n";
-        text << "AI2 得分: " << summary.scores[2] << "\n\n";
-        text << "炸弹次数: " << summary.bombs << "\n";
-        text << "关圆鸡人数: " << summary.springLosers << "\n";
-        text << "历史最高单局: " << summary.bestSingleRoundPlayerScore << "\n";
-        context.DrawTextUtf8(text.str(), {x + 26.0f, 215.0f, 298.0f, 280.0f}, 22.0f, Color(0.88f, 0.94f, 0.84f));
+        std::string text;
+        text += "局数: ";
+        core::AppendNumber(text, summary.rounds);
+        text += "\n\n玩家得分: ";
+        core::AppendNumber(text, summary.scores[0]);
+        text += "\nAI1 得分: ";
+        core::AppendNumber(text, summary.scores[1]);
+        text += "\nAI2 得分: ";
+        core::AppendNumber(text, summary.scores[2]);
+        text += "\n\n炸弹次数: ";
+        core::AppendNumber(text, summary.bombs);
+        text += "\n关圆鸡人数: ";
+        core::AppendNumber(text, summary.springLosers);
+        text += "\n历史最高单局: ";
+        core::AppendNumber(text, summary.bestSingleRoundPlayerScore);
+        text += "\n";
+        context.DrawTextUtf8(text, {x + 26.0f, 215.0f, 298.0f, 280.0f}, 22.0f, Color(0.88f, 0.94f, 0.84f));
     };
     block("今日", today_, 80.0f);
     block("本月", month_, 465.0f);
