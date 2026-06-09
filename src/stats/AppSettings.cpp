@@ -59,6 +59,14 @@ AppSettings LoadAppSettings(const std::string& path) {
     if (const cJSON* value = cJSON_GetObjectItemCaseSensitive(root, "windowHeight"); cJSON_IsNumber(value)) {
         settings.windowHeight = std::max(720, value->valueint);
     }
+    if (const cJSON* value = cJSON_GetObjectItemCaseSensitive(root, "ai1");
+        cJSON_IsString(value) && value->valuestring) {
+        settings.ai1 = value->valuestring;
+    }
+    if (const cJSON* value = cJSON_GetObjectItemCaseSensitive(root, "ai2");
+        cJSON_IsString(value) && value->valuestring) {
+        settings.ai2 = value->valuestring;
+    }
     const cJSON* providers = cJSON_GetObjectItemCaseSensitive(root, "aiProviders");
     if (cJSON_IsObject(providers)) {
         const cJSON* item = nullptr;
@@ -85,6 +93,8 @@ bool SaveAppSettings(const AppSettings& settings, const std::string& path) {
     cJSON_AddNumberToObject(root, "masterVolume", settings.masterVolume);
     cJSON_AddNumberToObject(root, "windowWidth", settings.windowWidth);
     cJSON_AddNumberToObject(root, "windowHeight", settings.windowHeight);
+    cJSON_AddStringToObject(root, "ai1", settings.ai1.c_str());
+    cJSON_AddStringToObject(root, "ai2", settings.ai2.c_str());
     if (!settings.aiProviders.empty()) {
         cJSON* providers = cJSON_CreateObject();
         for (const auto& [name, provider] : settings.aiProviders) {

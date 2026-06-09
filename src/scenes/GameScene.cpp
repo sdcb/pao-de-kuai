@@ -9,6 +9,7 @@
 #include "stats/StatStore.h"
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <sstream>
 
@@ -92,9 +93,20 @@ void GameScene::OnEnter() {
         app_.LoadGameResources();
     }
     if (!mock_ && !app_.ViewerMode()) {
-        const auto provider = app_.Settings().aiProviders.find("mimo");
-        if (provider != app_.Settings().aiProviders.end()) {
-            game_.SetExternalAiController(std::make_shared<ai::LlmAiController>(provider->second));
+        std::map<rules::PlayerId, stats::AiProviderSettings> remotePlayers;
+        auto addRemotePlayer = [&](rules::PlayerId player, const std::string& providerName) {
+            if (providerName.empty() || providerName == "local") {
+                return;
+            }
+            const auto provider = app_.Settings().aiProviders.find(providerName);
+            if (provider != app_.Settings().aiProviders.end()) {
+                remotePlayers[player] = provider->second;
+            }
+        };
+        addRemotePlayer(rules::PlayerId::Ai1, app_.Settings().ai1);
+        addRemotePlayer(rules::PlayerId::Ai2, app_.Settings().ai2);
+        if (!remotePlayers.empty()) {
+            game_.SetExternalAiController(std::make_shared<ai::LlmAiController>(std::move(remotePlayers)));
         }
     }
     game_.StartNewRound(app_.Settings().playerName, mock_ ? 20260606u : std::random_device{}());

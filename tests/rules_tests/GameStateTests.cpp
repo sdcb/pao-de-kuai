@@ -31,10 +31,13 @@ bool HasTalkContaining(const game::GameState& state, const std::string& text) {
 
 class MockExternalAiController final : public game::ExternalAiController {
 public:
-    explicit MockExternalAiController(game::ExternalAiResult result) : result_(std::move(result)) {}
+    explicit MockExternalAiController(
+        game::ExternalAiResult result,
+        rules::PlayerId handledPlayer = rules::PlayerId::Ai1)
+        : result_(std::move(result)), handledPlayer_(handledPlayer) {}
 
     bool CanHandle(rules::PlayerId player) const override {
-        return player == rules::PlayerId::Ai1;
+        return player == handledPlayer_;
     }
 
     bool HasPending() const override {
@@ -64,6 +67,7 @@ public:
 
 private:
     game::ExternalAiResult result_;
+    rules::PlayerId handledPlayer_{rules::PlayerId::Ai1};
     bool pending_{false};
 };
 
@@ -195,6 +199,34 @@ TEST_CASE("local AI2 actions are recorded but not external controlled") {
     CHECK(state.TurnRecords().back().actor == rules::PlayerId::Ai2);
     CHECK(state.TurnRecords().back().source == game::TurnDecisionSource::LocalAi);
     CHECK(state.TurnRecords().back().trace.toolCallId.empty());
+}
+
+TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
+    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    auto controller = std::make_shared<MockExternalAiController>(
+        game::ExternalAiResult{},
+        rules::PlayerId::Ai2);
+
+    game::GameState state;
+    state.SetExternalAiController(controller);
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Six)},
+            rules::Cards{C(rules::Rank::Five)}
+        },
+        rules::PlayerId::Ai2,
+        fourLead,
+        rules::PlayerId::Player);
+
+    state.Update(1.0f);
+    CHECK(controller->startCount == 0);
+    REQUIRE(state.TurnRecords().size() == 1);
+    const game::TurnRecord& record = state.TurnRecords().back();
+    CHECK(record.actor == rules::PlayerId::Ai2);
+    CHECK(record.reason == game::TurnDecisionReason::OnlyLegalMove);
+    CHECK(record.trace.toolName == "record_forced_move");
+    CHECK_FALSE(record.trace.toolCallId.empty());
 }
 
 TEST_CASE("invalid LLM decision falls back to local AI silently") {

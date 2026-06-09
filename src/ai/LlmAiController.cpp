@@ -281,8 +281,8 @@ struct LlmAiController::SharedState {
     std::optional<game::ExternalAiResult> result;
 };
 
-LlmAiController::LlmAiController(stats::AiProviderSettings provider)
-    : provider_(std::move(provider)),
+LlmAiController::LlmAiController(std::map<rules::PlayerId, stats::AiProviderSettings> providers)
+    : providers_(std::move(providers)),
       state_(std::make_shared<SharedState>()),
       runRoot_(std::filesystem::path("ai-ui-runs") / NowStamp()) {}
 
@@ -291,11 +291,15 @@ LlmAiController::~LlmAiController() {
 }
 
 bool LlmAiController::CanHandle(rules::PlayerId player) const {
-    return player == rules::PlayerId::Ai1 &&
-        provider_.type == "openai" &&
-        !provider_.endpoint.empty() &&
-        !provider_.apiKey.empty() &&
-        !provider_.model.empty();
+    const auto it = providers_.find(player);
+    if (it == providers_.end()) {
+        return false;
+    }
+    const stats::AiProviderSettings& provider = it->second;
+    return provider.type == "openai" &&
+        !provider.endpoint.empty() &&
+        !provider.apiKey.empty() &&
+        !provider.model.empty();
 }
 
 bool LlmAiController::HasPending() const {
@@ -305,7 +309,16 @@ bool LlmAiController::HasPending() const {
 
 void LlmAiController::Start(game::ExternalAiRequest request) {
     std::shared_ptr<SharedState> state = state_;
-    stats::AiProviderSettings provider = provider_;
+    const auto providerIt = providers_.find(request.player);
+    if (providerIt == providers_.end()) {
+        game::ExternalAiResult failed;
+        failed.errorMessage = "No remote AI provider configured for player";
+        std::lock_guard lock(state->mutex);
+        state->pending = false;
+        state->result = std::move(failed);
+        return;
+    }
+    stats::AiProviderSettings provider = providerIt->second;
     const std::filesystem::path requestLog = CallPath(runRoot_, request.turnNo, "request");
     const std::filesystem::path responseLog = CallPath(runRoot_, request.turnNo, "response");
     int generation = 0;

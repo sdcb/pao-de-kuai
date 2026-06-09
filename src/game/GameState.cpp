@@ -890,7 +890,8 @@ TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
         reasoning << "执行 " << MoveText(record.finalAction) << "。";
     }
     trace.reasoningContent = reasoning.str();
-    if (record.actor == rules::PlayerId::Ai1) {
+    if (externalAi_ && externalAi_->CanHandle(record.actor) &&
+        (record.reason == TurnDecisionReason::CannotBeat || record.reason == TurnDecisionReason::OnlyLegalMove)) {
         trace.toolCallId = "synthetic_turn_" + std::to_string(record.turnNo);
         trace.toolName = "record_forced_move";
         trace.toolArgumentsJson = ForcedMoveArgumentsJson(record.reason, record.finalAction);

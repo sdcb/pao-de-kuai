@@ -168,6 +168,8 @@ TEST_CASE("appsettings loads and preserves AI provider configuration") {
             "masterVolume": 0.25,
             "windowWidth": 1600,
             "windowHeight": 900,
+            "ai1": "local",
+            "ai2": "mimo",
             "aiProviders": {
                 "mimo": {
                     "type": "openai",
@@ -183,10 +185,14 @@ TEST_CASE("appsettings loads and preserves AI provider configuration") {
     REQUIRE(loaded.aiProviders.count("mimo") == 1);
     CHECK(loaded.aiProviders.at("mimo").type == "openai");
     CHECK(loaded.aiProviders.at("mimo").apiKey == "fake-secret-key");
+    CHECK(loaded.ai1 == "local");
+    CHECK(loaded.ai2 == "mimo");
 
     REQUIRE(stats::SaveAppSettings(loaded, path.string()));
     const std::string saved = ReadFile(path);
     CHECK(saved.find("\"aiProviders\"") != std::string::npos);
+    CHECK(saved.find("\"ai1\"") != std::string::npos);
+    CHECK(saved.find("\"ai2\"") != std::string::npos);
     CHECK(saved.find("cardScale") == std::string::npos);
     CHECK(saved.find("animationSpeed") == std::string::npos);
 }

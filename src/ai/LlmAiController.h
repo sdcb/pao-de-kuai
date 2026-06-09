@@ -4,6 +4,7 @@
 #include "game/ExternalAiController.h"
 
 #include <memory>
+#include <map>
 #include <mutex>
 #include <optional>
 
@@ -11,7 +12,7 @@ namespace pdk::ai {
 
 class LlmAiController final : public game::ExternalAiController {
 public:
-    explicit LlmAiController(stats::AiProviderSettings provider);
+    explicit LlmAiController(std::map<rules::PlayerId, stats::AiProviderSettings> providers);
     ~LlmAiController() override;
 
     bool CanHandle(rules::PlayerId player) const override;
@@ -23,7 +24,7 @@ public:
 private:
     struct SharedState;
 
-    stats::AiProviderSettings provider_;
+    std::map<rules::PlayerId, stats::AiProviderSettings> providers_;
     std::shared_ptr<SharedState> state_;
     std::filesystem::path runRoot_;
 };
