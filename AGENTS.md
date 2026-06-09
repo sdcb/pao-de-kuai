@@ -88,11 +88,10 @@ ctest --preset vs2026-release --output-on-failure
 当前 CTest 注册：
 
 ```text
-rules_tests
+unit_tests
 ui_scene_start
+ui_dialog_settings
 ui_scene_game_deal
-ui_scene_game
-ui_overlay_return_menu
 ui_overlay_result
 ```
 
@@ -199,17 +198,13 @@ UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到
 
 渲染开始场景，验证窗口、Direct2D、字体和主菜单能初始化。
 
+`ui_dialog_settings`
+
+打开原生设置对话框并截图，验证 user32/comctl32 控件、DPI 和设置入口能初始化。
+
 `ui_scene_game_deal`
 
 用 `--mock deal` 渲染游戏发牌阶段，覆盖资源加载、发牌动画、牌背/牌面和桌面布局。
-
-`ui_scene_game`
-
-渲染更多帧后的游戏场景，验证桌面、玩家手牌、AI 区域、按钮和文字稳定显示。
-
-`ui_overlay_return_menu`
-
-在游戏场景上渲染返回菜单覆盖层，验证覆盖层合成。
 
 `ui_overlay_result`
 
