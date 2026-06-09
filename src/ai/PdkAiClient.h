@@ -3,7 +3,6 @@
 #include "ai/WinHttpJsonClient.h"
 #include "stats/AppSettings.h"
 
-#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -33,8 +32,8 @@ struct PdkAiMove {
 struct PdkAiRequest {
     stats::AiProviderSettings provider;
     std::vector<PdkAiMessage> messages;
-    std::filesystem::path requestLogPath;
-    std::filesystem::path responseLogPath;
+    std::string requestLogPath;
+    std::string responseLogPath;
     int timeoutMs{30000};
 };
 

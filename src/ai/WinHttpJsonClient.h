@@ -1,6 +1,5 @@
 #pragma once
 
-#include <filesystem>
 #include <string>
 
 namespace pdk::ai {
@@ -9,7 +8,7 @@ struct HttpJsonRequest {
     std::string endpoint;
     std::string bearerToken;
     std::string body;
-    std::filesystem::path logPath;
+    std::string logPath;
     int timeoutMs{30000};
 };
 

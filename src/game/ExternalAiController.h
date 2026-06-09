@@ -22,8 +22,8 @@ struct ExternalAiResult {
     std::string toolCallId;
     std::string toolName;
     std::string toolArgumentsJson;
-    std::filesystem::path requestLogPath;
-    std::filesystem::path responseLogPath;
+    std::string requestLogPath;
+    std::string responseLogPath;
     std::string errorMessage;
 };
 

@@ -1,22 +1,15 @@
 #include "stats/StatStore.h"
 
+#include "core/WinFile.h"
+
 #include <cJSON.h>
 
 #include <chrono>
 #include <ctime>
-#include <fstream>
-#include <iterator>
+#include <utility>
 
 namespace pdk::stats {
 namespace {
-
-std::string ReadFile(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        return {};
-    }
-    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-}
 
 std::string LocalDateTime(const char* fmt) {
     const auto now = std::chrono::system_clock::now();
@@ -177,17 +170,17 @@ std::string NowTimeText() {
     return LocalDateTime("%H:%M:%S");
 }
 
-StatStore::StatStore(std::filesystem::path root) : root_(std::move(root)) {}
+StatStore::StatStore(std::string root) : root_(root.empty() ? core::CurrentDirectory() : std::move(root)) {}
 
-std::filesystem::path StatStore::DayPath(const std::string& date) const {
-    return root_ / "stat" / (date + ".json");
+std::string StatStore::DayPath(const std::string& date) const {
+    return core::JoinPath(core::JoinPath(root_, "stat"), date + ".json");
 }
 
 DailyStat StatStore::LoadDay(const std::string& date) const {
     DailyStat day;
     day.date = date;
 
-    const std::string content = ReadFile(DayPath(date));
+    const std::string content = core::ReadTextFile(DayPath(date));
     if (content.empty()) {
         return day;
     }
@@ -211,7 +204,7 @@ DailyStat StatStore::LoadDay(const std::string& date) const {
 }
 
 bool StatStore::SaveDay(const DailyStat& day) const {
-    std::filesystem::create_directories(root_ / "stat");
+    core::CreateDirectories(core::JoinPath(root_, "stat"));
     cJSON* root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "date", day.date.c_str());
     cJSON* rounds = cJSON_CreateArray();
@@ -226,14 +219,9 @@ bool StatStore::SaveDay(const DailyStat& day) const {
         return false;
     }
 
-    std::ofstream out(DayPath(day.date), std::ios::binary | std::ios::trunc);
-    if (!out) {
-        cJSON_free(text);
-        return false;
-    }
-    out << text;
+    const bool ok = core::WriteTextFile(DayPath(day.date), text);
     cJSON_free(text);
-    return true;
+    return ok;
 }
 
 bool StatStore::AppendRound(const std::string& date, const RoundRecord& round) const {
@@ -251,13 +239,13 @@ StatSummary StatStore::SummarizeDay(const std::string& date) const {
 
 StatSummary StatStore::SummarizeMonth(const std::string& yyyymm) const {
     StatSummary summary;
-    const std::filesystem::path statDir = root_ / "stat";
-    if (!std::filesystem::exists(statDir)) {
+    const std::string statDir = core::JoinPath(root_, "stat");
+    if (!core::DirectoryExists(statDir)) {
         return summary;
     }
-    for (const auto& entry : std::filesystem::directory_iterator(statDir)) {
-        const std::string name = entry.path().stem().string();
-        if (entry.is_regular_file() && name.rfind(yyyymm, 0) == 0) {
+    for (const std::string& fileName : core::ListRegularFileNames(statDir)) {
+        const std::string name = core::FileStem(fileName);
+        if (core::FileExtension(fileName) == ".json" && name.rfind(yyyymm, 0) == 0) {
             Accumulate(summary, LoadDay(name));
         }
     }
@@ -266,13 +254,13 @@ StatSummary StatStore::SummarizeMonth(const std::string& yyyymm) const {
 
 StatSummary StatStore::SummarizeHistory() const {
     StatSummary summary;
-    const std::filesystem::path statDir = root_ / "stat";
-    if (!std::filesystem::exists(statDir)) {
+    const std::string statDir = core::JoinPath(root_, "stat");
+    if (!core::DirectoryExists(statDir)) {
         return summary;
     }
-    for (const auto& entry : std::filesystem::directory_iterator(statDir)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            Accumulate(summary, LoadDay(entry.path().stem().string()));
+    for (const std::string& fileName : core::ListRegularFileNames(statDir)) {
+        if (core::FileExtension(fileName) == ".json") {
+            Accumulate(summary, LoadDay(core::FileStem(fileName)));
         }
     }
     return summary;

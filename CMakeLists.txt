@@ -54,6 +54,7 @@ target_compile_definitions(cjson_static PRIVATE CJSON_HIDE_SYMBOLS)
 
 set(PDK_CORE_SOURCES
     src/core/Tween.cpp
+    src/core/WinFile.cpp
     src/rules/Card.cpp
     src/rules/Deck.cpp
     src/rules/HandPattern.cpp

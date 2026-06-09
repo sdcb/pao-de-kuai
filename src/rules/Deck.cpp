@@ -1,6 +1,7 @@
 #include "rules/Deck.h"
 
-#include <algorithm>
+#include <cstdlib>
+#include <utility>
 
 namespace pdk::rules {
 
@@ -28,8 +29,12 @@ Cards CreatePaoDeKuaiDeck() {
     return deck;
 }
 
-void Shuffle(Cards& deck, std::mt19937& rng) {
-    std::shuffle(deck.begin(), deck.end(), rng);
+void Shuffle(Cards& deck, unsigned seed) {
+    std::srand(seed);
+    for (std::size_t i = deck.size(); i > 1; --i) {
+        const std::size_t j = static_cast<std::size_t>(std::rand()) % i;
+        std::swap(deck[i - 1], deck[j]);
+    }
 }
 
 int FindFirstPlayerBySpadeThree(const std::vector<Cards>& hands) {

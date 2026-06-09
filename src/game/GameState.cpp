@@ -6,9 +6,10 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 #include <map>
-#include <random>
+#include <ctime>
 #include <utility>
 
 namespace pdk::game {
@@ -359,6 +360,9 @@ GameState::GameState() {
 }
 
 void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
+    if (seed == 0) {
+        seed = static_cast<unsigned>(std::time(nullptr));
+    }
     playerName_ = playerName.empty() ? "\xE6\x9D\x8E\xE5\xA7\x90" : playerName;
     players_[0] = PlayerState{playerName_, {}, false};
     players_[1] = PlayerState{"AI1", {}, false};
@@ -387,9 +391,7 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     lastRoundRecord_ = {};
 
     rules::Cards deck = rules_.CreateDeck();
-    rng_.seed(seed);
-    std::mt19937 rng(seed);
-    rules::Shuffle(deck, rng);
+    rules::Shuffle(deck, seed);
     for (std::size_t i = 0; i < deck.size(); ++i) {
         players_[i % 3].hand.push_back(deck[i]);
     }
@@ -1330,8 +1332,7 @@ void GameState::MaybeTalkAboutHumanMove(const rules::HandPattern& pattern) {
         return;
     }
 
-    std::uniform_int_distribution<int> dist(0, 1);
-    const rules::PlayerId speaker = dist(rng_) == 0 ? rules::PlayerId::Ai1 : rules::PlayerId::Ai2;
+    const rules::PlayerId speaker = (std::rand() % 2) == 0 ? rules::PlayerId::Ai1 : rules::PlayerId::Ai2;
     MaybeTalk(speaker, *kind, true);
 }
 
@@ -1377,8 +1378,7 @@ std::string GameState::ChooseTalkText(TalkKind kind) {
         return {};
     }
 
-    std::uniform_int_distribution<int> dist(0, static_cast<int>(pool.size() - 1));
-    int selected = dist(rng_);
+    int selected = std::rand() % static_cast<int>(pool.size());
     if (pool.size() > 1 && selected == lastTalkIndices_[kindIndex]) {
         selected = (selected + 1) % static_cast<int>(pool.size());
     }

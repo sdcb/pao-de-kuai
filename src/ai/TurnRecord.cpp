@@ -79,8 +79,14 @@ cJSON* MoveJson(const PdkAiMove& move) {
     return object;
 }
 
-std::string RelativePathText(const std::filesystem::path& path) {
-    return path.generic_string();
+std::string RelativePathText(const std::string& path) {
+    std::string text = path;
+    for (char& ch : text) {
+        if (ch == '\\') {
+            ch = '/';
+        }
+    }
+    return text;
 }
 
 } // namespace

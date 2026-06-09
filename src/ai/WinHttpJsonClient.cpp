@@ -1,10 +1,10 @@
 #include "ai/WinHttpJsonClient.h"
 
 #include "core/StringUtil.h"
+#include "core/WinFile.h"
 
 #include <cJSON.h>
 
-#include <fstream>
 #include <string_view>
 #include <vector>
 
@@ -86,13 +86,15 @@ std::string JsonEscape(std::string_view value) {
     return out;
 }
 
-void WriteJsonString(std::ostream& out, const std::string& value) {
-    out << '"' << JsonEscape(value) << '"';
+void AppendJsonString(std::string& out, const std::string& value) {
+    out += '"';
+    out += JsonEscape(value);
+    out += '"';
 }
 
-void WriteJsonBody(std::ostream& out, const std::string& body, const std::string& secret) {
+void AppendJsonBody(std::string& out, const std::string& body, const std::string& secret) {
     if (body.empty()) {
-        out << "null";
+        out += "null";
         return;
     }
 
@@ -101,17 +103,17 @@ void WriteJsonBody(std::ostream& out, const std::string& body, const std::string
     std::string sanitized = SanitizeError(body, secret);
     cJSON* parsed = cJSON_Parse(sanitized.c_str());
     if (!parsed) {
-        WriteJsonString(out, sanitized);
+        AppendJsonString(out, sanitized);
         return;
     }
 
     char* printed = cJSON_Print(parsed);
     cJSON_Delete(parsed);
     if (!printed) {
-        WriteJsonString(out, sanitized);
+        AppendJsonString(out, sanitized);
         return;
     }
-    out << printed;
+    out += printed;
     cJSON_free(printed);
 }
 
@@ -271,29 +273,25 @@ void WinHttpJsonClient::WriteDebugLog(const HttpJsonRequest& request, const Http
     if (request.logPath.empty()) {
         return;
     }
-    if (!request.logPath.parent_path().empty()) {
-        std::filesystem::create_directories(request.logPath.parent_path());
-    }
-
-    std::ofstream out(request.logPath, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        return;
-    }
-    out << "{\n";
-    out << "  \"endpoint\": ";
-    WriteJsonString(out, SanitizeError(request.endpoint, request.bearerToken));
-    out << ",\n";
-    out << "  \"requestBody\": ";
-    WriteJsonBody(out, request.body, request.bearerToken);
-    out << ",\n";
-    out << "  \"responseStatus\": " << response.statusCode << ",\n";
-    out << "  \"responseBody\": ";
-    WriteJsonBody(out, response.body, request.bearerToken);
-    out << ",\n";
-    out << "  \"errorMessage\": ";
-    WriteJsonString(out, SanitizeError(response.errorMessage, request.bearerToken));
-    out << "\n";
-    out << "}\n";
+    std::string text;
+    text += "{\n";
+    text += "  \"endpoint\": ";
+    AppendJsonString(text, SanitizeError(request.endpoint, request.bearerToken));
+    text += ",\n";
+    text += "  \"requestBody\": ";
+    AppendJsonBody(text, request.body, request.bearerToken);
+    text += ",\n";
+    text += "  \"responseStatus\": ";
+    core::AppendNumber(text, response.statusCode);
+    text += ",\n";
+    text += "  \"responseBody\": ";
+    AppendJsonBody(text, response.body, request.bearerToken);
+    text += ",\n";
+    text += "  \"errorMessage\": ";
+    AppendJsonString(text, SanitizeError(response.errorMessage, request.bearerToken));
+    text += "\n";
+    text += "}\n";
+    core::WriteTextFile(request.logPath, text);
 }
 
 } // namespace pdk::ai

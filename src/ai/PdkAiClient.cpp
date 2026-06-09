@@ -1,8 +1,9 @@
 #include "ai/PdkAiClient.h"
 
+#include "core/WinFile.h"
+
 #include <cJSON.h>
 
-#include <fstream>
 #include <memory>
 
 namespace pdk::ai {
@@ -32,17 +33,6 @@ std::string JsonString(const cJSON* object, const char* key) {
         return value->valuestring;
     }
     return {};
-}
-
-void WriteTextFile(const std::filesystem::path& path, const std::string& text) {
-    if (path.empty()) {
-        return;
-    }
-    if (!path.parent_path().empty()) {
-        std::filesystem::create_directories(path.parent_path());
-    }
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out << text;
 }
 
 cJSON* CreateRanksSchema(const char* description) {
@@ -209,7 +199,7 @@ PdkAiResponse PdkAiClient::ChooseMove(const PdkAiRequest& request) const {
         result.errorMessage = "Failed to build AI request JSON";
         return result;
     }
-    WriteTextFile(request.requestLogPath, requestBody);
+    core::WriteTextFile(request.requestLogPath, requestBody);
 
     const HttpJsonResponse http = http_.Post(HttpJsonRequest{
         request.provider.endpoint,
@@ -218,7 +208,7 @@ PdkAiResponse PdkAiClient::ChooseMove(const PdkAiRequest& request) const {
         {},
         request.timeoutMs
     });
-    WriteTextFile(request.responseLogPath, http.body);
+    core::WriteTextFile(request.responseLogPath, http.body);
     if (!http.ok) {
         result.rawResponse = http.body;
         result.errorMessage = http.errorMessage;

@@ -6,7 +6,6 @@
 #include "rules/Scoring.h"
 
 #include <array>
-#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -39,8 +38,8 @@ struct TurnDecisionTrace {
     std::string reasoningContent;
     PdkAiMessage assistantMessage;
     std::optional<PdkAiMessage> toolMessage;
-    std::filesystem::path requestLogPath;
-    std::filesystem::path responseLogPath;
+    std::string requestLogPath;
+    std::string responseLogPath;
 };
 
 struct TurnRecord {

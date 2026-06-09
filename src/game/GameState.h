@@ -9,7 +9,6 @@
 #include <array>
 #include <memory>
 #include <optional>
-#include <random>
 #include <set>
 #include <string>
 #include <vector>
@@ -58,7 +57,7 @@ class GameState {
 public:
     GameState();
 
-    void StartNewRound(const std::string& playerName, unsigned seed = std::random_device{}());
+    void StartNewRound(const std::string& playerName, unsigned seed = 0);
     void Update(float dt);
 
     bool IsRoundOver() const { return roundOver_; }
@@ -158,7 +157,6 @@ private:
     std::set<int> selectedIndices_;
     std::vector<int> hintIndices_;
     std::vector<rules::BombScoreEvent> bombs_;
-    std::mt19937 rng_{std::random_device{}()};
     std::string startedAt_;
     std::string playerName_;
     std::vector<GameEvent> events_;

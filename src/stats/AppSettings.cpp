@@ -1,5 +1,7 @@
 #include "stats/AppSettings.h"
 
+#include "core/WinFile.h"
+
 #include <cJSON.h>
 
 #ifndef NOMINMAX
@@ -8,8 +10,6 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <fstream>
-#include <iterator>
 #include <string_view>
 #include <vector>
 #include <windows.h>
@@ -19,14 +19,6 @@ namespace pdk::stats {
 namespace {
 
 constexpr std::string_view DpapiPrefix = "dpapi:";
-
-std::string ReadFile(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        return {};
-    }
-    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-}
 
 float ClampFloat(double value, float min, float max) {
     return std::clamp(static_cast<float>(value), min, max);
@@ -114,7 +106,7 @@ std::string DecryptApiKey(const std::string& text) {
 
 AppSettings LoadAppSettings(const std::string& path) {
     AppSettings settings;
-    const std::string content = ReadFile(path);
+    const std::string content = core::ReadTextFile(path);
     if (content.empty()) {
         return settings;
     }
@@ -193,14 +185,9 @@ bool SaveAppSettings(const AppSettings& settings, const std::string& path) {
         return false;
     }
 
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        cJSON_free(text);
-        return false;
-    }
-    out << text;
+    const bool ok = core::WriteTextFile(path, text);
     cJSON_free(text);
-    return true;
+    return ok;
 }
 
 } // namespace pdk::stats

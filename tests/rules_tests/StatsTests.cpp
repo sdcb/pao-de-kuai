@@ -30,7 +30,7 @@ TEST_CASE("settings and daily stats use current working directory style json") {
     CHECK(settingsJson.find("cardScale") == std::string::npos);
     CHECK(settingsJson.find("animationSpeed") == std::string::npos);
 
-    stats::StatStore store(root);
+    stats::StatStore store(root.string());
     stats::RoundRecord round;
     round.startedAt = "20:12:31";
     round.endedAt = "20:16:02";

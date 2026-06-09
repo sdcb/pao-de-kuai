@@ -3,7 +3,6 @@
 #include "ai/PdkAiClient.h"
 #include "ai/TurnRecord.h"
 
-#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -16,7 +15,7 @@ enum class ToolHistoryMode {
 
 struct LlmOffscreenExperimentConfig {
     stats::AiProviderSettings provider;
-    std::filesystem::path runRoot;
+    std::string runRoot;
     std::vector<unsigned> seeds{20260608u, 20260609u, 20260610u, 20260611u, 20260612u, 20260613u};
     int maxTurnsPerRound{300};
     int maxLlmCalls{80};
@@ -33,7 +32,7 @@ struct LlmOffscreenExperimentResult {
     bool llmPlayedAfterCannotBeatSynthetic{false};
     bool completedRound{false};
     std::string message;
-    std::filesystem::path logRoot;
+    std::string logRoot;
     std::vector<TurnRecord> records;
 };
 

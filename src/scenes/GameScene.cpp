@@ -109,7 +109,7 @@ void GameScene::OnEnter() {
             game_.SetExternalAiController(std::make_shared<ai::LlmAiController>(std::move(remotePlayers)));
         }
     }
-    game_.StartNewRound(app_.Settings().playerName, mock_ ? 20260606u : std::random_device{}());
+    game_.StartNewRound(app_.Settings().playerName, mock_ ? 20260606u : 0u);
     recordedRound_ = false;
     roundResultPending_ = false;
     todayScores_ = stats::StatStore().SummarizeDay(stats::TodayDateKey()).scores;

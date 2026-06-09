@@ -1,6 +1,7 @@
 #include "ai/LlmOffscreenExperiment.h"
 
 #include "core/StringUtil.h"
+#include "core/WinFile.h"
 #include "game/AiStrategy.h"
 #include "rules/Deck.h"
 #include "rules/MoveValidator.h"
@@ -12,10 +13,9 @@
 #include <chrono>
 #include <ctime>
 #include <cstdint>
-#include <fstream>
+#include <cstdlib>
 #include <map>
 #include <optional>
-#include <random>
 
 namespace pdk::ai {
 namespace {
@@ -54,14 +54,6 @@ std::string NowStamp() {
     char text[32]{};
     std::strftime(text, sizeof(text), "%Y%m%d-%H%M%S", &tm);
     return text;
-}
-
-void WriteTextFile(const std::filesystem::path& path, const std::string& text) {
-    if (!path.parent_path().empty()) {
-        std::filesystem::create_directories(path.parent_path());
-    }
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out << text;
 }
 
 int Index(rules::PlayerId player) {
@@ -657,13 +649,13 @@ bool ValidateLlmMove(
     return true;
 }
 
-std::filesystem::path CallPath(const std::filesystem::path& root, int callNo, const char* suffix) {
+std::string CallPath(const std::string& root, int callNo, const char* suffix) {
     std::string name;
     core::AppendPaddedNumber(name, callNo, 4);
     name += "_";
     name += suffix;
     name += ".json";
-    return root / "calls" / name;
+    return core::JoinPath(core::JoinPath(root, "calls"), name);
 }
 
 TurnRecord MakeLlmRecord(
@@ -743,9 +735,8 @@ TurnRecord MakeLlmRecord(
 }
 
 void StartRound(SimulationState& state, unsigned seed) {
-    std::mt19937 rng(seed);
     rules::Cards deck = rules::CreatePaoDeKuaiDeck();
-    rules::Shuffle(deck, rng);
+    rules::Shuffle(deck, seed);
     for (std::size_t i = 0; i < deck.size(); ++i) {
         state.hands[i % 3].push_back(deck[i]);
     }
@@ -762,8 +753,8 @@ void StartRound(SimulationState& state, unsigned seed) {
 
 AttemptResult RunAttempt(const LlmOffscreenExperimentConfig& originalConfig, ToolHistoryMode mode, unsigned seed) {
     LlmOffscreenExperimentConfig config = originalConfig;
-    config.runRoot = originalConfig.runRoot / (ToolHistoryModeLabel(mode) + "-seed-" + std::to_string(seed));
-    std::filesystem::create_directories(config.runRoot / "calls");
+    config.runRoot = core::JoinPath(originalConfig.runRoot, ToolHistoryModeLabel(mode) + "-seed-" + std::to_string(seed));
+    core::CreateDirectories(core::JoinPath(config.runRoot, "calls"));
 
     AttemptResult attempt;
     attempt.result.mode = mode;
@@ -826,8 +817,8 @@ AttemptResult RunAttempt(const LlmOffscreenExperimentConfig& originalConfig, Too
     } else if (attempt.result.message.empty()) {
         attempt.result.message = "未满足全流程观察条件";
     }
-    WriteTextFile(attempt.result.logRoot / "turn_records.json", ToJson(attempt.result.records));
-    WriteTextFile(attempt.result.logRoot / "summary.json", ToJson(attempt.result));
+    core::WriteTextFile(core::JoinPath(attempt.result.logRoot, "turn_records.json"), ToJson(attempt.result.records));
+    core::WriteTextFile(core::JoinPath(attempt.result.logRoot, "summary.json"), ToJson(attempt.result));
     return attempt;
 }
 
@@ -840,7 +831,7 @@ std::string ToolHistoryModeLabel(ToolHistoryMode mode) {
 LlmOffscreenExperimentResult RunLlmOffscreenExperiment(const LlmOffscreenExperimentConfig& config) {
     LlmOffscreenExperimentConfig runConfig = config;
     if (runConfig.runRoot.empty()) {
-        runConfig.runRoot = std::filesystem::path("build") / "vs2026-release" / "ai-client-runs" / NowStamp();
+        runConfig.runRoot = core::JoinPath(core::JoinPath(core::JoinPath("build", "vs2026-release"), "ai-client-runs"), NowStamp());
     }
 
     LlmOffscreenExperimentResult last;
@@ -884,7 +875,7 @@ std::string ToJson(const LlmOffscreenExperimentResult& result) {
     cJSON_AddBoolToObject(root, "llmPlayedAfterCannotBeatSynthetic", result.llmPlayedAfterCannotBeatSynthetic);
     cJSON_AddBoolToObject(root, "completedRound", result.completedRound);
     cJSON_AddStringToObject(root, "message", result.message.c_str());
-    cJSON_AddStringToObject(root, "logRoot", result.logRoot.generic_string().c_str());
+    cJSON_AddStringToObject(root, "logRoot", result.logRoot.c_str());
     char* text = cJSON_Print(root);
     std::string json = text ? text : "";
     cJSON_free(text);

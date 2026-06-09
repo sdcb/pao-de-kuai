@@ -5,7 +5,6 @@
 
 #include <memory>
 #include <map>
-#include <mutex>
 #include <optional>
 
 namespace pdk::ai {
@@ -26,7 +25,7 @@ private:
 
     std::map<rules::PlayerId, stats::AiProviderSettings> providers_;
     std::shared_ptr<SharedState> state_;
-    std::filesystem::path runRoot_;
+    std::string runRoot_;
 };
 
 } // namespace pdk::ai

@@ -19,13 +19,13 @@ TEST_CASE("LLM offscreen experiment completes with tool-call history") {
     const auto root = std::filesystem::current_path() / "build" / "vs2026-release" / "ai-client-runs";
     const ai::LlmOffscreenExperimentResult result = ai::RunLlmOffscreenExperiment(ai::LlmOffscreenExperimentConfig{
         provider,
-        root,
+        root.string(),
         {20260608u, 20260609u, 20260610u, 20260611u, 20260612u, 20260613u},
         300,
         80
     });
 
-    INFO("logRoot: " << result.logRoot.string());
+    INFO("logRoot: " << result.logRoot);
     INFO("message: " << result.message);
     CHECK(result.ok);
     CHECK(result.completedRound);

@@ -386,7 +386,7 @@ TEST_CASE("winhttp debug log omits request headers and stays parseable") {
         "not-a-valid-url",
         "fake-secret-key",
         R"({"hello":"world"})",
-        logPath,
+        logPath.string(),
         1000
     });
     CHECK_FALSE(response.ok);
