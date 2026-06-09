@@ -20,6 +20,7 @@ if(MSVC)
         "$<$<COMPILE_LANGUAGE:CXX>:/utf-8>"
         "$<$<COMPILE_LANGUAGE:CXX>:/EHsc>"
     )
+    add_compile_options("$<$<CONFIG:Release>:/Os>")
 endif()
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

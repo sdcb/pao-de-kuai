@@ -15,6 +15,7 @@ ctest --preset vs2026-release --output-on-failure
 ```
 
 - CMake 配置会给 MSVC 添加 `/utf-8`、`/EHsc` 和 `/MT`。
+- Release 体积优化使用 MSVC 默认 `/O2 /Ob2` 并额外添加 `/Os`。
 - 日常构建和测试以 VS2026 为验证基线。
 - `CMakePresets.json` 是项目级配置，应纳入版本控制。个人机器路径应放在 `CMakeUserPresets.json`，不要提交。
 
@@ -28,6 +29,15 @@ ctest --preset vs2026-release --output-on-failure
 - 应用使用固定 1280x720 逻辑布局。窗口缩放应在场景布局外处理，窗口不应小于 1280x720。
 - Windows 基线尽量保持 Win8 兼容：`WINVER=0x0602`、`_WIN32_WINNT=0x0602`、Direct2D、DirectWrite、WIC、Media Foundation、XAudio2.8。
 - 需要处理 `D2DERR_RECREATE_TARGET`：游戏/窗口状态应保留，Direct2D 设备资源和 bitmap 应重建，音频和 CPU 数据应不受影响。
+
+## 体积约束
+
+- 生产源码 `src/` 不引入 `<filesystem>`、`<fstream>`、`<sstream>`、`fmt` 或 `<random>`。这些依赖对当前静态链接 exe 体积影响明显。
+- 文件和目录操作走 `src/core/WinFile.*`，字符串数字拼接走 `src/core/StringUtil.*`。
+- 需要拼接 UI 文本、日志文件名或提示词时，优先用 `std::string` 追加和 `core::AppendNumber`，不要重新引入流式格式化。
+- 洗牌和少量随机选择走当前 `std::srand/std::rand` 路径；本项目不是安全随机场景。
+- `std::thread`、`std::mutex`、`std::lock_guard` 可以用于异步网络请求等需要 RAII 的并发代码，不要为了很小体积收益改成裸 `EnterCriticalSection`。
+- 测试代码可按需要使用 `<filesystem>` 等标准库便利设施；上述限制主要针对进入主程序的 `src/`。
 
 ## 产品与 UX 约束
 
