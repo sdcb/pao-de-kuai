@@ -3,8 +3,8 @@
   "configurePresets": [
     {
       "name": "vs2026-release",
-      "displayName": "Visual Studio 2026 x64 Release",
-      "generator": "NMake Makefiles",
+      "displayName": "Visual Studio 2026 x64 Release (Ninja)",
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-vs2026",
       "environment": {
         "VSLANG": "1033"

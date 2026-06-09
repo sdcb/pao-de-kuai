@@ -10,6 +10,8 @@ jobs:
   build:
     name: Windows ${{ matrix.arch }}
     runs-on: windows-2025-vs2026
+    env:
+      VSLANG: "1033"
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +37,7 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.vcvars_arch }}
-          cmake -S . -B ${{ matrix.build_dir }} -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DPDK_BUILD_TESTS=ON
+          cmake -S . -B ${{ matrix.build_dir }} -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DPDK_BUILD_TESTS=ON
 
       - name: Build
         shell: cmd
