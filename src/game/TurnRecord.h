@@ -44,6 +44,7 @@ struct TurnSnapshot {
 struct TurnDecisionTrace {
     std::string reasoningContent;
     std::string toolCallId;
+    std::string toolName;
     std::string toolArgumentsJson;
     std::string toolResultJson;
     std::filesystem::path requestLogPath;
@@ -71,5 +72,6 @@ std::string PlayerLabel(rules::PlayerId player);
 std::string SourceLabel(TurnDecisionSource source);
 std::string ReasonLabel(TurnDecisionReason reason);
 std::string ActionArgumentsJson(const GameAction& action);
+std::string ForcedMoveArgumentsJson(TurnDecisionReason reason, const GameAction& action);
 
 } // namespace pdk::game

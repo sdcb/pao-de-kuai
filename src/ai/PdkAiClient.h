@@ -11,7 +11,7 @@ namespace pdk::ai {
 
 struct PdkAiToolCall {
     std::string id;
-    std::string name{"choose_move"};
+    std::string name{"play_cards"};
     std::string argumentsJson;
 };
 

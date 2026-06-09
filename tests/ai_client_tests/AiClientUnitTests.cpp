@@ -6,6 +6,7 @@
 #include "stats/AppSettings.h"
 #include "rules/Card.h"
 #include "rules/HandPattern.h"
+#include "rules/RuleText.h"
 
 #include <cJSON.h>
 
@@ -91,20 +92,37 @@ ai::TurnRecord Record(
     record.finalAction = move;
     record.requestedAction = move;
     record.trace.reasoningContent = "reasoning turn " + std::to_string(turnNo);
+    const bool llmChoice = source == ai::TurnDecisionSource::LlmAi;
+    const std::string toolName = llmChoice ? "play_cards" : "record_forced_move";
+    std::string arguments;
+    if (llmChoice) {
+        arguments = "{\"ranks\":[";
+        for (std::size_t i = 0; i < move.ranks.size(); ++i) {
+            if (i != 0) {
+                arguments += ",";
+            }
+            arguments += "\"" + move.ranks[i] + "\"";
+        }
+        arguments += "]}";
+    } else {
+        arguments = std::string("{\"reason\":\"") +
+            (reason == ai::TurnDecisionReason::CannotBeat ? "cannot_beat" : "only_legal_move") +
+            "\",\"ranks\":[]}";
+    }
     record.trace.assistantMessage = ai::PdkAiMessage{
         "assistant",
         {},
         record.trace.reasoningContent,
         {},
         {},
-        {ai::PdkAiToolCall{"call_" + std::to_string(turnNo), "choose_move", "{\"action\":\"" + move.action + "\",\"ranks\":[]}"}}
+        {ai::PdkAiToolCall{"call_" + std::to_string(turnNo), toolName, arguments}}
     };
     record.trace.toolMessage = ai::PdkAiMessage{
         "tool",
         "{\"accepted\":true}",
         {},
         "call_" + std::to_string(turnNo),
-        "choose_move",
+        toolName,
         {}
     };
     return record;
@@ -123,8 +141,8 @@ std::string FakeResponse(const char* reasoningKey = "reasoning_content") {
                             "id": "call_1",
                             "type": "function",
                             "function": {
-                                "name": "choose_move",
-                                "arguments": "{\"action\":\"play\",\"ranks\":[\"7\"],\"talk\":\"先走一张。\"}"
+                                "name": "play_cards",
+                                "arguments": "{\"ranks\":[\"7\"],\"talk\":\"先走一张。\"}"
                             }
                         }
                     ]
@@ -173,7 +191,7 @@ TEST_CASE("appsettings loads and preserves AI provider configuration") {
     CHECK(saved.find("animationSpeed") == std::string::npos);
 }
 
-TEST_CASE("pdk AI request JSON uses ranks tool call schema") {
+TEST_CASE("pdk AI request JSON uses play cards and forced history tools") {
     const ai::PdkAiRequest request = SampleRequest();
     const std::string body = ai::PdkAiClient::BuildRequestJson(request);
     REQUIRE_FALSE(body.empty());
@@ -187,13 +205,28 @@ TEST_CASE("pdk AI request JSON uses ranks tool call schema") {
 
     const cJSON* tools = cJSON_GetObjectItemCaseSensitive(root.get(), "tools");
     REQUIRE(cJSON_IsArray(tools));
-    const cJSON* function = cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(tools, 0), "function");
-    REQUIRE(cJSON_IsObject(function));
-    CHECK(std::string(cJSON_GetObjectItemCaseSensitive(function, "name")->valuestring) == "choose_move");
-    const cJSON* parameters = cJSON_GetObjectItemCaseSensitive(function, "parameters");
-    const cJSON* properties = cJSON_GetObjectItemCaseSensitive(parameters, "properties");
-    CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(properties, "action")));
-    CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(properties, "ranks")));
+    REQUIRE(cJSON_GetArraySize(tools) == 2);
+
+    const cJSON* playFunction = cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(tools, 0), "function");
+    REQUIRE(cJSON_IsObject(playFunction));
+    CHECK(std::string(cJSON_GetObjectItemCaseSensitive(playFunction, "name")->valuestring) == "play_cards");
+    const cJSON* playParameters = cJSON_GetObjectItemCaseSensitive(playFunction, "parameters");
+    const cJSON* playProperties = cJSON_GetObjectItemCaseSensitive(playParameters, "properties");
+    CHECK(cJSON_GetObjectItemCaseSensitive(playProperties, "action") == nullptr);
+    CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(playProperties, "ranks")));
+
+    const cJSON* forcedFunction = cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(tools, 1), "function");
+    REQUIRE(cJSON_IsObject(forcedFunction));
+    CHECK(std::string(cJSON_GetObjectItemCaseSensitive(forcedFunction, "name")->valuestring) == "record_forced_move");
+    const cJSON* forcedParameters = cJSON_GetObjectItemCaseSensitive(forcedFunction, "parameters");
+    const cJSON* forcedProperties = cJSON_GetObjectItemCaseSensitive(forcedParameters, "properties");
+    CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(forcedProperties, "reason")));
+    CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(forcedProperties, "ranks")));
+
+    const cJSON* toolChoice = cJSON_GetObjectItemCaseSensitive(root.get(), "tool_choice");
+    const cJSON* choiceFunction = cJSON_GetObjectItemCaseSensitive(toolChoice, "function");
+    REQUIRE(cJSON_IsObject(choiceFunction));
+    CHECK(std::string(cJSON_GetObjectItemCaseSensitive(choiceFunction, "name")->valuestring) == "play_cards");
 }
 
 TEST_CASE("pdk AI request can replay strict tool history") {
@@ -212,14 +245,14 @@ TEST_CASE("pdk AI request can replay strict tool history") {
         "本地系统判断 AI2 要不起。",
         {},
         {},
-        {ai::PdkAiToolCall{"synthetic_1", "choose_move", "{\"action\":\"pass\",\"ranks\":[]}"}}
+        {ai::PdkAiToolCall{"synthetic_1", "record_forced_move", "{\"reason\":\"cannot_beat\",\"ranks\":[]}"}}
     });
     request.messages.insert(request.messages.begin() + 3, ai::PdkAiMessage{
         "tool",
         "{\"accepted\":true}",
         {},
         "synthetic_1",
-        "choose_move",
+        "record_forced_move",
         {}
     });
 
@@ -242,7 +275,7 @@ TEST_CASE("experiment history replays only AI1 tool calls") {
     };
 
     const std::vector<ai::PdkAiMessage> messages =
-        ai::BuildExperimentMessagesForTest(records, "当前轮到 AI1。", ai::ToolHistoryMode::Loose);
+        ai::BuildExperimentMessagesForTest(records, "当前轮到你。", ai::ToolHistoryMode::Loose);
 
     int assistantToolCalls = 0;
     for (const ai::PdkAiMessage& message : messages) {
@@ -254,10 +287,21 @@ TEST_CASE("experiment history replays only AI1 tool calls") {
     CHECK(messages.front().role == "system");
     CHECK(messages[1].role == "user");
     CHECK(messages[2].role == "assistant");
-    CHECK(messages.back().content == "当前轮到 AI1。");
+    CHECK(messages.back().content == "当前轮到你。");
 }
 
-TEST_CASE("experiment prompt includes all actions after previous AI1 tool call only") {
+TEST_CASE("experiment system prompt uses shared help rule text") {
+    const std::vector<ai::PdkAiMessage> messages =
+        ai::BuildExperimentMessagesForTest({}, "当前轮到你。", ai::ToolHistoryMode::Loose);
+
+    REQUIRE_FALSE(messages.empty());
+    CHECK(messages.front().role == "system");
+    CHECK(messages.front().content.find(std::string(rules::HelpRulesText())) != std::string::npos);
+    CHECK(messages.front().content.find("choose_move") == std::string::npos);
+    CHECK(messages.front().content.find("play_cards") != std::string::npos);
+}
+
+TEST_CASE("experiment prompt includes all actions after previous self tool call only") {
     const auto before = SnapshotFor({C(rules::Rank::Seven), C(rules::Rank::Eight)});
     std::vector<ai::TurnRecord> records{
         Record(1, rules::PlayerId::Ai1, ai::TurnDecisionSource::LlmAi, ai::TurnDecisionReason::NormalChoice, {"play", {"7"}, {}}, before),
@@ -271,10 +315,11 @@ TEST_CASE("experiment prompt includes all actions after previous AI1 tool call o
         std::nullopt,
         rules::PlayerId::Ai1);
 
-    CHECK(prompt.find("从上次 AI1 tool_call 到现在发生的全部公开行动") != std::string::npos);
-    CHECK(prompt.find("1 ai1") == std::string::npos);
-    CHECK(prompt.find("2 ai2 不要") != std::string::npos);
-    CHECK(prompt.find("3 player 出 9") != std::string::npos);
+    CHECK(prompt.find("从上次你 tool_call 到现在发生的全部公开行动") != std::string::npos);
+    CHECK(prompt.find("本地决策树 AI 的前 3 个建议") != std::string::npos);
+    CHECK(prompt.find("1 你") == std::string::npos);
+    CHECK(prompt.find("2 另一名 AI 不要") != std::string::npos);
+    CHECK(prompt.find("3 玩家 出 9") != std::string::npos);
 }
 
 TEST_CASE("experiment replayed historical prompts are deterministic from TurnRecord prefix") {

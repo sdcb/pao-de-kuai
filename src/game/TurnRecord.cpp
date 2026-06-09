@@ -70,4 +70,15 @@ std::string ActionArgumentsJson(const GameAction& action) {
     return PrintJson(root.get());
 }
 
+std::string ForcedMoveArgumentsJson(TurnDecisionReason reason, const GameAction& action) {
+    JsonPtr root(cJSON_CreateObject());
+    cJSON_AddStringToObject(root.get(), "reason", reason == TurnDecisionReason::CannotBeat ? "cannot_beat" : "only_legal_move");
+    cJSON* ranks = cJSON_CreateArray();
+    for (const std::string& rank : action.ranks) {
+        cJSON_AddItemToArray(ranks, cJSON_CreateString(rank.c_str()));
+    }
+    cJSON_AddItemToObject(root.get(), "ranks", ranks);
+    return PrintJson(root.get());
+}
+
 } // namespace pdk::game

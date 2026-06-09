@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <limits>
 #include <map>
+#include <set>
+#include <sstream>
 #include <vector>
 
 namespace pdk::game {
@@ -349,6 +351,19 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
     return score;
 }
 
+std::string CandidateKey(const Candidate& candidate) {
+    std::ostringstream out;
+    out << rules::PatternName(candidate.pattern.type) << ':'
+        << rules::RankName(candidate.pattern.mainRank) << ':'
+        << candidate.pattern.cardCount << ':'
+        << candidate.pattern.groupCount << ':';
+    const auto counts = CountRanks(candidate.cards);
+    for (const auto& [rank, count] : counts) {
+        out << rules::RankName(rank) << count << ',';
+    }
+    return out.str();
+}
+
 rules::Cards RemainingAfterPlay(const rules::Cards& hand, std::uint64_t mask) {
     rules::Cards remaining;
     for (int i = 0; i < static_cast<int>(hand.size()); ++i) {
@@ -410,10 +425,10 @@ std::vector<Candidate> GenerateCandidates(const rules::Cards& hand, const AiCont
 
 } // namespace
 
-AiMoveChoice BasicAiStrategy::ChooseMove(const rules::Cards& hand, const AiContext& context) {
+std::vector<AiMoveChoice> BasicAiStrategy::RecommendMoves(const rules::Cards& hand, const AiContext& context, int limit) const {
     std::vector<Candidate> candidates = GenerateCandidates(hand, context);
     if (candidates.empty()) {
-        return AiMoveChoice{true, {}, {}, context.leading ? "没有可出的牌型" : "压不过，选择不要"};
+        return {AiMoveChoice{true, {}, {}, context.leading ? "没有可出的牌型" : "压不过，选择不要"}};
     }
 
     std::sort(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
@@ -426,8 +441,33 @@ AiMoveChoice BasicAiStrategy::ChooseMove(const rules::Cards& hand, const AiConte
         return rules::RankValue(lhs.pattern.mainRank) < rules::RankValue(rhs.pattern.mainRank);
     });
 
-    const Candidate& chosen = candidates.front();
-    return AiMoveChoice{false, chosen.cards, chosen.pattern, "基础 AI 推荐 " + rules::PatternName(chosen.pattern.type), chosen.disruptionPenalty};
+    const int count = std::max(0, std::min(limit, static_cast<int>(candidates.size())));
+    std::vector<AiMoveChoice> recommendations;
+    recommendations.reserve(static_cast<std::size_t>(count));
+    std::set<std::string> seen;
+    for (const Candidate& candidate : candidates) {
+        if (static_cast<int>(recommendations.size()) >= count) {
+            break;
+        }
+        if (!seen.insert(CandidateKey(candidate)).second) {
+            continue;
+        }
+        recommendations.push_back(AiMoveChoice{
+            false,
+            candidate.cards,
+            candidate.pattern,
+            "基础 AI 推荐 " + rules::PatternName(candidate.pattern.type),
+            candidate.disruptionPenalty
+        });
+    }
+    return recommendations;
+}
+
+AiMoveChoice BasicAiStrategy::ChooseMove(const rules::Cards& hand, const AiContext& context) {
+    const std::vector<AiMoveChoice> recommendations = RecommendMoves(hand, context, 1);
+    return recommendations.empty()
+        ? AiMoveChoice{true, {}, {}, context.leading ? "没有可出的牌型" : "压不过，选择不要"}
+        : recommendations.front();
 }
 
 } // namespace pdk::game

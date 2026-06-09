@@ -46,6 +46,7 @@ public:
 class BasicAiStrategy final : public AiStrategy {
 public:
     AiMoveChoice ChooseMove(const rules::Cards& hand, const AiContext& context) override;
+    std::vector<AiMoveChoice> RecommendMoves(const rules::Cards& hand, const AiContext& context, int limit = 3) const;
 };
 
 } // namespace pdk::game

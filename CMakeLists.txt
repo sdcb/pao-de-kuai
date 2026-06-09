@@ -59,6 +59,7 @@ set(PDK_CORE_SOURCES
     src/rules/HandPattern.cpp
     src/rules/MoveValidator.cpp
     src/rules/PaoDeKuaiRules.cpp
+    src/rules/RuleText.cpp
     src/rules/Scoring.cpp
     src/game/AiStrategy.cpp
     src/game/GameState.cpp

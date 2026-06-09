@@ -3,6 +3,7 @@
 #include "game/AiStrategy.h"
 #include "rules/Deck.h"
 #include "rules/MoveValidator.h"
+#include "rules/RuleText.h"
 
 #include <cJSON.h>
 
@@ -123,6 +124,28 @@ std::string PatternText(const std::optional<rules::HandPattern>& pattern) {
     return pattern ? rules::PatternDescription(*pattern) : "无";
 }
 
+struct PromptPerspective {
+    rules::PlayerId self{rules::PlayerId::Ai1};
+    std::string humanName{"玩家"};
+};
+
+std::string PromptPlayerLabel(rules::PlayerId player, const PromptPerspective& perspective) {
+    if (player == perspective.self) {
+        return "你";
+    }
+    if (player == rules::PlayerId::Player) {
+        return perspective.humanName.empty() ? "玩家" : perspective.humanName;
+    }
+    switch (player) {
+    case rules::PlayerId::Ai1:
+    case rules::PlayerId::Ai2:
+        return "另一名 AI";
+    case rules::PlayerId::Player:
+        break;
+    }
+    return "未知玩家";
+}
+
 std::string CardsText(const rules::Cards& cards) {
     if (cards.empty()) {
         return "无";
@@ -137,16 +160,93 @@ std::string CardsText(const rules::Cards& cards) {
     return out.str();
 }
 
+void RecordPassObservation(game::AiContext& context, const TurnRecord& record) {
+    if (record.finalAction.action != "pass" || !record.before.lastPattern) {
+        return;
+    }
+
+    const int index = Index(record.actor);
+    game::PassObservation observation{
+        *record.before.lastPattern,
+        static_cast<int>(record.before.hands[static_cast<std::size_t>(index)].size())
+    };
+    std::optional<game::PassObservation>& existing = context.passObservations[static_cast<std::size_t>(index)];
+    if (existing && existing->pattern.type == rules::PatternType::Single &&
+        observation.pattern.type == rules::PatternType::Single &&
+        rules::RankValue(observation.pattern.mainRank) < rules::RankValue(existing->pattern.mainRank)) {
+        existing = observation;
+    } else if (!existing) {
+        existing = observation;
+    }
+}
+
+game::AiContext PromptAiContext(
+    const TurnSnapshot& snapshot,
+    const std::vector<TurnRecord>& records,
+    rules::PlayerId self) {
+    game::AiContext context;
+    context.leading = !snapshot.lastPattern.has_value();
+    if (snapshot.lastPattern) {
+        context.previous = *snapshot.lastPattern;
+    }
+    const int selfIndex = Index(self);
+    context.currentPlayerIndex = selfIndex;
+    context.ownRemainingCards = static_cast<int>(snapshot.hands[static_cast<std::size_t>(selfIndex)].size());
+    for (int i = 0; i < 3; ++i) {
+        context.remainingCards[static_cast<std::size_t>(i)] = static_cast<int>(snapshot.hands[static_cast<std::size_t>(i)].size());
+    }
+    context.nextPlayerRemainingCards = static_cast<int>(snapshot.hands[static_cast<std::size_t>(Index(NextPlayer(self)))].size());
+    context.minOpponentRemainingCards = 99;
+    for (int i = 0; i < 3; ++i) {
+        if (i != selfIndex) {
+            context.minOpponentRemainingCards = std::min(context.minOpponentRemainingCards, context.remainingCards[static_cast<std::size_t>(i)]);
+        }
+    }
+    for (const TurnRecord& record : records) {
+        context.playedCards.insert(context.playedCards.end(), record.finalCards.begin(), record.finalCards.end());
+        RecordPassObservation(context, record);
+    }
+    return context;
+}
+
+std::string RecommendationText(
+    const TurnSnapshot& snapshot,
+    const std::vector<TurnRecord>& records,
+    const PromptPerspective& perspective) {
+    game::BasicAiStrategy localAi;
+    const game::AiContext context = PromptAiContext(snapshot, records, perspective.self);
+    const std::vector<game::AiMoveChoice> recommendations =
+        localAi.RecommendMoves(snapshot.hands[static_cast<std::size_t>(Index(perspective.self))], context, 3);
+
+    std::ostringstream out;
+    out << "本地决策树 AI 的前 3 个建议（仅供参考，最终由你决定）：\n";
+    if (recommendations.empty()) {
+        out << "- 无。\n";
+        return out.str();
+    }
+    for (std::size_t i = 0; i < recommendations.size(); ++i) {
+        const game::AiMoveChoice& choice = recommendations[i];
+        out << "- " << (i + 1) << ". ";
+        if (choice.pass) {
+            out << "不要";
+        } else {
+            out << "出 " << CardsText(choice.cards) << "，牌型 " << PatternText(choice.pattern);
+        }
+        out << "，" << choice.reason << "\n";
+    }
+    return out.str();
+}
+
 std::string SystemPrompt() {
-    return
-        "你是三人跑得快的 AI1。你必须用中文思考，并且每次只调用 choose_move 工具。\n"
-        "固定规则：一副 48 张牌，去掉大小王，只保留黑桃2，去掉梅花A，所以 A 有 3 张，2 只有 1 张。"
-        "三家各 16 张，持有黑桃3的玩家先出，第一手不强制包含黑桃3。出牌顺序为 player -> ai2 -> ai1 -> player 的逆时针顺序。\n"
-        "牌点从小到大：3 4 5 6 7 8 9 10 J Q K A 2。花色不参与大小比较，你只需要返回点数。\n"
-        "允许牌型：单张、对子、顺子(至少5张，不能含2)、连对(至少2连对，不能含2)、三带一、三带二(带牌可以是任意散牌)、"
-        "飞机(至少2组连续三张，可带N到2N张散牌，带牌不参与比较)、炸弹(3到K的四张，A和2不能做炸弹)。\n"
-        "跟牌必须同类同长度比较主点数，炸弹可以压任意非炸弹；炸弹之间比主点数。要得起必须打，要不起才能 pass。"
-        "如果你返回非法牌、本地不存在的牌、或者该打却 pass，本地裁判会判定失败。";
+    std::ostringstream out;
+    out << "你正在扮演三人跑得快中的一名 AI 玩家。下面所有“你”都指当前由你控制的玩家。\n"
+        << "你必须用中文思考；真实决策时只调用 play_cards 工具。"
+        << "record_forced_move 只会出现在历史中，用来记录规则强制动作，不是本次可调用的策略选择。\n"
+        << "固定规则如下，必须与帮助菜单说明保持一致：\n"
+        << rules::HelpRulesText() << "\n"
+        << "补充约束：三家各 16 张，牌点从小到大为 3 4 5 6 7 8 9 10 J Q K A 2。"
+        << "花色不参与大小比较，你只需要返回点数；如果你返回非法牌或本地不存在的牌，本地裁判会判定失败。";
+    return out.str();
 }
 
 std::string CurrentPrompt(
@@ -154,19 +254,27 @@ std::string CurrentPrompt(
     const std::array<rules::Cards, 3>& hands,
     const rules::Cards& lastCards,
     const std::optional<rules::HandPattern>& lastPattern,
-    rules::PlayerId lastMovePlayer) {
+    rules::PlayerId lastMovePlayer,
+    const PromptPerspective& perspective = {}) {
     std::ostringstream out;
-    out << "现在轮到 AI1 决策。\n";
-    out << "AI1 手牌: " << CardsText(hands[Index(rules::PlayerId::Ai1)]) << "\n";
-    out << "剩余张数: player=" << hands[0].size()
-        << ", ai1=" << hands[1].size()
-        << ", ai2=" << hands[2].size() << "\n";
+    out << "现在轮到你决策。\n";
+    out << "你的手牌: " << CardsText(hands[Index(rules::PlayerId::Ai1)]) << "\n";
+    out << "剩余张数: 玩家=" << hands[0].size()
+        << ", 你=" << hands[1].size()
+        << ", 另一名 AI=" << hands[2].size() << "\n";
     if (lastPattern) {
-        out << "当前要压的牌: " << PlayerLabel(lastMovePlayer) << " "
+        out << "当前要压的牌: " << PromptPlayerLabel(lastMovePlayer, perspective) << " "
             << CardsText(lastCards) << "，牌型 " << PatternText(lastPattern) << "\n";
     } else {
         out << "当前是领出，可以主动选择任意合法牌型。\n";
     }
+    TurnSnapshot snapshot;
+    snapshot.hands = hands;
+    snapshot.lastCards = lastCards;
+    snapshot.lastPattern = lastPattern;
+    snapshot.lastMovePlayer = lastMovePlayer;
+    snapshot.currentPlayer = perspective.self;
+    out << RecommendationText(snapshot, records, perspective);
 
     std::size_t start = 0;
     for (std::size_t i = records.size(); i > 0; --i) {
@@ -175,13 +283,13 @@ std::string CurrentPrompt(
             break;
         }
     }
-    out << "从上次 AI1 tool_call 到现在发生的全部公开行动:\n";
+    out << "从上次你 tool_call 到现在发生的全部公开行动:\n";
     if (start >= records.size()) {
-        out << "- 无，AI1 连续决策。\n";
+        out << "- 无，你连续决策。\n";
     }
     for (std::size_t i = start; i < records.size(); ++i) {
         const TurnRecord& record = records[i];
-        out << "- " << record.turnNo << " " << PlayerLabel(record.actor) << " "
+        out << "- " << record.turnNo << " " << PromptPlayerLabel(record.actor, perspective) << " "
             << MoveText(record.finalAction) << "，来源 " << SourceLabel(record.source)
             << "，原因 " << ReasonLabel(record.reason);
         if (record.finalPattern) {
@@ -189,7 +297,7 @@ std::string CurrentPrompt(
         }
         out << "\n";
     }
-    out << "请结合完整历史和当前手牌，只调用 choose_move。";
+    out << "请结合完整历史和当前手牌，只调用 play_cards。";
     return out.str();
 }
 
@@ -199,7 +307,6 @@ std::string CurrentPrompt(const SimulationState& state, const std::vector<TurnRe
 
 std::string ArgumentsJson(const PdkAiMove& move) {
     cJSON* root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "action", move.action.c_str());
     cJSON* ranks = cJSON_CreateArray();
     for (const std::string& rank : move.ranks) {
         cJSON_AddItemToArray(ranks, cJSON_CreateString(rank.c_str()));
@@ -208,6 +315,21 @@ std::string ArgumentsJson(const PdkAiMove& move) {
     if (!move.talk.empty()) {
         cJSON_AddStringToObject(root, "talk", move.talk.c_str());
     }
+    char* text = cJSON_PrintUnformatted(root);
+    std::string result = text ? text : "";
+    cJSON_free(text);
+    cJSON_Delete(root);
+    return result;
+}
+
+std::string ForcedArgumentsJson(const TurnRecord& record) {
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "reason", record.reason == TurnDecisionReason::CannotBeat ? "cannot_beat" : "only_legal_move");
+    cJSON* ranks = cJSON_CreateArray();
+    for (const std::string& rank : record.finalAction.ranks) {
+        cJSON_AddItemToArray(ranks, cJSON_CreateString(rank.c_str()));
+    }
+    cJSON_AddItemToObject(root, "ranks", ranks);
     char* text = cJSON_PrintUnformatted(root);
     std::string result = text ? text : "";
     cJSON_free(text);
@@ -236,7 +358,7 @@ PdkAiMessage SyntheticAssistantMessage(const TurnRecord& record) {
         record.trace.reasoningContent,
         {},
         {},
-        {PdkAiToolCall{id, "choose_move", ArgumentsJson(record.finalAction)}}
+        {PdkAiToolCall{id, "record_forced_move", ForcedArgumentsJson(record)}}
     };
 }
 
@@ -247,7 +369,7 @@ PdkAiMessage ToolMessageFor(const PdkAiMessage& assistant, const PdkAiMove& move
         PdkAiClient::BuildToolResultJson(move, accepted, reason),
         {},
         id,
-        "choose_move",
+        assistant.toolCalls.empty() ? "play_cards" : assistant.toolCalls.front().name,
         {}
     };
 }

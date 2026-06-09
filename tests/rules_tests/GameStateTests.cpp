@@ -112,7 +112,8 @@ TEST_CASE("AI1 can use external LLM controller and records the decision") {
         game::GameAction{"play", {"5"}, "我先压一张。"},
         "选择最小单张 5 压过 4。",
         "call_test",
-        "{\"action\":\"play\",\"ranks\":[\"5\"],\"talk\":\"我先压一张。\"}",
+        "play_cards",
+        "{\"ranks\":[\"5\"],\"talk\":\"我先压一张。\"}",
         {},
         {},
         {}
@@ -169,6 +170,7 @@ TEST_CASE("AI1 only legal move is recorded without calling external LLM") {
     CHECK(state.TurnRecords().back().source == game::TurnDecisionSource::LocalAi);
     CHECK(state.TurnRecords().back().reason == game::TurnDecisionReason::OnlyLegalMove);
     CHECK_FALSE(state.TurnRecords().back().trace.toolCallId.empty());
+    CHECK(state.TurnRecords().back().trace.toolName == "record_forced_move");
 }
 
 TEST_CASE("local AI2 actions are recorded but not external controlled") {
@@ -202,6 +204,7 @@ TEST_CASE("invalid LLM decision falls back to local AI silently") {
         game::GameAction{"pass", {}, {}},
         "错误地选择不要。",
         "call_bad",
+        "play_cards",
         "{\"action\":\"pass\",\"ranks\":[]}",
         {},
         {},

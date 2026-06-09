@@ -10,6 +10,7 @@ namespace pdk::game {
 struct ExternalAiRequest {
     int turnNo{0};
     rules::PlayerId player{rules::PlayerId::Ai1};
+    std::string humanName;
     TurnSnapshot snapshot;
     std::vector<TurnRecord> history;
 };
@@ -19,6 +20,7 @@ struct ExternalAiResult {
     GameAction requestedAction;
     std::string reasoningContent;
     std::string toolCallId;
+    std::string toolName;
     std::string toolArgumentsJson;
     std::filesystem::path requestLogPath;
     std::filesystem::path responseLogPath;

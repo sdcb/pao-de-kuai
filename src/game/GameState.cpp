@@ -892,7 +892,8 @@ TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
     trace.reasoningContent = reasoning.str();
     if (record.actor == rules::PlayerId::Ai1) {
         trace.toolCallId = "synthetic_turn_" + std::to_string(record.turnNo);
-        trace.toolArgumentsJson = ActionArgumentsJson(record.finalAction);
+        trace.toolName = "record_forced_move";
+        trace.toolArgumentsJson = ForcedMoveArgumentsJson(record.reason, record.finalAction);
         trace.toolResultJson = "{\"accepted\":true}";
     }
     return trace;
@@ -970,6 +971,7 @@ void GameState::StartExternalAiTurn() {
     externalAi_->Start(ExternalAiRequest{
         nextTurnNo_,
         currentPlayer_,
+        playerName_,
         Snapshot(),
         turnRecords_
     });
@@ -1010,6 +1012,7 @@ bool GameState::ApplyExternalAiResult(const ExternalAiResult& result) {
         TurnDecisionTrace trace;
         trace.reasoningContent = result.reasoningContent;
         trace.toolCallId = result.toolCallId;
+        trace.toolName = result.toolName;
         trace.toolArgumentsJson = result.toolArgumentsJson;
         trace.requestLogPath = result.requestLogPath;
         trace.responseLogPath = result.responseLogPath;
@@ -1054,6 +1057,7 @@ bool GameState::ApplyExternalAiResult(const ExternalAiResult& result) {
     TurnDecisionTrace trace;
     trace.reasoningContent = result.reasoningContent;
     trace.toolCallId = result.toolCallId;
+    trace.toolName = result.toolName;
     trace.toolArgumentsJson = result.toolArgumentsJson;
     trace.requestLogPath = result.requestLogPath;
     trace.responseLogPath = result.responseLogPath;

@@ -46,20 +46,7 @@ void WriteTextFile(const std::filesystem::path& path, const std::string& text) {
     out << text;
 }
 
-cJSON* CreateChooseMoveTool() {
-    cJSON* parameters = cJSON_CreateObject();
-    cJSON_AddStringToObject(parameters, "type", "object");
-
-    cJSON* properties = cJSON_CreateObject();
-    cJSON* action = cJSON_CreateObject();
-    cJSON_AddStringToObject(action, "type", "string");
-    cJSON* actionEnum = cJSON_CreateArray();
-    cJSON_AddItemToArray(actionEnum, cJSON_CreateString("play"));
-    cJSON_AddItemToArray(actionEnum, cJSON_CreateString("pass"));
-    cJSON_AddItemToObject(action, "enum", actionEnum);
-    cJSON_AddStringToObject(action, "description", "play 表示出牌，pass 表示不要。");
-    cJSON_AddItemToObject(properties, "action", action);
-
+cJSON* CreateRanksSchema(const char* description) {
     cJSON* ranks = cJSON_CreateObject();
     cJSON_AddStringToObject(ranks, "type", "array");
     cJSON* rankItems = cJSON_CreateObject();
@@ -70,8 +57,16 @@ cJSON* CreateChooseMoveTool() {
     }
     cJSON_AddItemToObject(rankItems, "enum", rankEnum);
     cJSON_AddItemToObject(ranks, "items", rankItems);
-    cJSON_AddStringToObject(ranks, "description", "要出的牌点数，不包含花色；对子/三张需要重复点数。pass 时留空。");
-    cJSON_AddItemToObject(properties, "ranks", ranks);
+    cJSON_AddStringToObject(ranks, "description", description);
+    return ranks;
+}
+
+cJSON* CreatePlayCardsTool() {
+    cJSON* parameters = cJSON_CreateObject();
+    cJSON_AddStringToObject(parameters, "type", "object");
+
+    cJSON* properties = cJSON_CreateObject();
+    cJSON_AddItemToObject(properties, "ranks", CreateRanksSchema("你决定出的牌点数，不包含花色；对子/三张需要重复点数。"));
 
     cJSON* talk = cJSON_CreateObject();
     cJSON_AddStringToObject(talk, "type", "string");
@@ -80,12 +75,44 @@ cJSON* CreateChooseMoveTool() {
 
     cJSON_AddItemToObject(parameters, "properties", properties);
     cJSON* required = cJSON_CreateArray();
-    cJSON_AddItemToArray(required, cJSON_CreateString("action"));
+    cJSON_AddItemToArray(required, cJSON_CreateString("ranks"));
     cJSON_AddItemToObject(parameters, "required", required);
 
     cJSON* function = cJSON_CreateObject();
-    cJSON_AddStringToObject(function, "name", "choose_move");
-    cJSON_AddStringToObject(function, "description", "选择本手跑得快动作，返回动作与牌点数。");
+    cJSON_AddStringToObject(function, "name", "play_cards");
+    cJSON_AddStringToObject(function, "description", "当你有多个合法选择时，选择本次要出的牌。");
+    cJSON_AddItemToObject(function, "parameters", parameters);
+
+    cJSON* tool = cJSON_CreateObject();
+    cJSON_AddStringToObject(tool, "type", "function");
+    cJSON_AddItemToObject(tool, "function", function);
+    return tool;
+}
+
+cJSON* CreateRecordForcedMoveTool() {
+    cJSON* parameters = cJSON_CreateObject();
+    cJSON_AddStringToObject(parameters, "type", "object");
+
+    cJSON* properties = cJSON_CreateObject();
+    cJSON* reason = cJSON_CreateObject();
+    cJSON_AddStringToObject(reason, "type", "string");
+    cJSON* reasonEnum = cJSON_CreateArray();
+    cJSON_AddItemToArray(reasonEnum, cJSON_CreateString("cannot_beat"));
+    cJSON_AddItemToArray(reasonEnum, cJSON_CreateString("only_legal_move"));
+    cJSON_AddItemToObject(reason, "enum", reasonEnum);
+    cJSON_AddStringToObject(reason, "description", "cannot_beat 表示你要不起；only_legal_move 表示只有一种合法出法。");
+    cJSON_AddItemToObject(properties, "reason", reason);
+    cJSON_AddItemToObject(properties, "ranks", CreateRanksSchema("cannot_beat 时为空数组；only_legal_move 时填写被迫出的牌。"));
+
+    cJSON_AddItemToObject(parameters, "properties", properties);
+    cJSON* required = cJSON_CreateArray();
+    cJSON_AddItemToArray(required, cJSON_CreateString("reason"));
+    cJSON_AddItemToArray(required, cJSON_CreateString("ranks"));
+    cJSON_AddItemToObject(parameters, "required", required);
+
+    cJSON* function = cJSON_CreateObject();
+    cJSON_AddStringToObject(function, "name", "record_forced_move");
+    cJSON_AddStringToObject(function, "description", "记录你因为游戏规则被迫执行的一手牌。这不是一次策略选择。");
     cJSON_AddItemToObject(function, "parameters", parameters);
 
     cJSON* tool = cJSON_CreateObject();
@@ -213,13 +240,14 @@ std::string PdkAiClient::BuildRequestJson(const PdkAiRequest& request) {
     cJSON_AddItemToObject(root.get(), "messages", messages);
 
     cJSON* tools = cJSON_CreateArray();
-    cJSON_AddItemToArray(tools, CreateChooseMoveTool());
+    cJSON_AddItemToArray(tools, CreatePlayCardsTool());
+    cJSON_AddItemToArray(tools, CreateRecordForcedMoveTool());
     cJSON_AddItemToObject(root.get(), "tools", tools);
 
     cJSON* toolChoice = cJSON_CreateObject();
     cJSON_AddStringToObject(toolChoice, "type", "function");
     cJSON* choiceFunction = cJSON_CreateObject();
-    cJSON_AddStringToObject(choiceFunction, "name", "choose_move");
+    cJSON_AddStringToObject(choiceFunction, "name", "play_cards");
     cJSON_AddItemToObject(toolChoice, "function", choiceFunction);
     cJSON_AddItemToObject(root.get(), "tool_choice", toolChoice);
     return PrintJson(root.get(), true);
@@ -251,8 +279,8 @@ PdkAiResponse PdkAiClient::ParseResponse(std::string responseBody) {
         result.errorMessage = "AI response has no tool call arguments";
         return result;
     }
-    if (toolCall.name != "choose_move") {
-        result.errorMessage = "AI response tool call is not choose_move";
+    if (toolCall.name != "play_cards") {
+        result.errorMessage = "AI response tool call is not play_cards";
         return result;
     }
 
@@ -262,19 +290,17 @@ PdkAiResponse PdkAiClient::ParseResponse(std::string responseBody) {
         return result;
     }
 
-    result.move.action = JsonString(arguments.get(), "action");
-    if (result.move.action != "play" && result.move.action != "pass") {
-        result.errorMessage = "AI tool call action is not play or pass";
-        return result;
-    }
+    result.move.action = "play";
 
     const cJSON* ranks = cJSON_GetObjectItemCaseSensitive(arguments.get(), "ranks");
-    if (cJSON_IsArray(ranks)) {
-        const cJSON* item = nullptr;
-        cJSON_ArrayForEach(item, ranks) {
-            if (cJSON_IsString(item) && item->valuestring) {
-                result.move.ranks.emplace_back(item->valuestring);
-            }
+    if (!cJSON_IsArray(ranks)) {
+        result.errorMessage = "AI tool call ranks is not an array";
+        return result;
+    }
+    const cJSON* item = nullptr;
+    cJSON_ArrayForEach(item, ranks) {
+        if (cJSON_IsString(item) && item->valuestring) {
+            result.move.ranks.emplace_back(item->valuestring);
         }
     }
     result.move.talk = JsonString(arguments.get(), "talk");
