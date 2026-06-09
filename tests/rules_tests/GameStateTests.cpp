@@ -229,6 +229,51 @@ TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
     CHECK_FALSE(record.trace.toolCallId.empty());
 }
 
+TEST_CASE("AI2 can use external LLM controller and records the decision") {
+    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    auto controller = std::make_shared<MockExternalAiController>(
+        game::ExternalAiResult{
+            true,
+            game::GameAction{"play", {"5"}, "我来接一下。"},
+            "选择最小单张 5 压过 4。",
+            "call_ai2",
+            "play_cards",
+            "{\"ranks\":[\"5\"],\"talk\":\"我来接一下。\"}",
+            {},
+            {},
+            {}
+        },
+        rules::PlayerId::Ai2);
+
+    game::GameState state;
+    state.SetExternalAiController(controller);
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Seven)},
+            rules::Cards{C(rules::Rank::Five), C(rules::Rank::Six)}
+        },
+        rules::PlayerId::Ai2,
+        fourLead,
+        rules::PlayerId::Player);
+
+    state.Update(1.0f);
+    CHECK(state.ExternalAiPending());
+    REQUIRE(controller->startCount == 1);
+    REQUIRE(controller->lastRequest.has_value());
+    CHECK(controller->lastRequest->player == rules::PlayerId::Ai2);
+
+    state.Update(0.1f);
+    CHECK_FALSE(state.ExternalAiPending());
+    REQUIRE(state.TurnRecords().size() == 1);
+    const game::TurnRecord& record = state.TurnRecords().back();
+    CHECK(record.actor == rules::PlayerId::Ai2);
+    CHECK(record.source == game::TurnDecisionSource::LlmAi);
+    CHECK(record.accepted);
+    CHECK(record.trace.toolName == "play_cards");
+    CHECK(record.finalAction.ranks == std::vector<std::string>{"5"});
+}
+
 TEST_CASE("invalid LLM decision falls back to local AI silently") {
     const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
     auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{

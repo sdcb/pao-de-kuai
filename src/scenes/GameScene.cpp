@@ -379,7 +379,7 @@ void GameScene::DrawAiArea(graphics::RenderContext& context, rules::PlayerId pla
     std::ostringstream text;
     text << state.name << "  剩 " << state.hand.size() << " 张  今日分 " << todayScores_[rules::PlayerIndex(player)];
     if (game_.CurrentPlayer() == player) {
-        text << (game_.ExternalAiPending() && player == rules::PlayerId::Ai1 ? "  联网思考中" : "  思考中");
+        text << (game_.ExternalAiPending() ? "  联网思考中" : "  思考中");
     }
     context.DrawTextUtf8(text.str(), {area.x + 16.0f, area.y + 12.0f, area.width - 32.0f, 28.0f}, 19.0f, Color(0.94f, 0.96f, 0.84f));
     const int count = static_cast<int>(state.hand.size());
