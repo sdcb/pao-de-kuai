@@ -8,11 +8,7 @@
 #include <algorithm>
 #include <chrono>
 #include <ctime>
-
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include <thread>
 
 namespace pdk::ai {
 namespace {
@@ -308,18 +304,10 @@ game::ExternalAiResult ConvertResult(const PdkAiResponse& response) {
 } // namespace
 
 struct LlmAiController::SharedState {
-    CRITICAL_SECTION lock{};
+    mutable std::mutex mutex;
     int generation{0};
     bool pending{false};
     std::optional<game::ExternalAiResult> result;
-
-    SharedState() {
-        InitializeCriticalSection(&lock);
-    }
-
-    ~SharedState() {
-        DeleteCriticalSection(&lock);
-    }
 };
 
 LlmAiController::LlmAiController(std::map<rules::PlayerId, stats::AiProviderSettings> providers)
@@ -344,10 +332,8 @@ bool LlmAiController::CanHandle(rules::PlayerId player) const {
 }
 
 bool LlmAiController::HasPending() const {
-    EnterCriticalSection(&state_->lock);
-    const bool pending = state_->pending;
-    LeaveCriticalSection(&state_->lock);
-    return pending;
+    std::lock_guard lock(state_->mutex);
+    return state_->pending;
 }
 
 void LlmAiController::Start(game::ExternalAiRequest request) {
@@ -356,10 +342,9 @@ void LlmAiController::Start(game::ExternalAiRequest request) {
     if (providerIt == providers_.end()) {
         game::ExternalAiResult failed;
         failed.errorMessage = "No remote AI provider configured for player";
-        EnterCriticalSection(&state->lock);
+        std::lock_guard lock(state->mutex);
         state->pending = false;
         state->result = std::move(failed);
-        LeaveCriticalSection(&state->lock);
         return;
     }
     stats::AiProviderSettings provider = providerIt->second;
@@ -367,82 +352,47 @@ void LlmAiController::Start(game::ExternalAiRequest request) {
     const std::string responseLog = CallPath(runRoot_, request.turnNo, "response");
     int generation = 0;
     {
-        EnterCriticalSection(&state->lock);
+        std::lock_guard lock(state->mutex);
         generation = ++state->generation;
         state->pending = true;
         state->result.reset();
-        LeaveCriticalSection(&state->lock);
     }
 
-    struct ThreadRequest {
-        std::shared_ptr<SharedState> state;
-        stats::AiProviderSettings provider;
-        game::ExternalAiRequest request;
-        std::string requestLog;
-        std::string responseLog;
-        int generation{0};
-    };
-
-    auto work = std::make_unique<ThreadRequest>();
-    work->state = std::move(state);
-    work->provider = std::move(provider);
-    work->request = std::move(request);
-    work->requestLog = requestLog;
-    work->responseLog = responseLog;
-    work->generation = generation;
-    HANDLE thread = CreateThread(nullptr, 0, [](LPVOID parameter) -> DWORD {
-        std::unique_ptr<ThreadRequest> work(static_cast<ThreadRequest*>(parameter));
+    std::thread([state, provider = std::move(provider), request = std::move(request), requestLog, responseLog, generation]() mutable {
         PdkAiResponse response = PdkAiClient().ChooseMove(PdkAiRequest{
-            work->provider,
-            BuildMessages(work->request),
-            work->requestLog,
-            work->responseLog,
+            provider,
+            BuildMessages(request),
+            requestLog,
+            responseLog,
             30000
         });
         game::ExternalAiResult result = ConvertResult(response);
-        result.requestLogPath = work->requestLog;
-        result.responseLogPath = work->responseLog;
+        result.requestLogPath = requestLog;
+        result.responseLogPath = responseLog;
 
-        EnterCriticalSection(&work->state->lock);
-        if (work->state->generation == work->generation) {
-            work->state->pending = false;
-            work->state->result = std::move(result);
+        std::lock_guard lock(state->mutex);
+        if (state->generation == generation) {
+            state->pending = false;
+            state->result = std::move(result);
         }
-        LeaveCriticalSection(&work->state->lock);
-        return 0;
-    }, work.get(), 0, nullptr);
-    if (thread) {
-        work.release();
-        CloseHandle(thread);
-        return;
-    }
-
-    game::ExternalAiResult failed;
-    failed.errorMessage = "CreateThread failed";
-    EnterCriticalSection(&state_->lock);
-    state_->pending = false;
-    state_->result = std::move(failed);
-    LeaveCriticalSection(&state_->lock);
+    }).detach();
 }
 
 std::optional<game::ExternalAiResult> LlmAiController::TryGetResult() {
-    EnterCriticalSection(&state_->lock);
+    std::lock_guard lock(state_->mutex);
     if (!state_->result) {
-        LeaveCriticalSection(&state_->lock);
         return std::nullopt;
     }
     std::optional<game::ExternalAiResult> result = std::move(state_->result);
     state_->result.reset();
-    LeaveCriticalSection(&state_->lock);
     return result;
 }
 
 void LlmAiController::Cancel() {
-    EnterCriticalSection(&state_->lock);
+    std::lock_guard lock(state_->mutex);
     ++state_->generation;
     state_->pending = false;
     state_->result.reset();
-    LeaveCriticalSection(&state_->lock);
 }
 
 } // namespace pdk::ai

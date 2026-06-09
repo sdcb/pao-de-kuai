@@ -53,6 +53,7 @@ target_include_directories(cjson_static PUBLIC ${cjson_src_SOURCE_DIR})
 target_compile_definitions(cjson_static PRIVATE CJSON_HIDE_SYMBOLS)
 
 set(PDK_CORE_SOURCES
+    src/core/StringUtil.cpp
     src/core/Tween.cpp
     src/core/WinFile.cpp
     src/rules/Card.cpp

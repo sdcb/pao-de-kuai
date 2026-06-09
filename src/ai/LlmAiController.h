@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <map>
+#include <mutex>
 #include <optional>
 
 namespace pdk::ai {
