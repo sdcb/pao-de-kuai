@@ -4,6 +4,7 @@
 
 namespace pdk::rules {
 
-std::string_view HelpRulesText();
+std::string_view SharedGameRulesText();
+std::string_view HumanHelpText();
 
 } // namespace pdk::rules

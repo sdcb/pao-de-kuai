@@ -214,6 +214,10 @@ TEST_CASE("pdk AI request JSON uses play cards and forced history tools") {
     const cJSON* playProperties = cJSON_GetObjectItemCaseSensitive(playParameters, "properties");
     CHECK(cJSON_GetObjectItemCaseSensitive(playProperties, "action") == nullptr);
     CHECK(cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(playProperties, "ranks")));
+    const cJSON* talk = cJSON_GetObjectItemCaseSensitive(playProperties, "talk");
+    REQUIRE(cJSON_IsObject(talk));
+    CHECK(std::string(cJSON_GetObjectItemCaseSensitive(talk, "description")->valuestring).find("不要透露你的手牌") != std::string::npos);
+    CHECK(cJSON_GetObjectItemCaseSensitive(talk, "maxLength")->valueint == 24);
 
     const cJSON* forcedFunction = cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(tools, 1), "function");
     REQUIRE(cJSON_IsObject(forcedFunction));
@@ -296,7 +300,10 @@ TEST_CASE("experiment system prompt uses shared help rule text") {
 
     REQUIRE_FALSE(messages.empty());
     CHECK(messages.front().role == "system");
-    CHECK(messages.front().content.find(std::string(rules::HelpRulesText())) != std::string::npos);
+    CHECK(messages.front().content.find(std::string(rules::SharedGameRulesText())) != std::string::npos);
+    CHECK(messages.front().content.find(std::string(rules::HumanHelpText())) == std::string::npos);
+    CHECK(messages.front().content.find("中文思考") == std::string::npos);
+    CHECK(messages.front().content.find("帮助菜单") == std::string::npos);
     CHECK(messages.front().content.find("choose_move") == std::string::npos);
     CHECK(messages.front().content.find("play_cards") != std::string::npos);
 }

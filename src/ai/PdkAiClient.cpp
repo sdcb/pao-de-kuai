@@ -70,7 +70,8 @@ cJSON* CreatePlayCardsTool() {
 
     cJSON* talk = cJSON_CreateObject();
     cJSON_AddStringToObject(talk, "type", "string");
-    cJSON_AddStringToObject(talk, "description", "可选中文短句。");
+    cJSON_AddStringToObject(talk, "description", "可选。公开给人类玩家看的牌桌表演短句，不是推理摘要；不要透露你的手牌、保留牌、候选项、策略原因或本地 AI 建议。可以幽默、浮夸、嘴硬或挑衅。");
+    cJSON_AddNumberToObject(talk, "maxLength", 24);
     cJSON_AddItemToObject(properties, "talk", talk);
 
     cJSON_AddItemToObject(parameters, "properties", properties);

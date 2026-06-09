@@ -239,13 +239,13 @@ std::string RecommendationText(
 
 std::string SystemPrompt() {
     std::ostringstream out;
-    out << "你正在扮演三人跑得快中的一名 AI 玩家。下面所有“你”都指当前由你控制的玩家。\n"
-        << "你必须用中文思考；真实决策时只调用 play_cards 工具。"
+    out << "你正在扮演三人跑得快中的一名 AI 玩家。\n"
+        << "真实决策时只调用 play_cards 工具。"
         << "record_forced_move 只会出现在历史中，用来记录规则强制动作，不是本次可调用的策略选择。\n"
-        << "固定规则如下，必须与帮助菜单说明保持一致：\n"
-        << rules::HelpRulesText() << "\n"
-        << "补充约束：三家各 16 张，牌点从小到大为 3 4 5 6 7 8 9 10 J Q K A 2。"
-        << "花色不参与大小比较，你只需要返回点数；如果你返回非法牌或本地不存在的牌，本地裁判会判定失败。";
+        << "固定规则如下：\n"
+        << rules::SharedGameRulesText() << "\n"
+        << "play_cards 只返回点数，不返回花色；对子、三张、炸弹需要重复点数。"
+        << "如果你返回非法牌或本地不存在的牌，本地裁判会判定失败。";
     return out.str();
 }
 
