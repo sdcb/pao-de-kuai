@@ -9,6 +9,7 @@
 #include <map>
 #include <random>
 #include <sstream>
+#include <utility>
 
 namespace pdk::game {
 namespace {
@@ -23,6 +24,39 @@ rules::PlayerId NextPlayer(rules::PlayerId player) {
 
 bool SameCard(rules::Card lhs, rules::Card rhs) {
     return lhs.rank == rhs.rank && lhs.suit == rhs.suit;
+}
+
+std::vector<std::string> RanksOf(const rules::Cards& cards) {
+    std::vector<std::string> ranks;
+    ranks.reserve(cards.size());
+    for (rules::Card card : cards) {
+        ranks.push_back(rules::RankName(card.rank));
+    }
+    return ranks;
+}
+
+std::string MoveText(const GameAction& action) {
+    if (action.action == "pass") {
+        return "不要";
+    }
+    std::ostringstream out;
+    out << "出";
+    for (const std::string& rank : action.ranks) {
+        out << ' ' << rank;
+    }
+    return out.str();
+}
+
+std::optional<rules::Rank> ParseRank(const std::string& rank) {
+    static const std::map<std::string, rules::Rank> ranks{
+        {"3", rules::Rank::Three}, {"4", rules::Rank::Four}, {"5", rules::Rank::Five},
+        {"6", rules::Rank::Six}, {"7", rules::Rank::Seven}, {"8", rules::Rank::Eight},
+        {"9", rules::Rank::Nine}, {"10", rules::Rank::Ten}, {"J", rules::Rank::Jack},
+        {"Q", rules::Rank::Queen}, {"K", rules::Rank::King}, {"A", rules::Rank::Ace},
+        {"2", rules::Rank::Two}
+    };
+    const auto it = ranks.find(rank);
+    return it == ranks.end() ? std::nullopt : std::optional<rules::Rank>(it->second);
 }
 
 std::string PlayerDisplayName(const std::array<PlayerState, 3>& players, rules::PlayerId player) {
@@ -342,6 +376,12 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     talkCooldown_ = 0.0f;
     talkText_.clear();
     lastTalkIndices_.fill(-1);
+    turnRecords_.clear();
+    nextTurnNo_ = 1;
+    externalAiPending_ = false;
+    if (externalAi_) {
+        externalAi_->Cancel();
+    }
     toast_ = "新一局开始";
     startedAt_ = stats::NowTimeText();
     lastRoundRecord_ = {};
@@ -371,6 +411,13 @@ void GameState::Update(float dt) {
         talkCooldown_ -= dt;
     }
 
+    if (externalAiPending_) {
+        if (TryCompleteExternalAiTurn()) {
+            aiDelay_ = NextThinkDelay();
+        }
+        return;
+    }
+
     const bool aiControlled = currentPlayer_ != rules::PlayerId::Player || autoplay_;
     if (!aiControlled) {
         return;
@@ -381,13 +428,10 @@ void GameState::Update(float dt) {
         return;
     }
 
-    AiMoveChoice choice = aiPlayers_[Index(currentPlayer_)].ChooseMove(
-        players_[Index(currentPlayer_)].hand,
-        MakeAiContext(currentPlayer_));
-    if (choice.pass) {
-        Pass(currentPlayer_);
+    if (externalAi_ && externalAi_->CanHandle(currentPlayer_)) {
+        StartExternalAiTurn();
     } else {
-        PlayCards(currentPlayer_, choice.cards, choice.pattern, choice.disruptionPenalty);
+        PlayLocalAiTurn(currentPlayer_);
     }
     aiDelay_ = NextThinkDelay();
 }
@@ -445,7 +489,21 @@ bool GameState::PlaySelected() {
         AddEvent(GameEvent{GameEventType::InvalidMove, rules::PlayerId::Player, validation.reason, cards});
         return false;
     }
+    const TurnSnapshot before = Snapshot();
     PlayCards(rules::PlayerId::Player, cards, validation.pattern);
+    TurnRecord record = BuildTurnRecord(
+        before,
+        rules::PlayerId::Player,
+        TurnDecisionSource::Human,
+        TurnDecisionReason::NormalChoice,
+        ActionFromCards(cards),
+        ActionFromCards(cards),
+        cards,
+        validation.pattern,
+        true,
+        "玩家出牌",
+        {});
+    AppendRecord(std::move(record));
     selectedIndices_.clear();
     hintIndices_.clear();
     return true;
@@ -455,7 +513,24 @@ bool GameState::PassHuman() {
     if (!IsHumanTurn()) {
         return false;
     }
-    return Pass(rules::PlayerId::Player);
+    const TurnSnapshot before = Snapshot();
+    if (!Pass(rules::PlayerId::Player)) {
+        return false;
+    }
+    TurnRecord record = BuildTurnRecord(
+        before,
+        rules::PlayerId::Player,
+        TurnDecisionSource::Human,
+        TurnDecisionReason::CannotBeat,
+        ActionFromCards({}, true),
+        ActionFromCards({}, true),
+        {},
+        std::nullopt,
+        true,
+        "玩家不要",
+        {});
+    AppendRecord(std::move(record));
+    return true;
 }
 
 bool GameState::ApplyHint() {
@@ -676,6 +751,12 @@ void GameState::TestSetRound(
     bombs_.clear();
     events_.clear();
     toast_.clear();
+    turnRecords_.clear();
+    nextTurnNo_ = 1;
+    externalAiPending_ = false;
+    if (externalAi_) {
+        externalAi_->Cancel();
+    }
 }
 
 bool GameState::CurrentPlayerLeads() const {
@@ -717,6 +798,347 @@ bool GameState::HasPlayableFollow(rules::PlayerId player) const {
     const rules::Cards& hand = players_[Index(player)].hand;
     // UI callers use this for pass/button state; keep it independent of AI strategy.
     return rules::HasAnyFollowMove(hand, *lastPattern_, static_cast<int>(hand.size()));
+}
+
+std::vector<std::pair<rules::Cards, rules::HandPattern>> GameState::LegalMoves(rules::PlayerId player) const {
+    const rules::Cards& hand = players_[Index(player)].hand;
+    const int n = static_cast<int>(hand.size());
+    std::vector<std::pair<rules::Cards, rules::HandPattern>> moves;
+    if (n <= 0 || n >= 63) {
+        return moves;
+    }
+    const std::uint64_t limit = 1ull << n;
+    for (std::uint64_t mask = 1; mask < limit; ++mask) {
+        rules::Cards cards;
+        cards.reserve(static_cast<std::size_t>(n));
+        for (int i = 0; i < n; ++i) {
+            if ((mask & (1ull << i)) != 0) {
+                cards.push_back(hand[static_cast<std::size_t>(i)]);
+            }
+        }
+        const auto validation = CurrentPlayerLeads()
+            ? rules_.ValidateLeadMove(cards, n)
+            : rules_.ValidateFollowMove(cards, *lastPattern_, n);
+        if (validation.ok) {
+            moves.emplace_back(std::move(cards), validation.pattern);
+        }
+    }
+    return moves;
+}
+
+TurnSnapshot GameState::Snapshot() const {
+    return TurnSnapshot{
+        {players_[0].hand, players_[1].hand, players_[2].hand},
+        lastCards_,
+        lastPattern_,
+        lastMovePlayer_,
+        currentPlayer_,
+        passCount_
+    };
+}
+
+GameAction GameState::ActionFromCards(const rules::Cards& cards, bool pass, std::string talk) const {
+    return GameAction{pass ? "pass" : "play", pass ? std::vector<std::string>{} : RanksOf(cards), std::move(talk)};
+}
+
+TurnRecord GameState::BuildTurnRecord(
+    const TurnSnapshot& before,
+    rules::PlayerId actor,
+    TurnDecisionSource source,
+    TurnDecisionReason reason,
+    const GameAction& requested,
+    const GameAction& final,
+    const rules::Cards& finalCards,
+    const std::optional<rules::HandPattern>& finalPattern,
+    bool accepted,
+    const std::string& validationMessage,
+    TurnDecisionTrace trace) const {
+    TurnRecord record;
+    record.turnNo = nextTurnNo_;
+    record.actor = actor;
+    record.source = source;
+    record.reason = reason;
+    record.before = before;
+    record.after = Snapshot();
+    record.requestedAction = requested;
+    record.finalAction = final;
+    record.finalCards = finalCards;
+    record.finalPattern = finalPattern;
+    record.accepted = accepted;
+    record.validationMessage = validationMessage;
+    record.trace = std::move(trace);
+    return record;
+}
+
+void GameState::AppendRecord(TurnRecord record) {
+    if (record.trace.reasoningContent.empty()) {
+        record.trace = SyntheticTrace(record);
+    }
+    turnRecords_.push_back(std::move(record));
+    nextTurnNo_++;
+}
+
+TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
+    TurnDecisionTrace trace;
+    std::ostringstream reasoning;
+    reasoning << "本地记录：" << PlayerLabel(record.actor) << ' ';
+    if (record.reason == TurnDecisionReason::CannotBeat) {
+        reasoning << "按规则要不起，只能不要。";
+    } else if (record.reason == TurnDecisionReason::OnlyLegalMove) {
+        reasoning << "只有一种合法选择，直接执行 " << MoveText(record.finalAction) << "。";
+    } else {
+        reasoning << "执行 " << MoveText(record.finalAction) << "。";
+    }
+    trace.reasoningContent = reasoning.str();
+    if (record.actor == rules::PlayerId::Ai1) {
+        trace.toolCallId = "synthetic_turn_" + std::to_string(record.turnNo);
+        trace.toolArgumentsJson = ActionArgumentsJson(record.finalAction);
+        trace.toolResultJson = "{\"accepted\":true}";
+    }
+    return trace;
+}
+
+void GameState::SetExternalAiController(std::shared_ptr<ExternalAiController> controller) {
+    if (externalAi_) {
+        externalAi_->Cancel();
+    }
+    externalAi_ = std::move(controller);
+    externalAiPending_ = false;
+}
+
+void GameState::PlayLocalAiTurn(rules::PlayerId player) {
+    const TurnSnapshot before = Snapshot();
+    const auto legal = LegalMoves(player);
+    TurnDecisionSource source = TurnDecisionSource::LocalAi;
+    TurnDecisionReason reason = legal.size() == 1 ? TurnDecisionReason::OnlyLegalMove : TurnDecisionReason::NormalChoice;
+    AiMoveChoice choice;
+    if (legal.empty() && !CurrentPlayerLeads()) {
+        source = TurnDecisionSource::System;
+        reason = TurnDecisionReason::CannotBeat;
+        choice.pass = true;
+    } else {
+        choice = aiPlayers_[Index(player)].ChooseMove(players_[Index(player)].hand, MakeAiContext(player));
+        if (choice.pass) {
+            reason = TurnDecisionReason::CannotBeat;
+        }
+    }
+
+    if (choice.pass) {
+        if (!Pass(player)) {
+            return;
+        }
+        TurnRecord record = BuildTurnRecord(
+            before,
+            player,
+            source,
+            reason,
+            ActionFromCards({}, true),
+            ActionFromCards({}, true),
+            {},
+            std::nullopt,
+            true,
+            "本地 AI 不要",
+            {});
+        AppendRecord(std::move(record));
+        return;
+    }
+
+    PlayCards(player, choice.cards, choice.pattern, choice.disruptionPenalty);
+    TurnRecord record = BuildTurnRecord(
+        before,
+        player,
+        source,
+        reason,
+        ActionFromCards(choice.cards),
+        ActionFromCards(choice.cards),
+        choice.cards,
+        choice.pattern,
+        true,
+        "本地 AI 出牌",
+        {});
+    AppendRecord(std::move(record));
+}
+
+void GameState::StartExternalAiTurn() {
+    const auto legal = LegalMoves(currentPlayer_);
+    if (legal.empty() || legal.size() == 1) {
+        PlayLocalAiTurn(currentPlayer_);
+        return;
+    }
+
+    externalAiPending_ = true;
+    externalAi_->Start(ExternalAiRequest{
+        nextTurnNo_,
+        currentPlayer_,
+        Snapshot(),
+        turnRecords_
+    });
+}
+
+bool GameState::TryCompleteExternalAiTurn() {
+    if (!externalAi_) {
+        externalAiPending_ = false;
+        return false;
+    }
+    std::optional<ExternalAiResult> result = externalAi_->TryGetResult();
+    if (!result) {
+        return false;
+    }
+    externalAiPending_ = false;
+    if (!ApplyExternalAiResult(*result)) {
+        PlayLocalAiTurn(currentPlayer_);
+    }
+    return true;
+}
+
+bool GameState::ApplyExternalAiResult(const ExternalAiResult& result) {
+    const TurnSnapshot before = Snapshot();
+    const rules::PlayerId actor = currentPlayer_;
+    auto useLlmTalk = [&](const std::string& talk) {
+        if (talk.empty()) {
+            return;
+        }
+        events_.erase(std::remove_if(events_.begin(), events_.end(), [&](const GameEvent& event) {
+            return event.type == GameEventType::Talk && event.player == actor;
+        }), events_.end());
+        talkPlayer_ = actor;
+        talkText_ = talk;
+        talkCooldown_ = 5.0f;
+        AddEvent(GameEvent{GameEventType::Talk, actor, talk, {}});
+    };
+    if (!result.ok) {
+        TurnDecisionTrace trace;
+        trace.reasoningContent = result.reasoningContent;
+        trace.toolCallId = result.toolCallId;
+        trace.toolArgumentsJson = result.toolArgumentsJson;
+        trace.requestLogPath = result.requestLogPath;
+        trace.responseLogPath = result.responseLogPath;
+        trace.errorMessage = result.errorMessage;
+        AiMoveChoice fallback = aiPlayers_[Index(actor)].ChooseMove(players_[Index(actor)].hand, MakeAiContext(actor));
+        if (fallback.pass) {
+            if (!Pass(actor)) {
+                return false;
+            }
+            TurnRecord record = BuildTurnRecord(
+                before,
+                actor,
+                TurnDecisionSource::LlmAi,
+                TurnDecisionReason::LlmFallback,
+                result.requestedAction,
+                ActionFromCards({}, true),
+                {},
+                std::nullopt,
+                false,
+                result.errorMessage,
+                std::move(trace));
+            AppendRecord(std::move(record));
+            return true;
+        }
+        PlayCards(actor, fallback.cards, fallback.pattern, fallback.disruptionPenalty);
+        TurnRecord record = BuildTurnRecord(
+            before,
+            actor,
+            TurnDecisionSource::LlmAi,
+            TurnDecisionReason::LlmFallback,
+            result.requestedAction,
+            ActionFromCards(fallback.cards),
+            fallback.cards,
+            fallback.pattern,
+            false,
+            result.errorMessage,
+            std::move(trace));
+        AppendRecord(std::move(record));
+        return true;
+    }
+
+    TurnDecisionTrace trace;
+    trace.reasoningContent = result.reasoningContent;
+    trace.toolCallId = result.toolCallId;
+    trace.toolArgumentsJson = result.toolArgumentsJson;
+    trace.requestLogPath = result.requestLogPath;
+    trace.responseLogPath = result.responseLogPath;
+
+    if (result.requestedAction.action == "pass") {
+        if (CurrentPlayerLeads() || HasPlayableFollow(actor)) {
+            trace.errorMessage = "LLM pass 不合法";
+            ExternalAiResult failed = result;
+            failed.ok = false;
+            failed.errorMessage = trace.errorMessage;
+            return ApplyExternalAiResult(failed);
+        }
+        Pass(actor);
+        useLlmTalk(result.requestedAction.talk);
+        TurnRecord record = BuildTurnRecord(
+            before,
+            actor,
+            TurnDecisionSource::LlmAi,
+            TurnDecisionReason::CannotBeat,
+            result.requestedAction,
+            result.requestedAction,
+            {},
+            std::nullopt,
+            true,
+            "LLM 不要合法",
+            std::move(trace));
+        AppendRecord(std::move(record));
+        return true;
+    }
+
+    rules::Cards cards;
+    std::vector<bool> used(players_[Index(actor)].hand.size(), false);
+    for (const std::string& rankText : result.requestedAction.ranks) {
+        const auto rank = ParseRank(rankText);
+        if (!rank) {
+            ExternalAiResult failed = result;
+            failed.ok = false;
+            failed.errorMessage = "LLM 返回未知点数";
+            return ApplyExternalAiResult(failed);
+        }
+        bool found = false;
+        const rules::Cards& hand = players_[Index(actor)].hand;
+        for (std::size_t i = 0; i < hand.size(); ++i) {
+            if (!used[i] && hand[i].rank == *rank) {
+                used[i] = true;
+                cards.push_back(hand[i]);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            ExternalAiResult failed = result;
+            failed.ok = false;
+            failed.errorMessage = "LLM 返回了手牌中不存在的点数";
+            return ApplyExternalAiResult(failed);
+        }
+    }
+
+    const int handSize = static_cast<int>(players_[Index(actor)].hand.size());
+    const auto validation = CurrentPlayerLeads()
+        ? rules_.ValidateLeadMove(cards, handSize)
+        : rules_.ValidateFollowMove(cards, *lastPattern_, handSize);
+    if (!validation.ok) {
+        ExternalAiResult failed = result;
+        failed.ok = false;
+        failed.errorMessage = validation.reason;
+        return ApplyExternalAiResult(failed);
+    }
+
+    PlayCards(actor, cards, validation.pattern);
+    useLlmTalk(result.requestedAction.talk);
+    TurnRecord record = BuildTurnRecord(
+        before,
+        actor,
+        TurnDecisionSource::LlmAi,
+        TurnDecisionReason::NormalChoice,
+        result.requestedAction,
+        ActionFromCards(cards, false, result.requestedAction.talk),
+        cards,
+        validation.pattern,
+        true,
+        "LLM 出牌合法",
+        std::move(trace));
+    AppendRecord(std::move(record));
+    return true;
 }
 
 float GameState::NextThinkDelay() {

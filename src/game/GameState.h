@@ -1,11 +1,13 @@
 #pragma once
 
 #include "game/AiPlayer.h"
+#include "game/ExternalAiController.h"
 #include "game/Player.h"
 #include "rules/PaoDeKuaiRules.h"
 #include "stats/DailyStat.h"
 
 #include <array>
+#include <memory>
 #include <optional>
 #include <random>
 #include <set>
@@ -76,6 +78,8 @@ public:
     rules::PlayerId TalkPlayer() const { return talkPlayer_; }
     bool Autoplay() const { return autoplay_; }
     const stats::RoundRecord& LastRoundRecord() const { return lastRoundRecord_; }
+    const std::vector<TurnRecord>& TurnRecords() const { return turnRecords_; }
+    bool ExternalAiPending() const { return externalAiPending_; }
     bool CanCurrentPlayerPass() const;
     bool IsInLeadState() const { return CurrentPlayerLeads(); }
 
@@ -89,6 +93,7 @@ public:
     bool ApplyHint();
     bool SelectByHoverPattern(int handIndex);
     bool SelectBestPatternFromDraggedCards(const std::vector<int>& handIndices);
+    void SetExternalAiController(std::shared_ptr<ExternalAiController> controller);
 
     void TestSetRound(
         const std::array<rules::Cards, 3>& hands,
@@ -100,6 +105,27 @@ private:
     bool CurrentPlayerLeads() const;
     AiContext MakeAiContext(rules::PlayerId player) const;
     bool HasPlayableFollow(rules::PlayerId player) const;
+    std::vector<std::pair<rules::Cards, rules::HandPattern>> LegalMoves(rules::PlayerId player) const;
+    TurnSnapshot Snapshot() const;
+    GameAction ActionFromCards(const rules::Cards& cards, bool pass = false, std::string talk = {}) const;
+    TurnRecord BuildTurnRecord(
+        const TurnSnapshot& before,
+        rules::PlayerId actor,
+        TurnDecisionSource source,
+        TurnDecisionReason reason,
+        const GameAction& requested,
+        const GameAction& final,
+        const rules::Cards& finalCards,
+        const std::optional<rules::HandPattern>& finalPattern,
+        bool accepted,
+        const std::string& validationMessage,
+        TurnDecisionTrace trace) const;
+    void AppendRecord(TurnRecord record);
+    TurnDecisionTrace SyntheticTrace(const TurnRecord& record) const;
+    bool ApplyExternalAiResult(const ExternalAiResult& result);
+    void StartExternalAiTurn();
+    bool TryCompleteExternalAiTurn();
+    void PlayLocalAiTurn(rules::PlayerId player);
     float NextThinkDelay();
     void AdvanceTurn();
     void RecordPassObservation(rules::PlayerId player, const rules::HandPattern& pattern);
@@ -117,6 +143,7 @@ private:
     rules::PaoDeKuaiRules rules_;
     std::array<PlayerState, 3> players_;
     std::array<AiPlayer, 3> aiPlayers_;
+    std::shared_ptr<ExternalAiController> externalAi_;
     rules::PlayerId currentPlayer_{rules::PlayerId::Player};
     rules::PlayerId lastMovePlayer_{rules::PlayerId::Player};
     std::optional<rules::HandPattern> lastPattern_;
@@ -140,6 +167,9 @@ private:
     rules::PlayerId talkPlayer_{rules::PlayerId::Ai1};
     stats::RoundRecord lastRoundRecord_;
     std::array<int, static_cast<std::size_t>(TalkKind::Count)> lastTalkIndices_{};
+    std::vector<TurnRecord> turnRecords_;
+    bool externalAiPending_{false};
+    int nextTurnNo_{1};
 };
 
 } // namespace pdk::game

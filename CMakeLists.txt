@@ -63,6 +63,7 @@ set(PDK_CORE_SOURCES
     src/game/AiStrategy.cpp
     src/game/GameState.cpp
     src/game/RoundRecorder.cpp
+    src/game/TurnRecord.cpp
     src/stats/AppSettings.cpp
     src/stats/StatStore.cpp
 )
@@ -72,6 +73,7 @@ target_include_directories(pdk_core PUBLIC src)
 target_link_libraries(pdk_core PUBLIC cjson_static)
 
 add_library(pdk_ai STATIC
+    src/ai/LlmAiController.cpp
     src/ai/LlmOffscreenExperiment.cpp
     src/ai/PdkAiClient.cpp
     src/ai/TurnRecord.cpp
@@ -119,7 +121,7 @@ set(PDK_APP_SOURCES
 
 add_library(pdk_app STATIC ${PDK_APP_SOURCES})
 target_include_directories(pdk_app PUBLIC src)
-target_link_libraries(pdk_app PUBLIC pdk_core)
+target_link_libraries(pdk_app PUBLIC pdk_ai)
 target_compile_definitions(pdk_app PUBLIC
     WINVER=0x0602
     _WIN32_WINNT=0x0602

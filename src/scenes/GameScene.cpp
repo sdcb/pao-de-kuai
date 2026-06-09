@@ -1,5 +1,6 @@
 #include "scenes/GameScene.h"
 
+#include "ai/LlmAiController.h"
 #include "app/App.h"
 #include "audio/SoundIds.h"
 #include "overlays/ReturnToMenuOverlay.h"
@@ -8,6 +9,7 @@
 #include "stats/StatStore.h"
 
 #include <algorithm>
+#include <memory>
 #include <sstream>
 
 namespace pdk::scenes {
@@ -88,6 +90,12 @@ GameScene::GameScene(app::App& app, bool mock) : app_(app), mock_(mock) {
 void GameScene::OnEnter() {
     if (!app_.CardAtlas().Loaded()) {
         app_.LoadGameResources();
+    }
+    if (!mock_ && !app_.ViewerMode()) {
+        const auto provider = app_.Settings().aiProviders.find("mimo");
+        if (provider != app_.Settings().aiProviders.end()) {
+            game_.SetExternalAiController(std::make_shared<ai::LlmAiController>(provider->second));
+        }
     }
     game_.StartNewRound(app_.Settings().playerName, mock_ ? 20260606u : std::random_device{}());
     recordedRound_ = false;
@@ -359,7 +367,7 @@ void GameScene::DrawAiArea(graphics::RenderContext& context, rules::PlayerId pla
     std::ostringstream text;
     text << state.name << "  剩 " << state.hand.size() << " 张  今日分 " << todayScores_[rules::PlayerIndex(player)];
     if (game_.CurrentPlayer() == player) {
-        text << "  思考中";
+        text << (game_.ExternalAiPending() && player == rules::PlayerId::Ai1 ? "  联网思考中" : "  思考中");
     }
     context.DrawTextUtf8(text.str(), {area.x + 16.0f, area.y + 12.0f, area.width - 32.0f, 28.0f}, 19.0f, Color(0.94f, 0.96f, 0.84f));
     const int count = static_cast<int>(state.hand.size());

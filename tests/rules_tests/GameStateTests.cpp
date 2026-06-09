@@ -3,6 +3,8 @@
 #include "TestHelpers.h"
 #include "game/GameState.h"
 
+#include <memory>
+
 using namespace pdk;
 using tests::C;
 
@@ -26,6 +28,44 @@ bool HasTalkContaining(const game::GameState& state, const std::string& text) {
     }
     return false;
 }
+
+class MockExternalAiController final : public game::ExternalAiController {
+public:
+    explicit MockExternalAiController(game::ExternalAiResult result) : result_(std::move(result)) {}
+
+    bool CanHandle(rules::PlayerId player) const override {
+        return player == rules::PlayerId::Ai1;
+    }
+
+    bool HasPending() const override {
+        return pending_;
+    }
+
+    void Start(game::ExternalAiRequest request) override {
+        startCount++;
+        lastRequest = std::move(request);
+        pending_ = true;
+    }
+
+    std::optional<game::ExternalAiResult> TryGetResult() override {
+        if (!pending_) {
+            return std::nullopt;
+        }
+        pending_ = false;
+        return result_;
+    }
+
+    void Cancel() override {
+        pending_ = false;
+    }
+
+    int startCount{0};
+    std::optional<game::ExternalAiRequest> lastRequest;
+
+private:
+    game::ExternalAiResult result_;
+    bool pending_{false};
+};
 
 } // namespace
 
@@ -63,6 +103,132 @@ TEST_CASE("turn order is counterclockwise so the left-hand player is upstream") 
     CHECK(state.CurrentPlayer() == rules::PlayerId::Ai2);
     state.Update(1.0f);
     CHECK(state.CurrentPlayer() == rules::PlayerId::Ai1);
+}
+
+TEST_CASE("AI1 can use external LLM controller and records the decision") {
+    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{
+        true,
+        game::GameAction{"play", {"5"}, "我先压一张。"},
+        "选择最小单张 5 压过 4。",
+        "call_test",
+        "{\"action\":\"play\",\"ranks\":[\"5\"],\"talk\":\"我先压一张。\"}",
+        {},
+        {},
+        {}
+    });
+
+    game::GameState state;
+    state.SetExternalAiController(controller);
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Five), C(rules::Rank::Six)},
+            rules::Cards{C(rules::Rank::Seven)}
+        },
+        rules::PlayerId::Ai1,
+        fourLead,
+        rules::PlayerId::Player);
+
+    state.Update(1.0f);
+    CHECK(state.ExternalAiPending());
+    REQUIRE(controller->startCount == 1);
+    REQUIRE(controller->lastRequest.has_value());
+    CHECK(controller->lastRequest->history.empty());
+
+    state.Update(0.1f);
+    CHECK_FALSE(state.ExternalAiPending());
+    REQUIRE(state.TurnRecords().size() == 1);
+    const game::TurnRecord& record = state.TurnRecords().back();
+    CHECK(record.actor == rules::PlayerId::Ai1);
+    CHECK(record.source == game::TurnDecisionSource::LlmAi);
+    CHECK(record.accepted);
+    CHECK(record.finalAction.ranks == std::vector<std::string>{"5"});
+    CHECK(state.LastCards().front().rank == rules::Rank::Five);
+}
+
+TEST_CASE("AI1 only legal move is recorded without calling external LLM") {
+    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
+
+    game::GameState state;
+    state.SetExternalAiController(controller);
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Five)},
+            rules::Cards{C(rules::Rank::Seven)}
+        },
+        rules::PlayerId::Ai1,
+        fourLead,
+        rules::PlayerId::Player);
+
+    state.Update(1.0f);
+    CHECK(controller->startCount == 0);
+    REQUIRE(state.TurnRecords().size() == 1);
+    CHECK(state.TurnRecords().back().source == game::TurnDecisionSource::LocalAi);
+    CHECK(state.TurnRecords().back().reason == game::TurnDecisionReason::OnlyLegalMove);
+    CHECK_FALSE(state.TurnRecords().back().trace.toolCallId.empty());
+}
+
+TEST_CASE("local AI2 actions are recorded but not external controlled") {
+    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
+
+    game::GameState state;
+    state.SetExternalAiController(controller);
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Six)},
+            rules::Cards{C(rules::Rank::Five)}
+        },
+        rules::PlayerId::Ai2,
+        fourLead,
+        rules::PlayerId::Player);
+
+    state.Update(1.0f);
+    CHECK(controller->startCount == 0);
+    REQUIRE(state.TurnRecords().size() == 1);
+    CHECK(state.TurnRecords().back().actor == rules::PlayerId::Ai2);
+    CHECK(state.TurnRecords().back().source == game::TurnDecisionSource::LocalAi);
+    CHECK(state.TurnRecords().back().trace.toolCallId.empty());
+}
+
+TEST_CASE("invalid LLM decision falls back to local AI silently") {
+    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{
+        true,
+        game::GameAction{"pass", {}, {}},
+        "错误地选择不要。",
+        "call_bad",
+        "{\"action\":\"pass\",\"ranks\":[]}",
+        {},
+        {},
+        {}
+    });
+
+    game::GameState state;
+    state.SetExternalAiController(controller);
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Five), C(rules::Rank::Six)},
+            rules::Cards{C(rules::Rank::Seven)}
+        },
+        rules::PlayerId::Ai1,
+        fourLead,
+        rules::PlayerId::Player);
+
+    state.Update(1.0f);
+    state.Update(0.1f);
+    REQUIRE(state.TurnRecords().size() == 1);
+    const game::TurnRecord& record = state.TurnRecords().back();
+    CHECK(record.source == game::TurnDecisionSource::LlmAi);
+    CHECK(record.reason == game::TurnDecisionReason::LlmFallback);
+    CHECK_FALSE(record.accepted);
+    CHECK(record.finalAction.action == "play");
+    CHECK_FALSE(state.LastCards().empty());
 }
 
 TEST_CASE("hint passes directly when player cannot beat and pass is blocked when player can beat") {
