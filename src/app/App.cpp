@@ -14,7 +14,6 @@
 #include "scenes/GameScene.h"
 #include "scenes/HelpScene.h"
 #include "scenes/LoadingScene.h"
-#include "scenes/SettingsScene.h"
 #include "scenes/StartScene.h"
 #include "scenes/StatsScene.h"
 
@@ -129,7 +128,12 @@ void App::ShowStats() {
 }
 
 void App::ShowSettings() {
-    ChangeScene(std::make_unique<scenes::SettingsScene>(*this));
+    if (!settingsDialog_) {
+        settingsDialog_ = std::make_unique<dialogs::SettingsDialog>(*this);
+    }
+    if (!settingsDialog_->Show(hwnd_)) {
+        settingsDialog_.reset();
+    }
 }
 
 void App::ShowHelp() {
@@ -229,6 +233,17 @@ void App::ReleaseGameResources() {
 
 void App::SaveSettings() {
     stats::SaveAppSettings(settings_);
+}
+
+bool App::ProcessDialogMessage(MSG* msg) {
+    if (settingsDialog_ && settingsDialog_->ProcessMessage(msg)) {
+        return true;
+    }
+    return false;
+}
+
+HWND App::SettingsDialogHwnd() const {
+    return settingsDialog_ && settingsDialog_->IsOpen() ? settingsDialog_->Hwnd() : nullptr;
 }
 
 void App::UpdateWindowSize(int width, int height) {

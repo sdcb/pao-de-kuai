@@ -193,6 +193,7 @@ TEST_CASE("appsettings loads and preserves AI provider configuration") {
     CHECK(saved.find("\"aiProviders\"") != std::string::npos);
     CHECK(saved.find("\"ai1\"") != std::string::npos);
     CHECK(saved.find("\"ai2\"") != std::string::npos);
+    CHECK(saved.find("fake-secret-key") == std::string::npos);
     CHECK(saved.find("cardScale") == std::string::npos);
     CHECK(saved.find("animationSpeed") == std::string::npos);
 }

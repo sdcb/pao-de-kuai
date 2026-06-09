@@ -71,7 +71,7 @@ set(PDK_CORE_SOURCES
 
 add_library(pdk_core STATIC ${PDK_CORE_SOURCES})
 target_include_directories(pdk_core PUBLIC src)
-target_link_libraries(pdk_core PUBLIC cjson_static)
+target_link_libraries(pdk_core PUBLIC cjson_static crypt32)
 
 add_library(pdk_ai STATIC
     src/ai/LlmAiController.cpp
@@ -98,6 +98,7 @@ set(PDK_APP_SOURCES
     src/audio/AudioDecoder.cpp
     src/audio/AudioEngine.cpp
     src/audio/SoundCatalog.cpp
+    src/dialogs/SettingsDialog.cpp
     src/graphics/D2DContext.cpp
     src/graphics/SpriteAtlas.cpp
     src/graphics/TextRenderer.cpp
@@ -108,7 +109,6 @@ set(PDK_APP_SOURCES
     src/scenes/GameScene.cpp
     src/scenes/HelpScene.cpp
     src/scenes/LoadingScene.cpp
-    src/scenes/SettingsScene.cpp
     src/scenes/StartScene.cpp
     src/scenes/StatsScene.cpp
     src/overlays/ConfirmExitDialog.cpp
@@ -131,7 +131,7 @@ target_compile_definitions(pdk_app PUBLIC
     NOMINMAX
 )
 target_link_libraries(pdk_app PUBLIC
-    d2d1 dwrite windowscodecs xaudio2_8 ole32 uuid shlwapi
+    d2d1 dwrite windowscodecs xaudio2_8 ole32 uuid shlwapi comctl32
     mfplat mfreadwrite mfuuid gdi32 user32 comdlg32
 )
 
@@ -223,6 +223,7 @@ if(PDK_BUILD_TESTS)
     enable_testing()
     add_test(NAME unit_tests COMMAND unit_tests)
     add_test(NAME ui_scene_start COMMAND scene_viewer --scene start --screenshot ${CMAKE_BINARY_DIR}/ui-start.jpg --quality 75)
+    add_test(NAME ui_dialog_settings COMMAND scene_viewer --scene settings --screenshot ${CMAKE_BINARY_DIR}/ui-settings.jpg --quality 75)
     add_test(NAME ui_scene_game_deal COMMAND scene_viewer --scene game --mock deal --screenshot ${CMAKE_BINARY_DIR}/ui-game-deal.jpg --quality 75)
     add_test(NAME ui_scene_game COMMAND scene_viewer --scene game --screenshot ${CMAKE_BINARY_DIR}/ui-game.jpg --quality 75)
     add_test(NAME ui_overlay_return_menu COMMAND scene_viewer --scene game --overlay return-menu --screenshot ${CMAKE_BINARY_DIR}/ui-return-menu.jpg --quality 75)

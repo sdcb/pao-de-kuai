@@ -57,6 +57,9 @@ int Window::Run() {
             if (msg.message == WM_QUIT) {
                 return static_cast<int>(msg.wParam);
             }
+            if (app_->ProcessDialogMessage(&msg)) {
+                continue;
+            }
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }

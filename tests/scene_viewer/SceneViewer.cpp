@@ -173,6 +173,9 @@ int main(int argc, char** argv) {
     const int frameCount = args.mock == "deal" ? 45 : 175;
     for (int frame = 0; frame < frameCount; ++frame) {
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            if (app.ProcessDialogMessage(&msg)) {
+                continue;
+            }
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
@@ -182,7 +185,8 @@ int main(int argc, char** argv) {
         Sleep(16);
     }
 
-    const bool ok = CaptureWindowJpeg(window.Hwnd(), Utf8ToWide(args.screenshot), args.quality);
+    HWND captureHwnd = app.SettingsDialogHwnd() ? app.SettingsDialogHwnd() : window.Hwnd();
+    const bool ok = CaptureWindowJpeg(captureHwnd, Utf8ToWide(args.screenshot), args.quality);
     app.ConfirmExit();
     CoUninitialize();
     return ok ? 0 : 3;

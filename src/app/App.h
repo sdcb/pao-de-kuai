@@ -3,6 +3,7 @@
 #include "audio/AudioEngine.h"
 #include "core/Overlay.h"
 #include "core/SceneManager.h"
+#include "dialogs/SettingsDialog.h"
 #include "game/RoundRecorder.h"
 #include "graphics/D2DContext.h"
 #include "graphics/SpriteAtlas.h"
@@ -40,6 +41,7 @@ public:
     void RequestClose();
     void ConfirmExit();
     bool ShouldQuit() const { return shouldQuit_; }
+    bool ProcessDialogMessage(MSG* msg);
 
     bool LoadGameResources();
     void ReleaseGameResources();
@@ -51,6 +53,7 @@ public:
     const stats::AppSettings& Settings() const { return settings_; }
     game::RoundRecorder& Recorder() { return recorder_; }
     bool ViewerMode() const { return viewerMode_; }
+    HWND SettingsDialogHwnd() const;
 
     void SaveSettings();
     void UpdateWindowSize(int width, int height);
@@ -66,6 +69,7 @@ private:
     graphics::SpriteAtlas cardAtlas_;
     core::SceneManager sceneManager_;
     std::vector<std::unique_ptr<core::Overlay>> overlays_;
+    std::unique_ptr<dialogs::SettingsDialog> settingsDialog_;
     stats::AppSettings settings_;
     game::RoundRecorder recorder_;
 };
