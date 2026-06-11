@@ -3,7 +3,25 @@ name: Build
 on:
   push:
     branches: [main]
+    paths:
+      - ".github/workflows/build.yml"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "src/**"
+      - "tests/**"
+      - "assets/pao-de-kuai.ico"
+      - "assets/poker-cards.png"
+      - "assets/audio/*.mp3"
   pull_request:
+    paths:
+      - ".github/workflows/build.yml"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "src/**"
+      - "tests/**"
+      - "assets/pao-de-kuai.ico"
+      - "assets/poker-cards.png"
+      - "assets/audio/*.mp3"
   workflow_dispatch:
 
 jobs:
