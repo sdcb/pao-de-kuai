@@ -7,6 +7,7 @@
 
 using namespace pdk;
 using tests::C;
+using tests::CountRank;
 
 namespace {
 
@@ -373,6 +374,59 @@ TEST_CASE("hint switches to recommendation or toggles it off when already select
     REQUIRE(state.ApplyHint());
     CHECK(state.SelectedIndices().empty());
     CHECK(state.HintIndices().empty());
+}
+
+TEST_CASE("hint follows triple with one using four cards instead of triple with two") {
+    const auto previous = rules::IdentifyPattern({
+        C(rules::Rank::Three),
+        C(rules::Rank::Three, rules::Suit::Hearts),
+        C(rules::Rank::Three, rules::Suit::Diamonds),
+        C(rules::Rank::Seven)
+    }).pattern;
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{
+                C(rules::Rank::Four),
+                C(rules::Rank::Four, rules::Suit::Hearts),
+                C(rules::Rank::Four, rules::Suit::Diamonds),
+                C(rules::Rank::Five),
+                C(rules::Rank::Six)
+            },
+            rules::Cards{C(rules::Rank::Eight)},
+            rules::Cards{C(rules::Rank::Nine)}
+        },
+        rules::PlayerId::Player,
+        previous,
+        rules::PlayerId::Ai1);
+
+    REQUIRE(state.ApplyHint());
+    CHECK(state.SelectedIndices().size() == 4);
+    REQUIRE_FALSE(state.Events().empty());
+    const game::GameEvent& event = state.Events().back();
+    CHECK(event.type == game::GameEventType::Hint);
+    CHECK(event.cards.size() == 4);
+    CHECK(CountRank(event.cards, rules::Rank::Four) == 3);
+}
+
+TEST_CASE("upstream AI follows with high singleton when player has reported single") {
+    const auto previous = rules::IdentifyPattern({C(rules::Rank::Seven)}).pattern;
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Eight), C(rules::Rank::King)},
+            rules::Cards{C(rules::Rank::Four)}
+        },
+        rules::PlayerId::Ai1,
+        previous,
+        rules::PlayerId::Ai2);
+
+    state.Update(1.0f);
+
+    REQUIRE(state.LastCards().size() == 1);
+    CHECK(state.LastCards().front().rank == rules::Rank::King);
+    CHECK(state.CurrentPlayer() == rules::PlayerId::Player);
 }
 
 TEST_CASE("game state tracks played cards and clears observations for a fresh test round") {

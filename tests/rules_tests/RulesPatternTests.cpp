@@ -193,6 +193,16 @@ TEST_CASE("move comparison follows fixed rules") {
     CHECK_FALSE(rules::CanBeat(planeLow, planeHigh));
     CHECK_FALSE(rules::CanBeat(planeHigh, planeThreeGroups));
     CHECK_FALSE(rules::CanBeat(planeThreeGroups, planeHigh));
+
+    const auto tripleOne = rules::IdentifyPattern({
+        C(rules::Rank::Three), C(rules::Rank::Three, rules::Suit::Hearts),
+        C(rules::Rank::Three, rules::Suit::Diamonds), C(rules::Rank::Seven)
+    }).pattern;
+    const auto tripleTwo = rules::IdentifyPattern({
+        C(rules::Rank::Four), C(rules::Rank::Four, rules::Suit::Hearts),
+        C(rules::Rank::Four, rules::Suit::Diamonds), C(rules::Rank::Five), C(rules::Rank::Six)
+    }).pattern;
+    CHECK_FALSE(rules::CanBeat(tripleTwo, tripleOne));
 }
 
 TEST_CASE("lead validation allows short final plane but follow validation does not") {

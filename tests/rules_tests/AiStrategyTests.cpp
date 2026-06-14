@@ -31,6 +31,25 @@ TEST_CASE("ai triple with two keeps an existing pair as a pair") {
     CHECK(CountRank(choice.cards, rules::Rank::Six) == 1);
 }
 
+TEST_CASE("ai lead prefers triple with two loose kickers over triple with one") {
+    game::BasicAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Six),
+        C(rules::Rank::Six, rules::Suit::Hearts),
+        C(rules::Rank::Six, rules::Suit::Diamonds),
+        C(rules::Rank::Seven),
+        C(rules::Rank::Nine),
+        C(rules::Rank::King)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::TripleWithPair);
+    CHECK(choice.cards.size() == 5);
+    CHECK(CountRank(choice.cards, rules::Rank::Six) == 3);
+}
+
 TEST_CASE("ai plane uses singleton kickers before breaking pairs or triples") {
     game::BasicAiStrategy ai;
     const auto previous = rules::IdentifyPattern({
@@ -104,6 +123,38 @@ TEST_CASE("ai lead avoids a small singleton when next player has one card") {
     CHECK(choice.pattern.mainRank == rules::Rank::Ace);
     CHECK(CountRank(choice.cards, rules::Rank::Three) == 0);
     CHECK(CountRank(choice.cards, rules::Rank::Ace) == 1);
+}
+
+TEST_CASE("ai lead uses king instead of eight when next player has one card") {
+    game::BasicAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Eight),
+        C(rules::Rank::King)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size()), 1, 1));
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::King);
+}
+
+TEST_CASE("ai follow uses high singleton when next player has one card") {
+    game::BasicAiStrategy ai;
+    const auto previous = rules::IdentifyPattern({C(rules::Rank::Seven)}).pattern;
+    rules::Cards hand{
+        C(rules::Rank::Eight),
+        C(rules::Rank::King)
+    };
+    game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
+    context.nextPlayerRemainingCards = 1;
+    context.minOpponentRemainingCards = 1;
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::King);
 }
 
 TEST_CASE("ai normal lead does not throw high control singleton first") {

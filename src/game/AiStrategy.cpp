@@ -298,6 +298,14 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
             score += 420 + candidate.pattern.cardCount * 25;
         }
     }
+    if (!context.leading && context.nextPlayerRemainingCards == 1 &&
+        context.previous.type == rules::PatternType::Single &&
+        candidate.pattern.type == rules::PatternType::Single) {
+        // When the next player has reported single, following with the minimum
+        // card often hands them the turn. A single-card follow should therefore
+        // favor the largest available blocker over preserving a high singleton.
+        score += rules::RankValue(candidate.pattern.mainRank) * 95;
+    }
 
     if (context.minOpponentRemainingCards > 0 && context.minOpponentRemainingCards <= 2) {
         score += candidate.pattern.cardCount * 35;
@@ -409,7 +417,7 @@ std::vector<Candidate> GenerateCandidates(const rules::Cards& hand, const AiCont
         const int leaves = static_cast<int>(remainder.size());
         const int disruption = GroupDisruptionPenalty(handCounts, cards, validation.pattern);
         int score = PatternBaseScore(validation.pattern.type);
-        score += static_cast<int>(cards.size()) * (context.leading ? 28 : 12);
+        score += static_cast<int>(cards.size()) * (context.leading ? 92 : 12);
         score -= rules::RankValue(validation.pattern.mainRank) * (context.leading ? 2 : 10);
         score += EvaluateRemainingHand(remainder);
         score -= disruption * (context.leading ? 2 : 3);
