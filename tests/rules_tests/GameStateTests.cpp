@@ -376,12 +376,13 @@ TEST_CASE("hint switches to recommendation or toggles it off when already select
     CHECK(state.HintIndices().empty());
 }
 
-TEST_CASE("hint follows triple with one using four cards instead of triple with two") {
+TEST_CASE("hint follows triple with two using five cards") {
     const auto previous = rules::IdentifyPattern({
         C(rules::Rank::Three),
         C(rules::Rank::Three, rules::Suit::Hearts),
         C(rules::Rank::Three, rules::Suit::Diamonds),
-        C(rules::Rank::Seven)
+        C(rules::Rank::Seven),
+        C(rules::Rank::Eight)
     }).pattern;
     game::GameState state;
     state.TestSetRound(
@@ -401,11 +402,11 @@ TEST_CASE("hint follows triple with one using four cards instead of triple with 
         rules::PlayerId::Ai1);
 
     REQUIRE(state.ApplyHint());
-    CHECK(state.SelectedIndices().size() == 4);
+    CHECK(state.SelectedIndices().size() == 5);
     REQUIRE_FALSE(state.Events().empty());
     const game::GameEvent& event = state.Events().back();
     CHECK(event.type == game::GameEventType::Hint);
-    CHECK(event.cards.size() == 4);
+    CHECK(event.cards.size() == 5);
     CHECK(CountRank(event.cards, rules::Rank::Four) == 3);
 }
 

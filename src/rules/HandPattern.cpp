@@ -52,7 +52,7 @@ std::optional<PatternResult> TryIdentifyPlane(
     const std::map<Rank, int>& counts,
     int total,
     int handSizeBeforePlay,
-    bool allowShortFinalPlane) {
+    bool allowShortFinal) {
     std::vector<Rank> tripleRanks;
     for (const auto& [rank, count] : counts) {
         if (rank != Rank::Two && count >= 3) {
@@ -78,7 +78,7 @@ std::optional<PatternResult> TryIdentifyPlane(
                 continue;
             }
             const bool lastShort = kickerCount < groupCount;
-            if (lastShort && !(allowShortFinalPlane && handSizeBeforePlay == total)) {
+            if (lastShort && !(allowShortFinal && handSizeBeforePlay == total)) {
                 continue;
             }
 
@@ -94,7 +94,7 @@ std::optional<PatternResult> TryIdentifyPlane(
 
 } // namespace
 
-PatternResult IdentifyPattern(const Cards& cards, int handSizeBeforePlay, bool allowShortFinalPlane) {
+PatternResult IdentifyPattern(const Cards& cards, int handSizeBeforePlay, bool allowShortFinal) {
     if (cards.empty()) {
         return Invalid("没有选择牌");
     }
@@ -111,10 +111,10 @@ PatternResult IdentifyPattern(const Cards& cards, int handSizeBeforePlay, bool a
     }
 
     if (total == 3 && counts.size() == 1) {
-        if (handSizeBeforePlay == 3) {
+        if (allowShortFinal && handSizeBeforePlay == 3) {
             return Valid(PatternType::TripleWithOne, cards.front().rank, total, true);
         }
-        return Invalid("三张主体需要带牌，最后一手牌不足时除外");
+        return Invalid("三张主体只能三带二，最后一手牌不足时除外");
     }
 
     if (total == 4) {
@@ -128,7 +128,10 @@ PatternResult IdentifyPattern(const Cards& cards, int handSizeBeforePlay, bool a
 
         for (const auto& [rank, count] : counts) {
             if (count == 3) {
-                return Valid(PatternType::TripleWithOne, rank, total);
+                if (allowShortFinal && handSizeBeforePlay == total) {
+                    return Valid(PatternType::TripleWithOne, rank, total, true);
+                }
+                return Invalid("三张主体只能三带二，最后一手牌不足时除外");
             }
         }
     }
@@ -141,7 +144,7 @@ PatternResult IdentifyPattern(const Cards& cards, int handSizeBeforePlay, bool a
         }
     }
 
-    if (const auto plane = TryIdentifyPlane(counts, total, handSizeBeforePlay, allowShortFinalPlane)) {
+    if (const auto plane = TryIdentifyPlane(counts, total, handSizeBeforePlay, allowShortFinal)) {
         return *plane;
     }
 

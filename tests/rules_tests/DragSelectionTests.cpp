@@ -177,9 +177,9 @@ TEST_CASE("drag selection toggles off when the chosen group is already selected"
     CHECK(state.HintIndices().empty());
 }
 
-TEST_CASE("drag selection adds kickers to an existing triple core") {
-    game::GameState tripleOneState;
-    tripleOneState.TestSetRound(
+TEST_CASE("drag selection completes triple core as triple with two") {
+    game::GameState tripleTwoFromSinglesState;
+    tripleTwoFromSinglesState.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
                 C(rules::Rank::Three),
@@ -195,14 +195,17 @@ TEST_CASE("drag selection adds kickers to an existing triple core") {
         std::nullopt,
         rules::PlayerId::Ai1);
 
-    REQUIRE(tripleOneState.SelectBestPatternFromDraggedCards({0, 1, 2}));
-    REQUIRE(tripleOneState.SelectBestPatternFromDraggedCards({3}));
-    CHECK(tripleOneState.SelectedIndices().size() == 4);
-    for (int i = 0; i < 4; ++i) {
-        CHECK(tripleOneState.SelectedIndices().contains(i));
+    REQUIRE(tripleTwoFromSinglesState.SelectBestPatternFromDraggedCards({0, 1, 2}));
+    REQUIRE(tripleTwoFromSinglesState.SelectBestPatternFromDraggedCards({3}));
+    CHECK(tripleTwoFromSinglesState.SelectedIndices().size() == 4);
+    CHECK_FALSE(tripleTwoFromSinglesState.PlaySelected());
+
+    REQUIRE(tripleTwoFromSinglesState.SelectBestPatternFromDraggedCards({4}));
+    CHECK(tripleTwoFromSinglesState.SelectedIndices().size() == 5);
+    for (int i = 0; i < 5; ++i) {
+        CHECK(tripleTwoFromSinglesState.SelectedIndices().contains(i));
     }
-    CHECK_FALSE(tripleOneState.SelectedIndices().contains(4));
-    CHECK(tripleOneState.PlaySelected());
+    CHECK(tripleTwoFromSinglesState.PlaySelected());
 
     game::GameState tripleTwoState;
     tripleTwoState.TestSetRound(

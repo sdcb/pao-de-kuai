@@ -74,7 +74,7 @@ TEST_CASE("recognizes core hand patterns") {
         C(rules::Rank::Eight), C(rules::Rank::Eight, rules::Suit::Hearts), C(rules::Rank::Eight, rules::Suit::Diamonds),
         C(rules::Rank::Four)
     });
-    CHECK(tripleOne.pattern.type == rules::PatternType::TripleWithOne);
+    CHECK_FALSE(tripleOne.pattern.IsValid());
 
     auto triplePair = rules::IdentifyPattern({
         C(rules::Rank::Nine), C(rules::Rank::Nine, rules::Suit::Hearts), C(rules::Rank::Nine, rules::Suit::Diamonds),
@@ -128,7 +128,7 @@ TEST_CASE("recognizes core hand patterns") {
     }).pattern.IsValid());
     CHECK(rules::IdentifyPattern({
         C(rules::Rank::Nine), C(rules::Rank::Nine, rules::Suit::Hearts), C(rules::Rank::Nine, rules::Suit::Diamonds)
-    }, 3).pattern.lastHandShort);
+    }, 3, true).pattern.lastHandShort);
 }
 
 TEST_CASE("bombs cannot be played as four with three") {
@@ -194,18 +194,41 @@ TEST_CASE("move comparison follows fixed rules") {
     CHECK_FALSE(rules::CanBeat(planeHigh, planeThreeGroups));
     CHECK_FALSE(rules::CanBeat(planeThreeGroups, planeHigh));
 
-    const auto tripleOne = rules::IdentifyPattern({
-        C(rules::Rank::Three), C(rules::Rank::Three, rules::Suit::Hearts),
-        C(rules::Rank::Three, rules::Suit::Diamonds), C(rules::Rank::Seven)
-    }).pattern;
     const auto tripleTwo = rules::IdentifyPattern({
         C(rules::Rank::Four), C(rules::Rank::Four, rules::Suit::Hearts),
         C(rules::Rank::Four, rules::Suit::Diamonds), C(rules::Rank::Five), C(rules::Rank::Six)
     }).pattern;
-    CHECK_FALSE(rules::CanBeat(tripleTwo, tripleOne));
+    CHECK(tripleTwo.IsValid());
 }
 
-TEST_CASE("lead validation allows short final plane but follow validation does not") {
+TEST_CASE("lead validation allows short final triples and plane but follow validation does not") {
+    const rules::Cards bareTriple{
+        C(rules::Rank::Nine), C(rules::Rank::Nine, rules::Suit::Hearts), C(rules::Rank::Nine, rules::Suit::Diamonds)
+    };
+    const auto bareTripleLead = rules::ValidateLead(bareTriple, static_cast<int>(bareTriple.size()));
+    CHECK(bareTripleLead.ok);
+    CHECK(bareTripleLead.pattern.type == rules::PatternType::TripleWithOne);
+    CHECK(bareTripleLead.pattern.lastHandShort);
+
+    const rules::Cards tripleWithOne{
+        C(rules::Rank::Nine), C(rules::Rank::Nine, rules::Suit::Hearts), C(rules::Rank::Nine, rules::Suit::Diamonds),
+        C(rules::Rank::Four)
+    };
+    const auto tripleWithOneNormal = rules::ValidateLead(tripleWithOne, 5);
+    CHECK_FALSE(tripleWithOneNormal.ok);
+
+    const auto tripleWithOneFinal = rules::ValidateLead(tripleWithOne, static_cast<int>(tripleWithOne.size()));
+    CHECK(tripleWithOneFinal.ok);
+    CHECK(tripleWithOneFinal.pattern.type == rules::PatternType::TripleWithOne);
+    CHECK(tripleWithOneFinal.pattern.lastHandShort);
+
+    const auto previousTripleWithPair = rules::IdentifyPattern({
+        C(rules::Rank::Eight), C(rules::Rank::Eight, rules::Suit::Hearts), C(rules::Rank::Eight, rules::Suit::Diamonds),
+        C(rules::Rank::Five), C(rules::Rank::Six)
+    }).pattern;
+    const auto tripleWithOneFollow = rules::ValidateFollow(tripleWithOne, previousTripleWithPair, static_cast<int>(tripleWithOne.size()));
+    CHECK_FALSE(tripleWithOneFollow.ok);
+
     const rules::Cards shortPlane{
         C(rules::Rank::Three), C(rules::Rank::Three, rules::Suit::Hearts), C(rules::Rank::Three, rules::Suit::Diamonds),
         C(rules::Rank::Four), C(rules::Rank::Four, rules::Suit::Hearts), C(rules::Rank::Four, rules::Suit::Diamonds)

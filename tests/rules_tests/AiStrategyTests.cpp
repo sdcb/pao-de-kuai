@@ -50,6 +50,46 @@ TEST_CASE("ai lead prefers triple with two loose kickers over triple with one") 
     CHECK(CountRank(choice.cards, rules::Rank::Six) == 3);
 }
 
+TEST_CASE("ai lead uses the full consecutive pairs run") {
+    game::BasicAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Three),
+        C(rules::Rank::Three, rules::Suit::Hearts),
+        C(rules::Rank::Four),
+        C(rules::Rank::Four, rules::Suit::Hearts),
+        C(rules::Rank::Five),
+        C(rules::Rank::Five, rules::Suit::Hearts)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::ConsecutivePairs);
+    CHECK(choice.pattern.cardCount == 6);
+    CHECK(choice.cards.size() == 6);
+}
+
+TEST_CASE("ai lead keeps extending consecutive pairs before leaving loose singles") {
+    game::BasicAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Three),
+        C(rules::Rank::Three, rules::Suit::Hearts),
+        C(rules::Rank::Four),
+        C(rules::Rank::Four, rules::Suit::Hearts),
+        C(rules::Rank::Five),
+        C(rules::Rank::Five, rules::Suit::Hearts),
+        C(rules::Rank::Seven),
+        C(rules::Rank::Nine)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::ConsecutivePairs);
+    CHECK(choice.pattern.cardCount == 6);
+    CHECK(choice.cards.size() == 6);
+}
+
 TEST_CASE("ai plane uses singleton kickers before breaking pairs or triples") {
     game::BasicAiStrategy ai;
     const auto previous = rules::IdentifyPattern({

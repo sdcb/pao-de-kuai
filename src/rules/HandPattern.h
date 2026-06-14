@@ -34,7 +34,7 @@ struct PatternResult {
     std::string reason;
 };
 
-PatternResult IdentifyPattern(const Cards& cards, int handSizeBeforePlay = -1, bool allowShortFinalPlane = false);
+PatternResult IdentifyPattern(const Cards& cards, int handSizeBeforePlay = -1, bool allowShortFinal = false);
 std::string PatternName(PatternType type);
 std::string PatternDescription(const HandPattern& pattern);
 bool SameComparisonClass(const HandPattern& lhs, const HandPattern& rhs);
