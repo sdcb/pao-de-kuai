@@ -14,9 +14,10 @@ cmake --build --preset vs2026-release
 ctest --preset vs2026-release --output-on-failure
 ```
 
-- CMake 配置会给 MSVC 添加 `/utf-8`、`/EHsc` 和 `/MT`。
+- CMake 配置会给 MSVC 添加 `/utf-8` 和 `/EHsc`；默认运行库为 `/MT`，可用 `-DPDK_MSVC_RUNTIME=MD|MT` 切换。
 - Release 体积优化使用 MSVC 默认 `/O2 /Ob2` 并额外添加 `/Os`。
 - MSVC x64/x86 默认使用 `external/vc-ltl` 中的精简 VC-LTL 源码，在 build 目录生成运行库并把 CRT 链接到系统 `msvcrt.dll`；缺少构建工具或非 x64/x86 架构时自动回退到普通 `/MT`。
+- GitHub Actions 覆盖 8 个 VS2026 组合：x64/x86/arm64 的 `/MD`，x64/x86/arm64 的 `/MT`，以及 x64/x86 的 VC-LTL。
 - 日常构建和测试以 VS2026 为验证基线。
 - `CMakePresets.json` 是项目级配置，应纳入版本控制。个人机器路径应放在 `CMakeUserPresets.json`，不要提交。
 

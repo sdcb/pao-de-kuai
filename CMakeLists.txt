@@ -5,7 +5,15 @@ if(POLICY CMP0091)
 endif()
 
 set(CMAKE_TRY_COMPILE_CONFIGURATION Release)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(PDK_MSVC_RUNTIME "MT" CACHE STRING "MSVC runtime library for non-VC-LTL MSVC builds: MT or MD")
+set_property(CACHE PDK_MSVC_RUNTIME PROPERTY STRINGS MT MD)
+if(PDK_MSVC_RUNTIME STREQUAL "MT")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+elseif(PDK_MSVC_RUNTIME STREQUAL "MD")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+else()
+    message(FATAL_ERROR "PDK_MSVC_RUNTIME must be MT or MD, got '${PDK_MSVC_RUNTIME}'.")
+endif()
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version for third-party dependencies")
 
 project(PaoDeKuai VERSION 0.1.0 LANGUAGES C CXX RC)
@@ -40,6 +48,10 @@ endif()
 
 add_library(pdk_vc_ltl INTERFACE)
 if(MSVC AND PDK_USE_VC_LTL)
+    if(NOT PDK_MSVC_RUNTIME STREQUAL "MT")
+        message(FATAL_ERROR "VC-LTL builds require PDK_MSVC_RUNTIME=MT.")
+    endif()
+
     set(PDK_VC_LTL_VERSION "6.2.9200.0")
     string(TOLOWER "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}" PDK_MSVC_ARCH)
     if(PDK_MSVC_ARCH STREQUAL "x64")
@@ -53,6 +65,8 @@ if(MSVC AND PDK_USE_VC_LTL)
         set(PDK_VC_LTL_INCLUDE_DIR "${PDK_VC_LTL_ROOT}/TargetPlatform/header")
         set(PDK_VC_LTL_VERSION_INCLUDE_DIR "${PDK_VC_LTL_ROOT}/TargetPlatform/${PDK_VC_LTL_VERSION}/header")
         set(PDK_VC_LTL_BUILD_SOURCE_DIR "${CMAKE_BINARY_DIR}/vc-ltl-build/src")
+        set(PDK_VC_LTL_COPY_STAMP "${CMAKE_BINARY_DIR}/vc-ltl-build/copied.stamp")
+        set(PDK_VC_LTL_SHARED_UCRT_LIB "${PDK_VC_LTL_BUILD_SOURCE_DIR}/Tools/${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}/libucrt_shared.lib")
         set(PDK_VC_LTL_LIBRARY_DIR "${PDK_VC_LTL_BUILD_SOURCE_DIR}/TargetPlatform/${PDK_VC_LTL_VERSION}/lib/${PDK_VC_LTL_PLATFORM}")
         set(PDK_VC_LTL_UCRT_LIB "${PDK_VC_LTL_LIBRARY_DIR}/libucrt.lib")
         set(PDK_VC_LTL_VCRUNTIME_LIB "${PDK_VC_LTL_LIBRARY_DIR}/libvcruntime.lib")
@@ -68,12 +82,25 @@ if(MSVC AND PDK_USE_VC_LTL)
             list(FILTER PDK_VC_LTL_SOURCE_FILES EXCLUDE REGEX "\\.lib$")
 
             add_custom_command(
-                OUTPUT "${PDK_VC_LTL_UCRT_LIB}" "${PDK_VC_LTL_VCRUNTIME_LIB}"
+                OUTPUT "${PDK_VC_LTL_COPY_STAMP}"
                 COMMAND "${CMAKE_COMMAND}" -E rm -rf "${PDK_VC_LTL_BUILD_SOURCE_DIR}"
                 COMMAND "${CMAKE_COMMAND}" -E make_directory "${PDK_VC_LTL_BUILD_SOURCE_DIR}"
                 COMMAND "${CMAKE_COMMAND}" -E copy_directory "${PDK_VC_LTL_ROOT}" "${PDK_VC_LTL_BUILD_SOURCE_DIR}"
+                COMMAND "${CMAKE_COMMAND}" -E touch "${PDK_VC_LTL_COPY_STAMP}"
+                DEPENDS ${PDK_VC_LTL_SOURCE_FILES}
+                COMMENT "Copying vendored VC-LTL source for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
+                VERBATIM
+            )
+            add_custom_command(
+                OUTPUT "${PDK_VC_LTL_SHARED_UCRT_LIB}"
                 COMMAND "${CMAKE_COMMAND}" -E chdir "${PDK_VC_LTL_BUILD_SOURCE_DIR}/Tools/${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
                     cmd /d /s /c "Build_libucrt_shared.cmd >nul"
+                DEPENDS "${PDK_VC_LTL_COPY_STAMP}"
+                COMMENT "Building VC-LTL libucrt_shared for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
+                VERBATIM
+            )
+            add_custom_command(
+                OUTPUT "${PDK_VC_LTL_VCRUNTIME_LIB}"
                 COMMAND "${PDK_MSBUILD_EXECUTABLE}" "${PDK_VC_LTL_BUILD_SOURCE_DIR}/vcruntime.msvcrt/vcruntime.msvcrt.vcxproj"
                     /nologo /m /v:minimal /clp:ErrorsOnly
                     /p:Configuration=Static
@@ -81,6 +108,12 @@ if(MSVC AND PDK_USE_VC_LTL)
                     /p:WindowsTargetPlatformMinVersion=${PDK_VC_LTL_VERSION}
                     /p:PreferredToolArchitecture=x64
                     /p:SolutionDir=${PDK_VC_LTL_BUILD_SOURCE_DIR}/
+                DEPENDS "${PDK_VC_LTL_COPY_STAMP}"
+                COMMENT "Building VC-LTL libvcruntime for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
+                VERBATIM
+            )
+            add_custom_command(
+                OUTPUT "${PDK_VC_LTL_UCRT_LIB}"
                 COMMAND "${PDK_MSBUILD_EXECUTABLE}" "${PDK_VC_LTL_BUILD_SOURCE_DIR}/ucrtbase.msvcrt/ucrtbase.msvcrt.vcxproj"
                     /nologo /m /v:minimal /clp:ErrorsOnly
                     /p:Configuration=Static
@@ -88,8 +121,8 @@ if(MSVC AND PDK_USE_VC_LTL)
                     /p:WindowsTargetPlatformMinVersion=${PDK_VC_LTL_VERSION}
                     /p:PreferredToolArchitecture=x64
                     /p:SolutionDir=${PDK_VC_LTL_BUILD_SOURCE_DIR}/
-                DEPENDS ${PDK_VC_LTL_SOURCE_FILES}
-                COMMENT "Building vendored VC-LTL runtime libraries for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
+                DEPENDS "${PDK_VC_LTL_COPY_STAMP}" "${PDK_VC_LTL_SHARED_UCRT_LIB}"
+                COMMENT "Building VC-LTL libucrt for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
                 VERBATIM
             )
             add_custom_target(pdk_vc_ltl_build DEPENDS "${PDK_VC_LTL_UCRT_LIB}" "${PDK_VC_LTL_VCRUNTIME_LIB}")

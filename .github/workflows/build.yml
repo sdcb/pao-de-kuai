@@ -28,7 +28,7 @@ on:
 
 jobs:
   build:
-    name: Windows ${{ matrix.arch }}
+    name: Windows ${{ matrix.name }}
     runs-on: windows-2025-vs2026
     env:
       VSLANG: "1033"
@@ -36,18 +36,62 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x64
+          - name: x64 /MD
+            arch: x64
             vcvars_arch: x64
-            build_dir: build-vs2026-x64
+            build_dir: build-vs2026-md-x64
+            runtime: MD
+            use_vc_ltl: OFF
             run_tests: true
-          - arch: x86
+          - name: x86 /MD
+            arch: x86
             vcvars_arch: x86
-            build_dir: build-vs2026-x86
+            build_dir: build-vs2026-md-x86
+            runtime: MD
+            use_vc_ltl: OFF
             run_tests: true
-          - arch: arm64
+          - name: arm64 /MD
+            arch: arm64
             vcvars_arch: x64_arm64
-            build_dir: build-vs2026-arm64
+            build_dir: build-vs2026-md-arm64
+            runtime: MD
+            use_vc_ltl: OFF
             run_tests: false
+          - name: x64 /MT
+            arch: x64
+            vcvars_arch: x64
+            build_dir: build-vs2026-mt-x64
+            runtime: MT
+            use_vc_ltl: OFF
+            run_tests: true
+          - name: x86 /MT
+            arch: x86
+            vcvars_arch: x86
+            build_dir: build-vs2026-mt-x86
+            runtime: MT
+            use_vc_ltl: OFF
+            run_tests: true
+          - name: arm64 /MT
+            arch: arm64
+            vcvars_arch: x64_arm64
+            build_dir: build-vs2026-mt-arm64
+            runtime: MT
+            use_vc_ltl: OFF
+            run_tests: false
+          - name: x64 VC-LTL
+            arch: x64
+            vcvars_arch: x64
+            build_dir: build-vs2026-vcltl-x64
+            runtime: MT
+            use_vc_ltl: ON
+            run_tests: true
+          - name: x86 VC-LTL
+            arch: x86
+            vcvars_arch: x86
+            build_dir: build-vs2026-vcltl-x86
+            runtime: MT
+            use_vc_ltl: ON
+            run_tests: true
 
     steps:
       - name: Checkout
@@ -57,7 +101,7 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.vcvars_arch }}
-          cmake -S . -B ${{ matrix.build_dir }} -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DPDK_BUILD_TESTS=ON
+          cmake -S . -B ${{ matrix.build_dir }} -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DPDK_BUILD_TESTS=ON -DPDK_MSVC_RUNTIME=${{ matrix.runtime }} -DPDK_USE_VC_LTL=${{ matrix.use_vc_ltl }}
 
       - name: Build
         shell: cmd
@@ -75,6 +119,6 @@ jobs:
       - name: Upload app artifact
         uses: actions/upload-artifact@v7
         with:
-          name: pao-de-kuai-${{ matrix.arch }}
+          name: pao-de-kuai-${{ matrix.build_dir }}
           path: ${{ matrix.build_dir }}/pao_de_kuai.exe
           if-no-files-found: error
