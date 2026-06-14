@@ -23,9 +23,11 @@ void AboutOverlay::Render(graphics::RenderContext& context) {
         "这是一个开源项目，代码地址：\n"
         "https://github.com/sdcb/pao-de-kuai\n\n"
         "使用技术：C++、Win32、Direct2D、DirectWrite、WIC、\n"
-        "Media Foundation、XAudio2.8、cJSON、doctest、CMake。\n\n"
+        "Media Foundation、XAudio2.8、cJSON、doctest、VC-LTL、CMake。\n\n"
+        "第三方许可：cJSON / doctest 使用 MIT License，\n"
+        "VC-LTL 使用 Eclipse Public License 2.0。\n\n"
         "如果你喜欢这个项目，欢迎到 GitHub 给一个 star ⭐。";
-    context.DrawTextUtf8(text, {330.0f, 245.0f, 620.0f, 250.0f}, 21.0f, scenes::Color(0.90f, 0.95f, 0.86f), DWRITE_TEXT_ALIGNMENT_CENTER);
+    context.DrawTextUtf8(text, {330.0f, 245.0f, 620.0f, 280.0f}, 19.0f, scenes::Color(0.90f, 0.95f, 0.86f), DWRITE_TEXT_ALIGNMENT_CENTER);
 
     scenes::ButtonGroup::DrawAll(context, buttons_);
 }

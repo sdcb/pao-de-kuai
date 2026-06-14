@@ -1,0 +1,116 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+
+用于编译VC-LTL
+
+
+"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe" -t:Build -m "I:\Visual Studio 2015\VC-LTL\src\Build.proj"
+
+-->
+
+<Project InitialTargets="ValidateSolutionConfiguration" DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(_GetProjectAllConfiguration)' != 'true'">
+    <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
+    <SolutionExt>.sln</SolutionExt>
+    <SolutionFileName>YY.Windows.CRT.sln</SolutionFileName>
+    <SolutionName>YY.Windows.CRT</SolutionName>
+    <SolutionPath>$(SolutionDir)$(SolutionFileName)</SolutionPath>
+    <WindowsTargetPlatformVersion>$([Microsoft.Build.Utilities.ToolLocationHelper]::GetLatestSDKTargetPlatformVersion('Windows', '10.0'))</WindowsTargetPlatformVersion>
+    <GlobalProperties>PreferredToolArchitecture=x64;BuildingSolutionFile=true;SolutionDir=$(SolutionDir); SolutionExt=$(SolutionExt); SolutionFileName=$(SolutionFileName); SolutionName=$(SolutionName); SolutionPath=$(SolutionPath)</GlobalProperties>
+
+    <UniversalCRTSdkDir Condition="'$(UniversalCRTSdkDir)' == ''">$(Registry:HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows Kits\Installed Roots@KitsRoot10)</UniversalCRTSdkDir>
+    <UniversalCRTSdkDir Condition="'$(UniversalCRTSdkDir)' == ''">$(Registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot10)</UniversalCRTSdkDir>
+    <VCInstallDir>$(VCTargetsPath)..\..\..\..\VC</VCInstallDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReferenceWork Include="$(MSBuildThisFileDirectory)vcruntime.msvcrt\vcruntime.msvcrt.vcxproj" OutItemName="ProjectReference"/>
+    <ProjectReferenceWork Include="$(MSBuildThisFileDirectory)ucrtbase.msvcrt\ucrtbase.msvcrt.vcxproj" OutItemName="ProjectReference"/>
+    
+    <ProjectReferenceWork Include="$(MSBuildThisFileDirectory)vcruntime.ucrtbase\vcruntime.ucrtbase.vcxproj" OutItemName="ProjectReference"/>
+    <ProjectReferenceWork Include="$(MSBuildThisFileDirectory)ucrtbase.ucrtbase\ucrtbase.ucrtbase.vcxproj" OutItemName="ProjectReference"/>
+
+    <ProjectReferenceWork Include="$(MSBuildThisFileDirectory)vccorlib.wincorlib\vccorlib.wincorlib.vcxproj" OutItemName="ProjectReference"/>
+  </ItemGroup>
+  
+  <Target Name="ValidateSolutionConfiguration">
+    <Message Text="正在生成解决方案配置“$(Configuration)|$(Platform)”。" />
+  </Target>
+  
+  <Import Project="$(VCInstallDir)\Auxiliary\Build\Microsoft.VCToolsVersion.default.props" />
+    
+  <Target Name="DownloadTools" BeforeTargets="Build">
+    <!--下载LibMaker-->
+    <DownloadFile
+      Condition="!Exists('$(MSBuildThisFileDirectory)Tools\LibMaker.exe')"
+      SourceUrl="https://github.com/Chuyu-Team/LibMaker/releases/download/v1.0.2/LibMaker.exe"
+      DestinationFolder="$(MSBuildThisFileDirectory)Tools" DestinationFileName="LibMaker.exe"/>
+  </Target>
+    
+  <Target Name="Build">
+      
+    <!--提取所有需要编译的配置-->
+    <MSBuild Projects="%(ProjectReferenceWork.Identity)" StopOnFirstFailure="True" Properties="_GetProjectAllConfiguration=true;ForceImportAfterCppTargets=$(MSBuildThisFileFullPath)" Targets="_GetProjectAllConfiguration">
+      <Output TaskParameter="TargetOutputs" ItemName="%(ProjectReferenceWork.OutItemName)" />
+    </MSBuild>
+
+    <ItemGroup>
+      <WindowsTargetPlatformMinVersionItem
+        Include="$(MSBuildThisFileFullPath)"
+        KeepDuplicates="false"
+        Condition="Exists('$(MSBuildThisFileDirectory)Tools\%(ProjectReference.WindowsTargetPlatformMinVersion)\%(ProjectReference.Platform)\Build_libucrt_shared.cmd') and !Exists('$(MSBuildThisFileDirectory)Tools\%(ProjectReference.WindowsTargetPlatformMinVersion)\%(ProjectReference.Platform)\libucrt_shared.lib')"
+        AdditionalProperties="WindowsTargetPlatformMinVersion=%(ProjectReference.WindowsTargetPlatformMinVersion);Platform=%(ProjectReference.Platform)"
+        />
+    </ItemGroup>
+
+    <Message Text="%(WindowsTargetPlatformMinVersionItem.AdditionalProperties)" Importance="high"/>
+    
+    <!--前置环境准备-->
+    <MSBuild Projects="@(WindowsTargetPlatformMinVersionItem)" StopOnFirstFailure="True" Targets="Build_libucrt_shared" BuildInParallel="True" Properties="$(GlobalProperties)"/>
+    
+    <!--启动实际编译-->
+    <MSBuild Projects="@(ProjectReference)" StopOnFirstFailure="True" BuildInParallel="True" Properties="$(GlobalProperties)"/>
+  </Target>
+
+  <!-- VC-LTL Rust crate 编译准备 -->
+  <Target Name="PrepareToCompileRustLanguageSupport">
+    <ItemGroup>
+      <RustTargetPlatform_x86 Include="$(SolutionDir)TargetPlatform\6.0.6000.0\lib\Win32\*ucrt.lib;$(SolutionDir)TargetPlatform\6.0.6000.0\lib\Win32\*vcruntime.lib;" />
+      <RustTargetPlatform_x64 Include="$(SolutionDir)TargetPlatform\6.0.6000.0\lib\x64\*ucrt.lib;$(SolutionDir)TargetPlatform\6.0.6000.0\lib\x64\*vcruntime.lib;" />
+      <RustTargetPlatform_arm64 Include="$(SolutionDir)TargetPlatform\10.0.10240.0\lib\ARM64\*ucrt.lib;$(SolutionDir)TargetPlatform\10.0.10240.0\lib\ARM64\*vcruntime.lib;" />
+      <RustTargetPlatform_Common Include="$(SolutionDir)Readme.md;$(SolutionDir)LICENSE;" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(RustTargetPlatform_x86)" DestinationFolder="$(SolutionDir)Rust\TargetPlatform\6.0.6000.0\lib\Win32" />
+    <Copy SourceFiles="@(RustTargetPlatform_x64)" DestinationFolder="$(SolutionDir)Rust\TargetPlatform\6.0.6000.0\lib\x64" />
+    <Copy SourceFiles="@(RustTargetPlatform_arm64)" DestinationFolder="$(SolutionDir)Rust\TargetPlatform\10.0.10240.0\lib\ARM64" />
+    <Copy SourceFiles="@(RustTargetPlatform_Common)" DestinationFolder="$(SolutionDir)Rust" />
+  </Target>
+
+  <Target Name="Pack">
+    <PropertyGroup>
+      <ZipFileName>VC-LTL-Binary.7z</ZipFileName>
+    </PropertyGroup>
+    <Delete Files="$(MSBuildThisFileDirectory)$(ZipFileName)"/>
+    <Exec Command="7z.exe a $(ZipFileName) config _msvcrt.h %22VC-LTL helper for *%22 TargetPlatform Readme.md Readme.osc.md Install.cmd -xr!*.objs.lib -xr!*.idb" WorkingDirectory="$(MSBuildThisFileDirectory)"/>
+  </Target>
+  
+  <Target Name="_GetProjectAllConfiguration" Returns="@(AllProjectReferenceConfigurations)">
+    <!--故意过滤Debug配置 与 ARM配置，因为ARM的人实在是太少了。-->
+    <CreateItem
+      Condition="'%(ProjectConfiguration.Configuration)' != 'Debug' and '%(ProjectConfiguration.Platform)' != 'ARM'"
+      Include="$(MSBuildProjectFullPath)"
+      AdditionalMetadata="Configuration=%(ProjectConfiguration.Configuration);Platform=%(ProjectConfiguration.Platform);WindowsTargetPlatformMinVersion=%(ProjectConfiguration.WindowsTargetPlatformMinVersion);AdditionalProperties=Configuration=%(ProjectConfiguration.Configuration)%3BPlatform=%(ProjectConfiguration.Platform)%3BWindowsTargetPlatformMinVersion=%(ProjectConfiguration.WindowsTargetPlatformMinVersion)">
+      <Output TaskParameter="Include" ItemName="AllProjectReferenceConfigurations"/>
+    </CreateItem>
+  </Target>
+  <Target Name="Build_libucrt_shared" Inputs="$(MSBuildThisFileDirectory)Tools\$(WindowsTargetPlatformMinVersion)\$(Platform)\Build_libucrt_shared.cmd" Outputs="$(MSBuildThisFileDirectory)Tools\$(WindowsTargetPlatformMinVersion)\$(Platform)\libucrt_shared.lib">
+
+    <Message Text="$(WindowsTargetPlatformMinVersion)\$(Platform) 进入" Importance="high"/>
+    <Exec
+      Command="cmd /c %22$(MSBuildThisFileDirectory)Tools\$(WindowsTargetPlatformMinVersion)\$(Platform)\Build_libucrt_shared.cmd%22"
+      WorkingDirectory="$(MSBuildThisFileDirectory)Tools\$(WindowsTargetPlatformMinVersion)\$(Platform)"
+      Condition="Exists('$(MSBuildThisFileDirectory)Tools\$(WindowsTargetPlatformMinVersion)\$(Platform)\Build_libucrt_shared.cmd')"/>
+  </Target>
+</Project>

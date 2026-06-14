@@ -16,6 +16,7 @@ ctest --preset vs2026-release --output-on-failure
 
 - CMake 配置会给 MSVC 添加 `/utf-8`、`/EHsc` 和 `/MT`。
 - Release 体积优化使用 MSVC 默认 `/O2 /Ob2` 并额外添加 `/Os`。
+- MSVC x64/x86 默认使用 `external/vc-ltl` 中的精简 VC-LTL 源码，在 build 目录生成运行库并把 CRT 链接到系统 `msvcrt.dll`；缺少构建工具或非 x64/x86 架构时自动回退到普通 `/MT`。
 - 日常构建和测试以 VS2026 为验证基线。
 - `CMakePresets.json` 是项目级配置，应纳入版本控制。个人机器路径应放在 `CMakeUserPresets.json`，不要提交。
 
@@ -38,6 +39,7 @@ ctest --preset vs2026-release --output-on-failure
 - 洗牌和少量随机选择走当前 `std::srand/std::rand` 路径；本项目不是安全随机场景。
 - `std::thread`、`std::mutex`、`std::lock_guard` 可以用于异步网络请求等需要 RAII 的并发代码，不要为了很小体积收益改成裸 `EnterCriticalSection`。
 - 测试代码可按需要使用 `<filesystem>` 等标准库便利设施；上述限制主要针对进入主程序的 `src/`。
+- 第三方依赖只保留精简 vendor 文件：`external/cjson`、`external/doctest`、`external/vc-ltl`。不要重新引入 CMake 下载依赖，也不要在仓库中签入 VC-LTL `.lib` 产物。
 
 ## 产品与 UX 约束
 

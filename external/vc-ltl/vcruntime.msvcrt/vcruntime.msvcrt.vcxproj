@@ -1,0 +1,777 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Condition="'$(_GetProjectAllConfiguration)' == 'true'">
+    <!--WinXP支持配置（5.1.2600.0 + 5.2.3790.0）-->
+    <ProjectConfiguration Include="DDynamic|Win32">
+      <Configuration>DDynamic</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>5.1.2600.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DDynamic|x64">
+      <Configuration>DDynamic</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>5.2.3790.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DStatic|Win32">
+      <Configuration>DStatic</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>5.1.2600.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DStatic|x64">
+      <Configuration>DStatic</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>5.2.3790.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Dynamic|Win32">
+      <Configuration>Dynamic</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>5.1.2600.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Dynamic|x64">
+      <Configuration>Dynamic</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>5.2.3790.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Static|Win32">
+      <Configuration>Static</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>5.1.2600.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Static|x64">
+      <Configuration>Static</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>5.2.3790.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup Condition="'$(_GetProjectAllConfiguration)' == 'true'">
+    <!--6.0.6000.0-->
+    <ProjectConfiguration Include="DDynamic|Win32">
+      <Configuration>DDynamic</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>6.0.6000.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DDynamic|x64">
+      <Configuration>DDynamic</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>6.0.6000.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DStatic|Win32">
+      <Configuration>DStatic</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>6.0.6000.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DStatic|x64">
+      <Configuration>DStatic</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>6.0.6000.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Dynamic|Win32">
+      <Configuration>Dynamic</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>6.0.6000.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Dynamic|x64">
+      <Configuration>Dynamic</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>6.0.6000.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Static|Win32">
+      <Configuration>Static</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>6.0.6000.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Static|x64">
+      <Configuration>Static</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>6.0.6000.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <!--6.2.9200.0-->
+    <ProjectConfiguration Include="DDynamic|ARM">
+      <Configuration>DDynamic</Configuration>
+      <Platform>ARM</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DDynamic|Win32">
+      <Configuration>DDynamic</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DDynamic|x64">
+      <Configuration>DDynamic</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DStatic|ARM">
+      <Configuration>DStatic</Configuration>
+      <Platform>ARM</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DStatic|Win32">
+      <Configuration>DStatic</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DStatic|x64">
+      <Configuration>DStatic</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Dynamic|ARM">
+      <Configuration>Dynamic</Configuration>
+      <Platform>ARM</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Dynamic|Win32">
+      <Configuration>Dynamic</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Dynamic|x64">
+      <Configuration>Dynamic</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Static|ARM">
+      <Configuration>Static</Configuration>
+      <Platform>ARM</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Static|Win32">
+      <Configuration>Static</Configuration>
+      <Platform>Win32</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Static|x64">
+      <Configuration>Static</Configuration>
+      <Platform>x64</Platform>
+      <WindowsTargetPlatformMinVersion>6.2.9200.0</WindowsTargetPlatformMinVersion>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{2D2789F9-1A04-4E94-8386-E5B2C8C93354}</ProjectGuid>
+    <RootNamespace>vcruntime.msvcrt</RootNamespace>
+    <WindowsTargetPlatformVersion>$([Microsoft.Build.Utilities.ToolLocationHelper]::GetLatestSDKTargetPlatformVersion('Windows', '10.0'))</WindowsTargetPlatformVersion>
+    <!--如果外部没有定义，那么默认值为 最低支持版本-->
+    <WindowsTargetPlatformMinVersion Condition="'$(WindowsTargetPlatformMinVersion)' == '' and '$(Platform)' == 'ARM' ">6.2.9200.0</WindowsTargetPlatformMinVersion>
+    <WindowsTargetPlatformMinVersion Condition="'$(WindowsTargetPlatformMinVersion)' == '' and '$(Platform)' == 'x64' ">5.2.3790.0</WindowsTargetPlatformMinVersion>
+    <WindowsTargetPlatformMinVersion Condition="'$(WindowsTargetPlatformMinVersion)' == ''">5.1.2600.0</WindowsTargetPlatformMinVersion>
+    <ProjectName>vcruntime.msvcrt</ProjectName>
+    <WindowsTargetPlatformMinVersionBuild>$([System.Version]::Parse('$(WindowsTargetPlatformMinVersion)').Build)</WindowsTargetPlatformMinVersionBuild>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Static|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Static|ARM'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|ARM'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|ARM'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|ARM'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Static|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Static|Win32'">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|Win32'" Label="PropertySheets" />
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Static|ARM'" Label="PropertySheets" />
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|ARM'" Label="PropertySheets" />
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|Win32'" Label="PropertySheets" />
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|Win32'" Label="PropertySheets" />
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|ARM'" Label="PropertySheets" />
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|ARM'" Label="PropertySheets" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Static|x64'">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|x64'" Label="PropertySheets" />
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|x64'" Label="PropertySheets" />
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|x64'" Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Static|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetName>libvcruntime</TargetName>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetName>libvcruntimed</TargetName>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Static|ARM'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetName>libvcruntime</TargetName>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|ARM'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetName>libvcruntimed</TargetName>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetName>vcruntime</TargetName>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetName>vcruntimed</TargetName>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|ARM'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetName>vcruntime</TargetName>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|ARM'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetName>vcruntimed</TargetName>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Static|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <TargetName>libvcruntime</TargetName>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <TargetName>libvcruntimed</TargetName>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <TargetName>vcruntime</TargetName>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\lib\$(Platform)\</OutDir>
+    <TargetName>vcruntimed</TargetName>
+    <IntDir>$(Platform)\$(Configuration)\$(WindowsTargetPlatformMinVersion)\</IntDir>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Static|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+    <MASM>
+      <UseSafeExceptionHandlers>true</UseSafeExceptionHandlers>
+    </MASM>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+    <MASM>
+      <UseSafeExceptionHandlers>true</UseSafeExceptionHandlers>
+    </MASM>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Static|ARM'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|ARM'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>CRTDLL;WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+    <MASM>
+      <UseSafeExceptionHandlers>true</UseSafeExceptionHandlers>
+    </MASM>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>CRTDLL;WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+    <MASM>
+      <UseSafeExceptionHandlers>true</UseSafeExceptionHandlers>
+    </MASM>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|ARM'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>CRTDLL;WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|ARM'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>CRTDLL;WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Static|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DStatic|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Dynamic|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>CRTDLL;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DDynamic|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>CRTDLL;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <OmitDefaultLibName>true</OmitDefaultLibName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <ForcedIncludeFiles>suppress.h;framework.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>$(IntDir)vcruntime.msvcrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Sources\crt\framework.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Sources\crt\i386\chandler4.c">
+      <ExcludedFromBuild Condition="'$(Platform)' != 'Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="('$(Configuration)'=='Dynamic' or '$(Configuration)'=='DDynamic') and '$(WindowsTargetPlatformMinVersionBuild)' &gt;= '6000'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\chandler_noexcept.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)' != 'x64' and '$(Platform)' != 'ARM' and '$(Platform)' != 'ARM64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(WindowsTargetPlatformMinVersionBuild)' &gt;= '17134'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\ehhelpers.cpp">
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExcludedFromBuild Condition="'$(WindowsTargetPlatformMinVersionBuild)' &gt;= '14393'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\ehstate.cpp">
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExcludedFromBuild Condition="'$(Platform)' != 'x64' or '$(WindowsTargetPlatformMinVersionBuild)' &gt;= '19041'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\frame.cpp">
+      <ExcludedFromBuild Condition="'$(WindowsTargetPlatformMinVersionBuild)' &gt;= '10240'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\i386\trnsctrl.cpp">
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExcludedFromBuild Condition="'$(Platform)' != 'Win32' or '$(WindowsTargetPlatformMinVersionBuild)' &gt;= '10240'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\ltl\c11_atomic_support.c" />
+    <ClCompile Include="..\Sources\crt\vcruntime\ltl\threads.cpp">
+      <RemoveUnreferencedCodeData>false</RemoveUnreferencedCodeData>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\mgdframe.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)' != 'x64' and '$(Platform)' != 'ARM' and '$(Platform)' != 'ARM64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\purevirt.cpp" />
+    <ClCompile Include="..\Sources\crt\vcruntime\risctrnsctrl.cpp">
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExcludedFromBuild Condition="'$(WindowsTargetPlatformMinVersionBuild)' &gt;= '19041'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Platform)' != 'x64' and '$(Platform)' != 'ARM'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\std_exception.cpp" />
+    <ClCompile Include="..\Sources\crt\vcruntime\std_type_info.cpp" />
+    <ClCompile Include="..\Sources\crt\vcruntime\telemetry.cpp" />
+    <ClCompile Include="..\Sources\crt\vcruntime\uncaught_exceptions.cpp">
+      <ExcludedFromBuild Condition="'$(WindowsTargetPlatformMinVersionBuild)' &gt;= '14393'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\unexpected.cpp" />
+    <ClCompile Include="..\Sources\crt\vcruntime\winapi_downlevel.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)' != 'Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\Sources\crt\vcruntime\winapi_thunks.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)' != 'Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="CxxFrameHandler_WinXP.cpp">
+      <ExcludedFromBuild Condition="'$(WindowsTargetPlatformMinVersionBuild)' &gt;= '6000'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="jbcxrval.cpp">
+      <ExcludedFromBuild Condition="'$(WindowsTargetPlatformMinVersionBuild)' &gt;= '6000'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="setjmp.cpp">
+      <OmitFramePointers>true</OmitFramePointers>
+    </ClCompile>
+    <ClCompile Include="setjmpex.cpp">
+      <OmitFramePointers>true</OmitFramePointers>
+      <ExcludedFromBuild Condition="'$(Platform)' == 'Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="vcruntime_IAT.cpp" />
+    <ClCompile Include="VC_LTL_Config.c">
+      <ForcedIncludeFiles>
+      </ForcedIncludeFiles>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="i386\exsup.asm">
+      <ExcludedFromBuild Condition="'$(Platform)' == 'x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Platform)' == 'ARM'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Platform)' == 'ARM64'">true</ExcludedFromBuild>
+    </MASM>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
+  </ImportGroup>
+  <Import Project="$(SolutionDir)Tools\VCRuntime\$(Platform)\LibInfo.props" Condition="Exists('$(SolutionDir)Tools\VCRuntime\$(Platform)\LibInfo.props')" />
+  <Target Name="EXTRACT_obj" AfterTargets="_ClCompile" Inputs="%(ExtractItem.LibFile)" Outputs="%(ExtractItem.OutDir)%(ExtractItem.Filename)%(ExtractItem.Extension)" Condition="'@(ExtractItem)' !=''">
+    <!--确保文件夹必定存在-->
+    <MakeDir Directories="%(ExtractItem.OutDir)" />
+    <Exec Command="%22$(SolutionDir)Tools\LibMaker.exe%22 ExportObj %22%(ExtractItem.LibFile)%22 %(ExtractItem.Identity) %22%(ExtractItem.OutDir)%(ExtractItem.Filename)%(ExtractItem.Extension)%22" />
+    <ItemGroup>
+      <Obj Include="%(ExtractItem.OutDir)%(ExtractItem.Filename)%(ExtractItem.Extension)">
+        <LinkCompiled>true</LinkCompiled>
+        <LibCompiled>true</LibCompiled>
+        <ImpLibCompiled>true</ImpLibCompiled>
+      </Obj>
+    </ItemGroup>
+  </Target>
+  <!--生成只有msvcrt.dll支持的vcrt动态库部分-->
+  <Target Name="Build_vcruntime_msvcrt_base" AfterTargets="_ClCompile" Inputs="$(SolutionDir)Tools\$(WindowsTargetPlatformMinVersion)\$(Platform)\vcruntime.msvcrt.def;$(SolutionDir)Tools\$(WindowsTargetPlatformMinVersion)\$(Platform)\vcruntime.msvcrt.weak.def" Outputs="$(IntDir)vcruntime.msvcrt.lib">
+    <Exec Command="lib /def:%22$(SolutionDir)Tools\$(WindowsTargetPlatformMinVersion)\$(Platform)\vcruntime.msvcrt.def%22 /out:%22$(IntDir)vcruntime.msvcrt.lib%22 /MACHINE:$(PlatformShortName)" />
+    <!--复制lib属性，Win32下面 __seh_longjmp_unwind@4 这类接口需要标记导出类型-->
+    <Exec Command="%22$(SolutionDir)Tools\LibMaker.exe%22 CopyLibType %22$(IntDir)vcruntime.msvcrt.lib%22 %22$(VCToolsInstallDir)lib\$(PlatformShortName)\vcruntime.lib%22" Condition="'$(Platform)' == 'Win32'" />
+    <RemoveDir Directories="$(IntDir)objs\weak" />
+    <MakeDir Directories="$(IntDir)objs\weak" />
+    <Exec Command="%22$(SolutionDir)Tools\LibMaker.exe%22 CreateWeaks /MACHINE:$(PlatformShortName) /def:%22$(SolutionDir)Tools\$(WindowsTargetPlatformMinVersion)\$(Platform)\vcruntime.msvcrt.weak.def%22 /out:%22$(IntDir)objs\weak%22" />
+    <Exec Command="lib %22$(IntDir)vcruntime.msvcrt.lib%22 %22$(IntDir)objs\weak\*%22" />
+  </Target>
+</Project>

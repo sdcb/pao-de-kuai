@@ -32,6 +32,7 @@ void StartScene::Render(graphics::RenderContext& context) {
     context.DrawTextUtf8("极客版跑得快", {0.0f, 120.0f, 1280.0f, 72.0f}, 52.0f, Color(0.96f, 0.88f, 0.44f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     context.DrawTextUtf8("单机三人场  48 张固定规则", {0.0f, 190.0f, 1280.0f, 34.0f}, 21.0f, Color(0.82f, 0.92f, 0.80f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     ButtonGroup::DrawAll(context, buttons_);
+    context.DrawTextUtf8("使用 cJSON / doctest (MIT) 与 VC-LTL (EPL-2.0)", {0.0f, 650.0f, 1280.0f, 24.0f}, 14.0f, Color(0.70f, 0.82f, 0.70f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 }
 
 bool StartScene::OnMouseMove(float x, float y) {

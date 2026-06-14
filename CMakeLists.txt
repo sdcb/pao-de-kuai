@@ -11,8 +11,9 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version 
 project(PaoDeKuai VERSION 0.1.0 LANGUAGES C CXX RC)
 
 option(PDK_BUILD_TESTS "Build rule tests" ON)
+option(PDK_USE_VC_LTL "Use vendored VC-LTL CRT libraries for smaller MSVC binaries when available" ON)
 
-include(FetchContent)
+set(PDK_EXTERNAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
 if(MSVC)
     add_compile_options(
@@ -37,21 +38,88 @@ else()
     set(CMAKE_CXX_STANDARD 23)
 endif()
 
-FetchContent_Declare(
-    cjson_src
-    URL https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.zip
-)
-set(ENABLE_CJSON_TEST OFF CACHE BOOL "" FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(CJSON_OVERRIDE_BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
-set(CJSON_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(cjson_src)
-set(BUILD_TESTING ON CACHE BOOL "" FORCE)
+add_library(pdk_vc_ltl INTERFACE)
+if(MSVC AND PDK_USE_VC_LTL)
+    set(PDK_VC_LTL_VERSION "6.2.9200.0")
+    string(TOLOWER "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}" PDK_MSVC_ARCH)
+    if(PDK_MSVC_ARCH STREQUAL "x64")
+        set(PDK_VC_LTL_PLATFORM "x64")
+    elseif(PDK_MSVC_ARCH STREQUAL "x86")
+        set(PDK_VC_LTL_PLATFORM "Win32")
+    endif()
 
-add_library(cjson_static STATIC ${cjson_src_SOURCE_DIR}/cJSON.c)
-target_include_directories(cjson_static PUBLIC ${cjson_src_SOURCE_DIR})
+    if(PDK_VC_LTL_PLATFORM)
+        set(PDK_VC_LTL_ROOT "${PDK_EXTERNAL_DIR}/vc-ltl")
+        set(PDK_VC_LTL_INCLUDE_DIR "${PDK_VC_LTL_ROOT}/TargetPlatform/header")
+        set(PDK_VC_LTL_VERSION_INCLUDE_DIR "${PDK_VC_LTL_ROOT}/TargetPlatform/${PDK_VC_LTL_VERSION}/header")
+        set(PDK_VC_LTL_BUILD_SOURCE_DIR "${CMAKE_BINARY_DIR}/vc-ltl-build/src")
+        set(PDK_VC_LTL_LIBRARY_DIR "${PDK_VC_LTL_BUILD_SOURCE_DIR}/TargetPlatform/${PDK_VC_LTL_VERSION}/lib/${PDK_VC_LTL_PLATFORM}")
+        set(PDK_VC_LTL_UCRT_LIB "${PDK_VC_LTL_LIBRARY_DIR}/libucrt.lib")
+        set(PDK_VC_LTL_VCRUNTIME_LIB "${PDK_VC_LTL_LIBRARY_DIR}/libvcruntime.lib")
+        find_program(PDK_MSBUILD_EXECUTABLE NAMES MSBuild.exe msbuild.exe)
+
+        if(EXISTS "${PDK_VC_LTL_ROOT}/Build.proj"
+            AND EXISTS "${PDK_VC_LTL_ROOT}/Tools/LibMaker.exe"
+            AND EXISTS "${PDK_VC_LTL_ROOT}/Tools/${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}/Build_libucrt_shared.cmd"
+            AND PDK_MSBUILD_EXECUTABLE)
+            file(GLOB_RECURSE PDK_VC_LTL_SOURCE_FILES CONFIGURE_DEPENDS
+                "${PDK_VC_LTL_ROOT}/*"
+            )
+            list(FILTER PDK_VC_LTL_SOURCE_FILES EXCLUDE REGEX "\\.lib$")
+
+            add_custom_command(
+                OUTPUT "${PDK_VC_LTL_UCRT_LIB}" "${PDK_VC_LTL_VCRUNTIME_LIB}"
+                COMMAND "${CMAKE_COMMAND}" -E rm -rf "${PDK_VC_LTL_BUILD_SOURCE_DIR}"
+                COMMAND "${CMAKE_COMMAND}" -E make_directory "${PDK_VC_LTL_BUILD_SOURCE_DIR}"
+                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${PDK_VC_LTL_ROOT}" "${PDK_VC_LTL_BUILD_SOURCE_DIR}"
+                COMMAND "${CMAKE_COMMAND}" -E chdir "${PDK_VC_LTL_BUILD_SOURCE_DIR}/Tools/${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
+                    cmd /d /s /c "Build_libucrt_shared.cmd >nul"
+                COMMAND "${PDK_MSBUILD_EXECUTABLE}" "${PDK_VC_LTL_BUILD_SOURCE_DIR}/vcruntime.msvcrt/vcruntime.msvcrt.vcxproj"
+                    /nologo /m /v:minimal /clp:ErrorsOnly
+                    /p:Configuration=Static
+                    /p:Platform=${PDK_VC_LTL_PLATFORM}
+                    /p:WindowsTargetPlatformMinVersion=${PDK_VC_LTL_VERSION}
+                    /p:PreferredToolArchitecture=x64
+                    /p:SolutionDir=${PDK_VC_LTL_BUILD_SOURCE_DIR}/
+                COMMAND "${PDK_MSBUILD_EXECUTABLE}" "${PDK_VC_LTL_BUILD_SOURCE_DIR}/ucrtbase.msvcrt/ucrtbase.msvcrt.vcxproj"
+                    /nologo /m /v:minimal /clp:ErrorsOnly
+                    /p:Configuration=Static
+                    /p:Platform=${PDK_VC_LTL_PLATFORM}
+                    /p:WindowsTargetPlatformMinVersion=${PDK_VC_LTL_VERSION}
+                    /p:PreferredToolArchitecture=x64
+                    /p:SolutionDir=${PDK_VC_LTL_BUILD_SOURCE_DIR}/
+                DEPENDS ${PDK_VC_LTL_SOURCE_FILES}
+                COMMENT "Building vendored VC-LTL runtime libraries for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
+                VERBATIM
+            )
+            add_custom_target(pdk_vc_ltl_build DEPENDS "${PDK_VC_LTL_UCRT_LIB}" "${PDK_VC_LTL_VCRUNTIME_LIB}")
+            target_include_directories(pdk_vc_ltl SYSTEM BEFORE INTERFACE
+                "${PDK_VC_LTL_INCLUDE_DIR}"
+                "${PDK_VC_LTL_VERSION_INCLUDE_DIR}"
+            )
+            target_link_directories(pdk_vc_ltl BEFORE INTERFACE "${PDK_VC_LTL_LIBRARY_DIR}")
+            target_compile_definitions(pdk_vc_ltl INTERFACE
+                _LTL_ucrt_module_type=1
+                _LTL_vcruntime_module_type=1
+                _LTL_vccorlib_module_type=1
+            )
+            message(STATUS "VC-LTL enabled from source: ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}")
+        else()
+            message(WARNING "VC-LTL requested but its source tree or MSBuild is missing; using normal MSVC /MT runtime.")
+        endif()
+    else()
+        message(STATUS "VC-LTL is not enabled for MSVC target architecture '${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}'.")
+    endif()
+endif()
+
+add_library(cjson_static STATIC "${PDK_EXTERNAL_DIR}/cjson/cJSON.c")
+target_include_directories(cjson_static PUBLIC "${PDK_EXTERNAL_DIR}/cjson")
 target_compile_definitions(cjson_static PRIVATE CJSON_HIDE_SYMBOLS)
+target_link_libraries(cjson_static PRIVATE pdk_vc_ltl)
+
+add_library(doctest INTERFACE)
+add_library(doctest::doctest ALIAS doctest)
+target_include_directories(doctest SYSTEM INTERFACE "${PDK_EXTERNAL_DIR}/doctest")
 
 set(PDK_CORE_SOURCES
     src/core/StringUtil.cpp
@@ -74,7 +142,7 @@ set(PDK_CORE_SOURCES
 
 add_library(pdk_core STATIC ${PDK_CORE_SOURCES})
 target_include_directories(pdk_core PUBLIC src)
-target_link_libraries(pdk_core PUBLIC cjson_static crypt32)
+target_link_libraries(pdk_core PUBLIC cjson_static pdk_vc_ltl crypt32)
 
 add_library(pdk_ai STATIC
     src/ai/LlmAiController.cpp
@@ -138,6 +206,13 @@ target_link_libraries(pdk_app PUBLIC
     mfplat mfreadwrite mfuuid gdi32 user32 comdlg32
 )
 
+if(TARGET pdk_vc_ltl_build)
+    add_dependencies(cjson_static pdk_vc_ltl_build)
+    add_dependencies(pdk_core pdk_vc_ltl_build)
+    add_dependencies(pdk_ai pdk_vc_ltl_build)
+    add_dependencies(pdk_app pdk_vc_ltl_build)
+endif()
+
 foreach(target pdk_core pdk_ai pdk_app cjson_static)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
@@ -150,17 +225,29 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_VERSION VERSION_LESS "3.25")
     target_compile_options(pdk_app PUBLIC -std=c++2c)
 endif()
 
+function(pdk_add_vc_ltl_link_dependency target)
+    if(TARGET pdk_vc_ltl_build)
+        add_dependencies(${target} pdk_vc_ltl_build)
+        set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS
+            "${PDK_VC_LTL_UCRT_LIB}"
+            "${PDK_VC_LTL_VCRUNTIME_LIB}"
+        )
+    endif()
+endfunction()
+
 add_executable(pao_de_kuai WIN32
     src/app/WinMain.cpp
     src/resources/resources.rc
 )
 target_link_libraries(pao_de_kuai PRIVATE pdk_app)
+pdk_add_vc_ltl_link_dependency(pao_de_kuai)
 
 add_executable(scene_viewer
     tests/scene_viewer/SceneViewer.cpp
     src/resources/resources.rc
 )
 target_link_libraries(scene_viewer PRIVATE pdk_app)
+pdk_add_vc_ltl_link_dependency(scene_viewer)
 
 foreach(target pao_de_kuai scene_viewer)
     target_compile_definitions(${target} PRIVATE
@@ -180,12 +267,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 if(PDK_BUILD_TESTS)
-    FetchContent_Declare(
-        doctest_src
-        URL https://github.com/doctest/doctest/archive/refs/tags/v2.5.2.zip
-    )
-    FetchContent_MakeAvailable(doctest_src)
-
     add_executable(unit_tests
         tests/rules_tests/TestMain.cpp
         tests/rules_tests/RulesPatternTests.cpp
@@ -197,6 +278,7 @@ if(PDK_BUILD_TESTS)
         tests/ai_client_tests/AiClientUnitTests.cpp
     )
     target_link_libraries(unit_tests PRIVATE pdk_ai doctest::doctest)
+    pdk_add_vc_ltl_link_dependency(unit_tests)
     target_compile_definitions(unit_tests PRIVATE
         DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
         PDK_ENABLE_TEST_HOOKS
@@ -213,6 +295,7 @@ if(PDK_BUILD_TESTS)
         tests/ai_client_tests/AiClientIntegrationTests.cpp
     )
     target_link_libraries(ai_client_tests PRIVATE pdk_ai doctest::doctest)
+    pdk_add_vc_ltl_link_dependency(ai_client_tests)
     target_compile_definitions(ai_client_tests PRIVATE
         DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
     )

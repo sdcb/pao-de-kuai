@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Condition="'$(WindowsTargetPlatformMinVersionBuild)' &lt; '19041'">
+    <ExtractItem Include="\objr\amd64\handlers.obj">
+      <LibFile>$(VCToolsInstallDir)lib\$(PlatformShortName)\libvcruntime.lib</LibFile>
+      <OutDir>$(IntDir)objr\libvcruntime\</OutDir>
+    </ExtractItem>
+  </ItemGroup>
+  <ItemGroup Condition="'$(WindowsTargetPlatformMinVersionBuild)' &lt; '10240'">
+    <ExtractItem Include="\objr\amd64\notify.obj">
+      <LibFile>$(VCToolsInstallDir)lib\$(PlatformShortName)\libvcruntime.lib</LibFile>
+      <OutDir>$(IntDir)objr\libvcruntime\</OutDir>
+    </ExtractItem>
+  </ItemGroup>
+  <ItemGroup>
+    <ExtractItem Include="\objr\amd64\softmemtag.obj">
+      <LibFile>$(VCToolsInstallDir)lib\$(PlatformShortName)\vcruntime.lib</LibFile>
+      <OutDir>$(IntDir)objr\libvcruntime\</OutDir>
+    </ExtractItem>
+  </ItemGroup>
+</Project>

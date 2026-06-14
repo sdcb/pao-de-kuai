@@ -15,6 +15,7 @@
 - Media Foundation / XAudio2.8
 - cJSON
 - doctest
+- VC-LTL
 - CMake
 
 ## 项目结构
@@ -23,6 +24,7 @@
 .
 ├── assets/                  # 扑克牌图集、图标、音效 mp3
 │   └── audio/               # 音效资源和生成脚本
+├── external/                # 精简签入的第三方依赖和许可证
 ├── spec/                    # 项目规格与计划文档
 ├── src/
 │   ├── app/                 # App 主流程、Win32 窗口、DPI、入口 WinMain
@@ -44,7 +46,7 @@
 
 ## 构建
 
-先进入任意 VS2026 x64 开发者命令行。Community、Professional、Enterprise 或 Build Tools 均可，只要环境里有 MSVC、Windows SDK、NMake 和 CMake。
+先进入任意 VS2026 x64 开发者命令行。Community、Professional、Enterprise 或 Build Tools 均可，只要环境里有 MSVC、Windows SDK、Ninja 和 CMake。
 
 ```powershell
 cmake --preset vs2026-release
@@ -56,7 +58,9 @@ ctest --preset vs2026-release --output-on-failure
 
 - `pao_de_kuai.exe`：正式 Windows GUI 程序。
 - `scene_viewer.exe`：测试/调试用场景查看器，可按参数打开指定场景并截图。
-- `rules_tests.exe`：规则与状态单元测试。
+- `unit_tests.exe`：规则、状态和基础 AI 单元测试。
+
+MSVC x64/x86 默认使用 `external/vc-ltl` 中的精简 VC-LTL 源码，在 build 目录生成运行库并将 CRT 链接到系统 `msvcrt.dll` 以减小 exe 体积；仓库不签入 VC-LTL `.lib` 产物，其他架构或缺少构建工具时会自动回退到普通 `/MT`。
 
 ## 运行数据
 
@@ -67,3 +71,9 @@ ctest --preset vs2026-release --output-on-failure
 ## License
 
 MIT License. See [LICENSE](LICENSE).
+
+第三方依赖：
+
+- cJSON：MIT License，见 `external/cjson/LICENSE`。
+- doctest：MIT License，见 `external/doctest/LICENSE.txt`。
+- VC-LTL：Eclipse Public License 2.0，见 `external/vc-ltl/LICENSE`。

@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+项目的全局配置
+
+
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(WindowsTargetPlatformMinVersionBuild)' != ''">
+    <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(SolutionDir)Sources\crt;$(SolutionDir)Sources\crt\vcruntime;$(SolutionDir)Sources\ucrt;$(SolutionDir)Sources\ucrt\inc;$(SolutionDir)TargetPlatform\header;$(SolutionDir)TargetPlatform\$(WindowsTargetPlatformMinVersion)\header;$(IncludePath)</IncludePath>
+    <AllProjectIncludesArePublic>true</AllProjectIncludesArePublic>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(WindowsTargetPlatformMinVersionBuild)' != ''">
+    <ClCompile>
+      <PreprocessorDefinitions>WindowsTargetPlatformMinVersion=(($([System.Version]::Parse('$(WindowsTargetPlatformMinVersion)').Major.ToString('00')) &lt;&lt; 12) + ($([System.Version]::Parse('$(WindowsTargetPlatformMinVersion)').Minor.ToString('00')) &lt;&lt; 8) + $([System.Version]::Parse('$(WindowsTargetPlatformMinVersion)').Build));_VCRT_ALLOW_INTERNALS;_ALLOW_ITERATOR_DEBUG_LEVEL_MISMATCH;_ALLOW_RUNTIME_LIBRARY_MISMATCH;_CRT_STDIO_ARBITRARY_WIDE_SPECIFIERS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(WindowsTargetPlatformMinVersionBuild)' &lt; '10240'">__BuildWithMSVCRT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      
+      <EnableEnhancedInstructionSet Condition="'$(Platform)' == 'Win32'">NoExtensions</EnableEnhancedInstructionSet>
+      <DisableSpecificWarnings>4200;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <!--禁用FH4，因为早期版本 2015 2017都是没有这个功能的，实际上，微软自己也是禁用的。-->
+      <AdditionalOptions Condition="'$(Platform)'=='x64'">/d2FH4- %(AdditionalOptions)</AdditionalOptions>
+      <!--避免使用tlsGuards，因为VC-LTL能确保不会使用那些动态的。此外避免高版本依赖-->
+      <AdditionalOptions>/Zc:tlsGuards- %(AdditionalOptions)</AdditionalOptions>
+      <SupportJustMyCode>false</SupportJustMyCode>
+      <GuardEHContMetadata>true</GuardEHContMetadata>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <!--从兼容性考虑，继续向上搜索 Directory.Build.props-->
+  <PropertyGroup>
+    <DirectoryBuildPropsPath>$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))</DirectoryBuildPropsPath>
+  </PropertyGroup>
+  <Import Project="$(DirectoryBuildPropsPath)" Condition="'$(DirectoryBuildPropsPath)' != ''"/>
+</Project>
