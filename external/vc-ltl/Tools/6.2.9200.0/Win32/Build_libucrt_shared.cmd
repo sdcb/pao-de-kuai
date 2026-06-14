@@ -11,7 +11,7 @@ for /f "tokens=*" %%i in ('"%BuiltInVsWhereExe%" -latest -prerelease -property i
 
 @call "%LatestVisualStudioRoot%\VC\Auxiliary\Build\vcvars32.bat"
 
-copy "%WindowsSdkDir%Lib\10.0.19041.0\ucrt\x86\libucrt.lib" "%libfile%" /y
+copy "%WindowsSdkDir%Lib\%WindowsSDKLibVersion%ucrt\x86\libucrt.lib" "%libfile%" /y
 
 
 
@@ -679,7 +679,7 @@ lib "%libfile%" /remove:d:\os\obj\x86fre\minkernel\crts\ucrt\src\appcrt\dll\mt\.
 ::lib "%libfile%" /remove:d:\os\obj\x86fre\minkernel\crts\ucrt\src\appcrt\dll\mt\..\..\tran\mt\objfre\i386\fminf.obj
 ::lib "%libfile%" /remove:d:\os\obj\x86fre\minkernel\crts\ucrt\src\appcrt\dll\mt\..\..\tran\mt\objfre\i386\fminl.obj
 ::lib "%libfile%" /remove:d:\os\obj\x86fre\minkernel\crts\ucrt\src\appcrt\dll\mt\..\..\tran\mt\objfre\i386\fpexcept.obj
-lib "%libfile%" /remove:d:\os\obj\x86fre\minkernel\crts\ucrt\src\appcrt\dll\mt\..\..\tran\mt\objfre\i386\frexp.obj
+::lib "%libfile%" /remove:d:\os\obj\x86fre\minkernel\crts\ucrt\src\appcrt\dll\mt\..\..\tran\mt\objfre\i386\frexp.obj
 lib "%libfile%" /remove:d:\os\obj\x86fre\minkernel\crts\ucrt\src\appcrt\dll\mt\..\..\tran\mt\objfre\i386\ftol.obj
 lib "%libfile%" /remove:d:\os\obj\x86fre\minkernel\crts\ucrt\src\appcrt\dll\mt\..\..\tran\mt\objfre\i386\genexcep.obj
 ::lib "%libfile%" /remove:d:\os\obj\x86fre\minkernel\crts\ucrt\src\appcrt\dll\mt\..\..\tran\mt\objfre\i386\ilogb.obj

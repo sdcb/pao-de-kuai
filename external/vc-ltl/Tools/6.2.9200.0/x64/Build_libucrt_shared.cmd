@@ -11,7 +11,7 @@ for /f "tokens=*" %%i in ('"%BuiltInVsWhereExe%" -latest -prerelease -property i
 
 @call "%LatestVisualStudioRoot%\VC\Auxiliary\Build\vcvars32.bat"
 
-copy "%WindowsSdkDir%Lib\10.0.19041.0\ucrt\x64\libucrt.lib" "%libfile%" /y
+copy "%WindowsSdkDir%Lib\%WindowsSDKLibVersion%ucrt\x64\libucrt.lib" "%libfile%" /y
 
 
 lib "%libfile%" /remove:d:\os\obj\amd64fre\minkernel\crts\ucrt\src\appcrt\dll\mt\..\..\..\desktopcrt\conio\mt\objfre\amd64\cgets.obj
