@@ -363,6 +363,8 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     if (seed == 0) {
         seed = static_cast<unsigned>(std::time(nullptr));
     }
+    const std::optional<rules::PlayerId> requestedLeader = nextRoundLeader_;
+    nextRoundLeader_.reset();
     playerName_ = playerName.empty() ? "\xE6\x9D\x8E\xE5\xA7\x90" : playerName;
     players_[0] = PlayerState{playerName_, {}, false};
     players_[1] = PlayerState{"AI1", {}, false};
@@ -389,6 +391,7 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     toast_ = "新一局开始";
     startedAt_ = stats::NowTimeText();
     lastRoundRecord_ = {};
+    events_.clear();
 
     rules::Cards deck = rules_.CreateDeck();
     rules::Shuffle(deck, seed);
@@ -399,10 +402,15 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     for (const PlayerState& player : players_) {
         hands.push_back(player.hand);
     }
-    currentPlayer_ = rules::PlayerFromIndex(rules::FindFirstPlayerBySpadeThree(hands));
+    currentPlayer_ = requestedLeader.value_or(rules::PlayerFromIndex(rules::FindFirstPlayerBySpadeThree(hands)));
     lastMovePlayer_ = currentPlayer_;
     aiDelay_ = NextThinkDelay();
-    AddEvent(GameEvent{GameEventType::RoundStarted, currentPlayer_, "黑桃 3 玩家先出", {}});
+    AddEvent(GameEvent{
+        GameEventType::RoundStarted,
+        currentPlayer_,
+        requestedLeader ? "上局赢家先出" : "黑桃 3 玩家先出",
+        {}
+    });
 }
 
 void GameState::Update(float dt) {
@@ -1267,6 +1275,7 @@ bool GameState::Pass(rules::PlayerId player) {
 
 void GameState::FinishRound(rules::PlayerId winner) {
     roundOver_ = true;
+    nextRoundLeader_ = winner;
     rules::RoundScoreInput input;
     input.winner = winner;
     input.bombs = bombs_;

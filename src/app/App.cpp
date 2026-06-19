@@ -123,6 +123,15 @@ void App::StartGame(bool mock) {
     }
 }
 
+void App::RestartCurrentGame() {
+    if (auto* gameScene = dynamic_cast<scenes::GameScene*>(sceneManager_.Current())) {
+        ClearOverlays();
+        gameScene->StartNextRound();
+        return;
+    }
+    StartGame();
+}
+
 void App::ShowStats() {
     ChangeScene(std::make_unique<scenes::StatsScene>(*this));
 }

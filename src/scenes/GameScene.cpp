@@ -92,6 +92,38 @@ void GameScene::OnEnter() {
     if (!app_.CardAtlas().Loaded()) {
         app_.LoadGameResources();
     }
+    InitializeExternalAi();
+    todayScores_ = stats::StatStore().SummarizeDay(stats::TodayDateKey()).scores;
+    StartNextRound();
+}
+
+void GameScene::StartNextRound() {
+    game_.StartNewRound(app_.Settings().playerName, mock_ ? 20260606u : 0u);
+    recordedRound_ = false;
+    roundResultPending_ = false;
+    for (int i = 0; i < 3; ++i) {
+        handsBeforeSort_[i] = game_.Players()[i].hand;
+    }
+    handsSorted_ = false;
+    dealElapsed_ = 0.0f;
+    sortAnimation_ = 0.0f;
+    playAnimation_ = 0.0f;
+    bombAnimation_ = 0.0f;
+    roundResultDelay_ = 0.0f;
+    dealSoundCount_ = 0;
+    dragSelecting_ = false;
+    dragMoved_ = false;
+    hoverCard_ = -1;
+    backButton_.hover = false;
+    dragStartCard_ = -1;
+    dragPath_.clear();
+    lastAnimatedPlayer_ = rules::PlayerId::Player;
+    actionButtonsDirty_ = true;
+    lastInteractionReady_ = InteractionReady();
+    UpdateActionButtons();
+}
+
+void GameScene::InitializeExternalAi() {
     if (!mock_ && !app_.ViewerMode()) {
         std::map<rules::PlayerId, stats::AiProviderSettings> remotePlayers;
         auto addRemotePlayer = [&](rules::PlayerId player, const std::string& providerName) {
@@ -109,29 +141,6 @@ void GameScene::OnEnter() {
             game_.SetExternalAiController(std::make_shared<ai::LlmAiController>(std::move(remotePlayers)));
         }
     }
-    game_.StartNewRound(app_.Settings().playerName, mock_ ? 20260606u : 0u);
-    recordedRound_ = false;
-    roundResultPending_ = false;
-    todayScores_ = stats::StatStore().SummarizeDay(stats::TodayDateKey()).scores;
-    for (int i = 0; i < 3; ++i) {
-        handsBeforeSort_[i] = game_.Players()[i].hand;
-    }
-    handsSorted_ = false;
-    dealElapsed_ = 0.0f;
-    sortAnimation_ = 0.0f;
-    playAnimation_ = 0.0f;
-    bombAnimation_ = 0.0f;
-    roundResultDelay_ = 0.0f;
-    dealSoundCount_ = 0;
-    dragSelecting_ = false;
-    dragMoved_ = false;
-    backButton_.hover = false;
-    dragStartCard_ = -1;
-    dragPath_.clear();
-    lastAnimatedPlayer_ = rules::PlayerId::Player;
-    actionButtonsDirty_ = true;
-    lastInteractionReady_ = InteractionReady();
-    UpdateActionButtons();
 }
 
 void GameScene::Update(float dt) {

@@ -146,6 +146,7 @@ private:
     rules::PlayerId currentPlayer_{rules::PlayerId::Player};
     rules::PlayerId lastMovePlayer_{rules::PlayerId::Player};
     std::optional<rules::HandPattern> lastPattern_;
+    std::optional<rules::PlayerId> nextRoundLeader_;
     rules::Cards lastCards_;
     rules::Cards playedCards_;
     std::array<std::optional<PassObservation>, 3> passObservations_{};

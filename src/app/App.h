@@ -29,6 +29,7 @@ public:
 
     void ShowStart();
     void StartGame(bool mock = false);
+    void RestartCurrentGame();
     void ShowStats();
     void ShowSettings();
     void ShowHelp();

@@ -30,6 +30,23 @@ bool HasTalkContaining(const game::GameState& state, const std::string& text) {
     return false;
 }
 
+bool HasCard(const rules::Cards& cards, rules::Card card) {
+    return std::find_if(cards.begin(), cards.end(), [card](rules::Card owned) {
+        return owned.rank == card.rank && owned.suit == card.suit;
+    }) != cards.end();
+}
+
+unsigned SeedWhereFirstLeaderIsNot(rules::PlayerId player) {
+    for (unsigned seed = 1; seed < 300; ++seed) {
+        game::GameState state;
+        state.StartNewRound("Tester", seed);
+        if (state.CurrentPlayer() != player) {
+            return seed;
+        }
+    }
+    return 0;
+}
+
 class MockExternalAiController final : public game::ExternalAiController {
 public:
     explicit MockExternalAiController(
@@ -91,6 +108,67 @@ TEST_CASE("game state can finish a full three player autoplay round") {
            record.winner == rules::PlayerId::Ai2));
     CHECK(record.remainingCards[rules::PlayerIndex(record.winner)] == 0);
     CHECK(record.scores[0] + record.scores[1] + record.scores[2] == 0);
+}
+
+TEST_CASE("first round starts from the spade three holder") {
+    game::GameState state;
+    state.StartNewRound("Tester", 20260606u);
+
+    const rules::PlayerId starter = state.CurrentPlayer();
+    CHECK(HasCard(state.Players()[rules::PlayerIndex(starter)].hand, C(rules::Rank::Three, rules::Suit::Spades)));
+    REQUIRE_FALSE(state.Events().empty());
+    CHECK(state.Events().front().type == game::GameEventType::RoundStarted);
+    CHECK(state.Events().front().player == starter);
+    CHECK(state.Events().front().message == "黑桃 3 玩家先出");
+}
+
+TEST_CASE("next round starts from previous winner and later winner overrides it") {
+    const unsigned nonPlayerSeed = SeedWhereFirstLeaderIsNot(rules::PlayerId::Player);
+    const unsigned nonAi1Seed = SeedWhereFirstLeaderIsNot(rules::PlayerId::Ai1);
+    REQUIRE(nonPlayerSeed != 0);
+    REQUIRE(nonAi1Seed != 0);
+
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Four)},
+            rules::Cards{C(rules::Rank::Five)}
+        },
+        rules::PlayerId::Player,
+        std::nullopt,
+        rules::PlayerId::Player);
+
+    state.TogglePlayerCard(0);
+    REQUIRE(state.PlaySelected());
+    REQUIRE(state.IsRoundOver());
+    CHECK(state.LastRoundRecord().winner == rules::PlayerId::Player);
+
+    state.StartNewRound("Tester", nonPlayerSeed);
+    CHECK(state.CurrentPlayer() == rules::PlayerId::Player);
+    REQUIRE_FALSE(state.Events().empty());
+    CHECK(state.Events().back().type == game::GameEventType::RoundStarted);
+    CHECK(state.Events().back().message == "上局赢家先出");
+
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Four)},
+            rules::Cards{C(rules::Rank::Five)}
+        },
+        rules::PlayerId::Ai1,
+        std::nullopt,
+        rules::PlayerId::Ai1);
+
+    state.Update(1.0f);
+    REQUIRE(state.IsRoundOver());
+    CHECK(state.LastRoundRecord().winner == rules::PlayerId::Ai1);
+
+    state.StartNewRound("Tester", nonAi1Seed);
+    CHECK(state.CurrentPlayer() == rules::PlayerId::Ai1);
+    REQUIRE_FALSE(state.Events().empty());
+    CHECK(state.Events().back().type == game::GameEventType::RoundStarted);
+    CHECK(state.Events().back().message == "上局赢家先出");
 }
 
 TEST_CASE("turn order is counterclockwise so the left-hand player is upstream") {

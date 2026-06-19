@@ -17,6 +17,7 @@ class GameScene final : public core::Scene {
 public:
     explicit GameScene(app::App& app, bool mock = false);
     void OnEnter() override;
+    void StartNextRound();
     void Update(float dt) override;
     void Render(graphics::RenderContext& context) override;
     bool OnMouseMove(float x, float y) override;
@@ -35,6 +36,7 @@ private:
     core::Rect CardRectFor(int index, int count) const;
     core::Rect AiCardRectFor(int index, int count, const core::Rect& area) const;
     void LayoutActionButtons();
+    void InitializeExternalAi();
     void ConsumeEvents();
     void UpdateRoundResultDelay(float dt);
     void ShowRoundResultOverlay();

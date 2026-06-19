@@ -59,7 +59,7 @@ bool RoundResultOverlay::OnMouseDown(float x, float y) {
     const int hit = scenes::ButtonGroup::Hit(buttons_, x, y);
     if (hit == 0) {
         app_.Audio().Play(audio::SoundId::Confirm);
-        app_.StartGame();
+        app_.RestartCurrentGame();
     } else if (hit == 1) {
         app_.Audio().Play(audio::SoundId::Cancel);
         app_.ShowStart();
