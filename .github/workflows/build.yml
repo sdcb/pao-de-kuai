@@ -122,3 +122,17 @@ jobs:
           name: pao-de-kuai-${{ matrix.build_dir }}
           path: ${{ matrix.build_dir }}/pao_de_kuai.exe
           if-no-files-found: error
+
+      - name: Upload x64 VC-LTL app to MinIO
+        if: ${{ matrix.name == 'x64 VC-LTL' }}
+        shell: pwsh
+        run: |
+          aws s3 cp "${{ matrix.build_dir }}/pao_de_kuai.exe" "s3://${{ vars.MINIO_BUCKET }}/2026/pao-de-kuai.exe" `
+            --endpoint-url "${{ secrets.MINIO_HOST }}" `
+            --content-type "application/vnd.microsoft.portable-executable" `
+            --no-progress
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_EC2_METADATA_DISABLED: "true"
