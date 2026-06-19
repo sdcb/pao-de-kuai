@@ -93,6 +93,7 @@ public:
     bool SelectByHoverPattern(int handIndex);
     bool SelectBestPatternFromDraggedCards(const std::vector<int>& handIndices);
     void SetExternalAiController(std::shared_ptr<ExternalAiController> controller);
+    void SetLocalAiStrategy(rules::PlayerId player, std::unique_ptr<AiStrategy> strategy);
 
     void TestSetRound(
         const std::array<rules::Cards, 3>& hands,

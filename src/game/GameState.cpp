@@ -923,6 +923,10 @@ void GameState::SetExternalAiController(std::shared_ptr<ExternalAiController> co
     externalAiPending_ = false;
 }
 
+void GameState::SetLocalAiStrategy(rules::PlayerId player, std::unique_ptr<AiStrategy> strategy) {
+    aiPlayers_[Index(player)].SetStrategy(std::move(strategy));
+}
+
 void GameState::PlayLocalAiTurn(rules::PlayerId player) {
     const TurnSnapshot before = Snapshot();
     const auto legal = LegalMoves(player);

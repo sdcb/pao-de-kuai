@@ -1,8 +1,10 @@
 #include <doctest/doctest.h>
 
 #include "TestHelpers.h"
+#include "TestWeakAiStrategy.h"
 #include "game/GameState.h"
 
+#include <cstdlib>
 #include <memory>
 
 using namespace pdk;
@@ -45,6 +47,31 @@ unsigned SeedWhereFirstLeaderIsNot(rules::PlayerId player) {
         }
     }
     return 0;
+}
+
+bool RunAiFairnessTest() {
+    const char* value = std::getenv("PDK_RUN_AI_FAIRNESS_TEST");
+    return value != nullptr && value[0] != '\0' && value[0] != '0';
+}
+
+std::array<int, 3> RunAutoplayRounds(game::GameState& state, unsigned seedBase, int roundCount) {
+    constexpr int maxUpdatesPerRound = 500;
+    std::array<int, 3> wins{0, 0, 0};
+    state.ToggleAutoplay();
+
+    for (int round = 0; round < roundCount; ++round) {
+        state.StartNewRound("Tester", seedBase + static_cast<unsigned>(round));
+
+        for (int update = 0; update < maxUpdatesPerRound && !state.IsRoundOver(); ++update) {
+            state.Update(1.0f);
+            state.ClearEvents();
+        }
+
+        REQUIRE(state.IsRoundOver());
+        ++wins[rules::PlayerIndex(state.LastRoundRecord().winner)];
+    }
+
+    return wins;
 }
 
 class MockExternalAiController final : public game::ExternalAiController {
@@ -108,6 +135,45 @@ TEST_CASE("game state can finish a full three player autoplay round") {
            record.winner == rules::PlayerId::Ai2));
     CHECK(record.remainingCards[rules::PlayerIndex(record.winner)] == 0);
     CHECK(record.scores[0] + record.scores[1] + record.scores[2] == 0);
+}
+
+TEST_CASE("disabled ai fairness smoke over 100 all-basic autoplay rounds" * doctest::skip(!RunAiFairnessTest())) {
+    constexpr int roundCount = 100;
+    constexpr int minExpectedWins = 20;
+    constexpr int maxExpectedWins = 47;
+
+    game::GameState state;
+    const std::array<int, 3> wins = RunAutoplayRounds(state, 20260619u, roundCount);
+
+    INFO("All-basic wins: Player=" << wins[0] << ", AI1=" << wins[1] << ", AI2=" << wins[2]);
+    CHECK(wins[0] + wins[1] + wins[2] == roundCount);
+    CHECK(wins[0] >= minExpectedWins);
+    CHECK(wins[0] <= maxExpectedWins);
+    CHECK(wins[1] >= minExpectedWins);
+    CHECK(wins[1] <= maxExpectedWins);
+    CHECK(wins[2] >= minExpectedWins);
+    CHECK(wins[2] <= maxExpectedWins);
+}
+
+TEST_CASE("disabled ai fairness smoke confirms injected weak AI2 wins less" * doctest::skip(!RunAiFairnessTest())) {
+    constexpr int roundCount = 100;
+    constexpr int maxWeakAiWins = 24;
+
+    game::GameState basicState;
+    const std::array<int, 3> basicWins = RunAutoplayRounds(basicState, 20260619u, roundCount);
+
+    game::GameState weakState;
+    weakState.SetLocalAiStrategy(rules::PlayerId::Ai2, std::make_unique<tests::TestWeakAiStrategy>());
+    const std::array<int, 3> weakWins = RunAutoplayRounds(weakState, 20260619u, roundCount);
+
+    INFO("All-basic wins: Player=" << basicWins[0] << ", AI1=" << basicWins[1] << ", AI2=" << basicWins[2]
+        << "; weak-AI2 wins: Player=" << weakWins[0] << ", AI1=" << weakWins[1] << ", AI2=" << weakWins[2]);
+    CHECK(basicWins[0] + basicWins[1] + basicWins[2] == roundCount);
+    CHECK(weakWins[0] + weakWins[1] + weakWins[2] == roundCount);
+    CHECK(weakWins[2] < basicWins[2]);
+    CHECK(weakWins[2] <= maxWeakAiWins);
+    CHECK(weakWins[2] < weakWins[0]);
+    CHECK(weakWins[2] < weakWins[1]);
 }
 
 TEST_CASE("first round starts from the spade three holder") {

@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "TestHelpers.h"
+#include "TestWeakAiStrategy.h"
 #include "game/AiStrategy.h"
 
 using namespace pdk;
@@ -266,4 +267,37 @@ TEST_CASE("ai urgent lead can still use high singleton despite safe singleton ob
     CHECK_FALSE(choice.pass);
     CHECK(choice.pattern.type == rules::PatternType::Single);
     CHECK(choice.pattern.mainRank == rules::Rank::Ace);
+}
+
+TEST_CASE("test weak ai lead ignores one-card defense and plays the lowest singleton") {
+    tests::TestWeakAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Three),
+        C(rules::Rank::Eight),
+        C(rules::Rank::Ace)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size()), 1, 1));
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::Three);
+}
+
+TEST_CASE("test weak ai follow breaks a pair to use the lowest beating singleton") {
+    tests::TestWeakAiStrategy ai;
+    const auto previous = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const rules::Cards hand{
+        C(rules::Rank::Five),
+        C(rules::Rank::Five, rules::Suit::Hearts),
+        C(rules::Rank::Six)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, FollowContext(previous, static_cast<int>(hand.size())));
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::Five);
+    CHECK(CountRank(choice.cards, rules::Rank::Five) == 1);
+    CHECK(CountRank(choice.cards, rules::Rank::Six) == 0);
 }
