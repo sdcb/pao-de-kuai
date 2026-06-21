@@ -301,3 +301,48 @@ TEST_CASE("test weak ai follow breaks a pair to use the lowest beating singleton
     CHECK(CountRank(choice.cards, rules::Rank::Five) == 1);
     CHECK(CountRank(choice.cards, rules::Rank::Six) == 0);
 }
+
+TEST_CASE("strong ai uses proven pass information for a safe singleton lead") {
+    game::StrongAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Queen),
+        C(rules::Rank::King),
+        C(rules::Rank::Ace),
+        C(rules::Rank::Two)
+    };
+    game::AiContext context = LeadContext(static_cast<int>(hand.size()), 8, 8);
+    context.currentPlayerIndex = 1;
+    context.remainingCards = {8, static_cast<int>(hand.size()), 8};
+    context.passObservations[0] = game::PassObservation{
+        rules::HandPattern{rules::PatternType::Single, rules::Rank::Queen, 1},
+        8
+    };
+    context.passObservations[2] = game::PassObservation{
+        rules::HandPattern{rules::PatternType::Single, rules::Rank::Queen, 1},
+        8
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::Queen);
+}
+
+TEST_CASE("strong ai urgent follow uses a high singleton blocker") {
+    game::StrongAiStrategy ai;
+    const auto previous = rules::IdentifyPattern({C(rules::Rank::Seven)}).pattern;
+    rules::Cards hand{
+        C(rules::Rank::Eight),
+        C(rules::Rank::King)
+    };
+    game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
+    context.nextPlayerRemainingCards = 1;
+    context.minOpponentRemainingCards = 1;
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::King);
+}

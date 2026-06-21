@@ -3,6 +3,30 @@
 #include <cstdint>
 
 namespace pdk::rules {
+namespace {
+
+int CountMaskBits(std::uint64_t mask) {
+    int count = 0;
+    while (mask != 0) {
+        mask &= mask - 1;
+        count++;
+    }
+    return count;
+}
+
+bool PossibleFollowCardCount(int selectedCount, const HandPattern& previous) {
+    if (selectedCount == 4) {
+        return true;
+    }
+    if (previous.type == PatternType::Plane) {
+        const int minCards = previous.groupCount * 4;
+        const int maxCards = previous.groupCount * 5;
+        return selectedCount >= minCards && selectedCount <= maxCards;
+    }
+    return selectedCount == previous.cardCount;
+}
+
+} // namespace
 
 MoveValidation ValidateLead(const Cards& cards, int handSizeBeforePlay) {
     const auto result = IdentifyPattern(cards, handSizeBeforePlay, true);
@@ -57,6 +81,11 @@ bool HasAnyFollowMove(const Cards& hand, const HandPattern& previous, int handSi
     const int sourceHandSize = handSizeBeforePlay >= 0 ? handSizeBeforePlay : n;
     const std::uint64_t limit = 1ull << n;
     for (std::uint64_t mask = 1; mask < limit; ++mask) {
+        const int selectedCount = CountMaskBits(mask);
+        if (!PossibleFollowCardCount(selectedCount, previous)) {
+            continue;
+        }
+
         Cards cards;
         cards.reserve(n);
         for (int i = 0; i < n; ++i) {

@@ -30,11 +30,16 @@ struct AiContext {
     rules::HandPattern previous;
     int ownRemainingCards{0};
     int currentPlayerIndex{0};
+    int lastMovePlayerIndex{0};
+    int trickLeaderIndex{0};
+    int roundLeaderIndex{0};
+    int currentTrickPassCount{0};
     int nextPlayerRemainingCards{0};
     int minOpponentRemainingCards{0};
     std::array<int, 3> remainingCards{0, 0, 0};
     rules::Cards playedCards;
     std::array<std::optional<PassObservation>, 3> passObservations{};
+    std::array<std::vector<PassObservation>, 3> passHistory{};
 };
 
 class AiStrategy {
@@ -47,6 +52,11 @@ class BasicAiStrategy final : public AiStrategy {
 public:
     AiMoveChoice ChooseMove(const rules::Cards& hand, const AiContext& context) override;
     std::vector<AiMoveChoice> RecommendMoves(const rules::Cards& hand, const AiContext& context, int limit = 3) const;
+};
+
+class StrongAiStrategy final : public AiStrategy {
+public:
+    AiMoveChoice ChooseMove(const rules::Cards& hand, const AiContext& context) override;
 };
 
 } // namespace pdk::game

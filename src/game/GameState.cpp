@@ -375,6 +375,9 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     lastCards_.clear();
     playedCards_.clear();
     passObservations_.fill(std::nullopt);
+    for (auto& history : passHistory_) {
+        history.clear();
+    }
     lastPattern_.reset();
     passCount_ = 0;
     roundOver_ = false;
@@ -404,6 +407,8 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     }
     currentPlayer_ = requestedLeader.value_or(rules::PlayerFromIndex(rules::FindFirstPlayerBySpadeThree(hands)));
     lastMovePlayer_ = currentPlayer_;
+    trickLeader_ = currentPlayer_;
+    roundLeader_ = currentPlayer_;
     aiDelay_ = NextThinkDelay();
     AddEvent(GameEvent{
         GameEventType::RoundStarted,
@@ -749,10 +754,15 @@ void GameState::TestSetRound(
     players_[2] = PlayerState{"AI2", hands[2], true};
     currentPlayer_ = currentPlayer;
     lastMovePlayer_ = lastMovePlayer;
+    trickLeader_ = previousPattern ? lastMovePlayer : currentPlayer;
+    roundLeader_ = currentPlayer;
     lastPattern_ = previousPattern;
     lastCards_.clear();
     playedCards_.clear();
     passObservations_.fill(std::nullopt);
+    for (auto& history : passHistory_) {
+        history.clear();
+    }
     passCount_ = 0;
     roundOver_ = false;
     autoplay_ = false;
@@ -786,6 +796,10 @@ AiContext GameState::MakeAiContext(rules::PlayerId player) const {
     const int currentIndex = Index(player);
     context.ownRemainingCards = static_cast<int>(players_[currentIndex].hand.size());
     context.currentPlayerIndex = currentIndex;
+    context.lastMovePlayerIndex = Index(lastMovePlayer_);
+    context.trickLeaderIndex = Index(CurrentPlayerLeads() ? currentPlayer_ : trickLeader_);
+    context.roundLeaderIndex = Index(roundLeader_);
+    context.currentTrickPassCount = passCount_;
     for (int i = 0; i < 3; ++i) {
         context.remainingCards[i] = static_cast<int>(players_[i].hand.size());
     }
@@ -798,6 +812,7 @@ AiContext GameState::MakeAiContext(rules::PlayerId player) const {
     }
     context.playedCards = playedCards_;
     context.passObservations = passObservations_;
+    context.passHistory = passHistory_;
     return context;
 }
 
@@ -1179,6 +1194,7 @@ void GameState::AdvanceTurn() {
 void GameState::RecordPassObservation(rules::PlayerId player, const rules::HandPattern& pattern) {
     const int index = Index(player);
     PassObservation observation{pattern, static_cast<int>(players_[index].hand.size())};
+    passHistory_[static_cast<std::size_t>(index)].push_back(observation);
     std::optional<PassObservation>& existing = passObservations_[static_cast<std::size_t>(index)];
 
     if (existing && existing->pattern.type == rules::PatternType::Single && pattern.type == rules::PatternType::Single) {
@@ -1204,6 +1220,9 @@ void GameState::PlayCards(rules::PlayerId player, const rules::Cards& cards, con
     players_[Index(player)].hasPlayedCards = true;
     playedCards_.insert(playedCards_.end(), cards.begin(), cards.end());
     lastCards_ = cards;
+    if (CurrentPlayerLeads()) {
+        trickLeader_ = player;
+    }
     lastPattern_ = pattern;
     lastMovePlayer_ = player;
     passCount_ = 0;
@@ -1268,6 +1287,7 @@ bool GameState::Pass(rules::PlayerId player) {
         currentPlayer_ = lastMovePlayer_;
         lastPattern_.reset();
         lastCards_.clear();
+        trickLeader_ = currentPlayer_;
         passCount_ = 0;
         toast_ = PlayerDisplayName(players_, currentPlayer_) + " 重新领出";
         return true;

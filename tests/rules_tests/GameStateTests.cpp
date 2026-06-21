@@ -1,10 +1,12 @@
 #include <doctest/doctest.h>
 
 #include "TestHelpers.h"
-#include "TestWeakAiStrategy.h"
+#include "game/AiStrategy.h"
 #include "game/GameState.h"
 
+#include <algorithm>
 #include <cstdlib>
+#include <iostream>
 #include <memory>
 
 using namespace pdk;
@@ -54,24 +56,400 @@ bool RunAiFairnessTest() {
     return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 
-std::array<int, 3> RunAutoplayRounds(game::GameState& state, unsigned seedBase, int roundCount) {
-    constexpr int maxUpdatesPerRound = 500;
-    std::array<int, 3> wins{0, 0, 0};
-    state.ToggleAutoplay();
+int AiFairnessRoundCount() {
+    const char* value = std::getenv("PDK_AI_FAIRNESS_ROUNDS");
+    if (value == nullptr || value[0] == '\0') {
+        return 1000;
+    }
+    const int parsed = std::atoi(value);
+    return parsed > 0 ? parsed : 1000;
+}
 
-    for (int round = 0; round < roundCount; ++round) {
-        state.StartNewRound("Tester", seedBase + static_cast<unsigned>(round));
+bool RunContinuousFairnessRounds() {
+    const char* value = std::getenv("PDK_AI_FAIRNESS_CONTINUOUS");
+    return value == nullptr || value[0] == '\0' || value[0] != '0';
+}
 
-        for (int update = 0; update < maxUpdatesPerRound && !state.IsRoundOver(); ++update) {
-            state.Update(1.0f);
-            state.ClearEvents();
+bool RunStrongFairnessStrategy() {
+    const char* value = std::getenv("PDK_AI_FAIRNESS_STRATEGY");
+    return value == nullptr || std::string(value) != "basic";
+}
+
+bool RunAiCompareDiagnostics() {
+    const char* value = std::getenv("PDK_AI_COMPARE_BASIC");
+    return value != nullptr && value[0] != '\0' && value[0] != '0';
+}
+
+bool ListAi1LeaderLosses() {
+    const char* value = std::getenv("PDK_AI_LIST_A1_LEADER_LOSSES");
+    return value != nullptr && value[0] != '\0' && value[0] != '0';
+}
+
+std::optional<rules::PlayerId> ListLeaderLossesFor() {
+    const char* value = std::getenv("PDK_AI_LIST_LEADER_LOSSES");
+    if (value == nullptr || value[0] == '\0') {
+        return std::nullopt;
+    }
+    const std::string name(value);
+    if (name == "P" || name == "Player") {
+        return rules::PlayerId::Player;
+    }
+    if (name == "A1" || name == "Ai1") {
+        return rules::PlayerId::Ai1;
+    }
+    if (name == "A2" || name == "Ai2") {
+        return rules::PlayerId::Ai2;
+    }
+    return std::nullopt;
+}
+
+int ListAi1LeaderLossesFromRound() {
+    const char* value = std::getenv("PDK_AI_LIST_A1_LEADER_LOSSES_FROM");
+    if (value == nullptr || value[0] == '\0') {
+        return 0;
+    }
+    const int parsed = std::atoi(value);
+    return parsed > 0 ? parsed : 0;
+}
+
+unsigned AiCompareTraceSeed() {
+    const char* value = std::getenv("PDK_AI_COMPARE_TRACE_SEED");
+    if (value == nullptr || value[0] == '\0') {
+        return 0;
+    }
+    const int parsed = std::atoi(value);
+    return parsed > 0 ? static_cast<unsigned>(parsed) : 0u;
+}
+
+unsigned AiCompareSeedBase() {
+    const char* value = std::getenv("PDK_AI_COMPARE_SEED_BASE");
+    if (value == nullptr || value[0] == '\0') {
+        return 20260619u;
+    }
+    const int parsed = std::atoi(value);
+    return parsed > 0 ? static_cast<unsigned>(parsed) : 20260619u;
+}
+
+std::optional<rules::PlayerId> AiCompareForcedLeader() {
+    const char* value = std::getenv("PDK_AI_COMPARE_FORCE_LEADER");
+    if (value == nullptr || value[0] == '\0') {
+        return std::nullopt;
+    }
+    const std::string name(value);
+    if (name == "P" || name == "Player") {
+        return rules::PlayerId::Player;
+    }
+    if (name == "A1" || name == "Ai1") {
+        return rules::PlayerId::Ai1;
+    }
+    if (name == "A2" || name == "Ai2") {
+        return rules::PlayerId::Ai2;
+    }
+    return std::nullopt;
+}
+
+int AiFairnessTraceRound() {
+    const char* value = std::getenv("PDK_AI_FAIRNESS_TRACE_ROUND");
+    if (value == nullptr || value[0] == '\0') {
+        return -1;
+    }
+    const int parsed = std::atoi(value);
+    return parsed >= 0 ? parsed : -1;
+}
+
+rules::PlayerId NextSimPlayer(rules::PlayerId player) {
+    return rules::PlayerFromIndex((rules::PlayerIndex(player) + 2) % 3);
+}
+
+void RecordSimPassObservation(
+    std::array<std::optional<game::PassObservation>, 3>& observations,
+    std::array<std::vector<game::PassObservation>, 3>& history,
+    rules::PlayerId player,
+    const rules::HandPattern& pattern,
+    int remainingCards) {
+    std::optional<game::PassObservation>& existing = observations[static_cast<std::size_t>(rules::PlayerIndex(player))];
+    game::PassObservation observation{pattern, remainingCards};
+    history[static_cast<std::size_t>(rules::PlayerIndex(player))].push_back(observation);
+
+    if (existing && existing->pattern.type == rules::PatternType::Single && pattern.type == rules::PatternType::Single) {
+        if (rules::RankValue(pattern.mainRank) < rules::RankValue(existing->pattern.mainRank)) {
+            existing = observation;
         }
+        return;
+    }
+    if (existing && existing->pattern.type == rules::PatternType::Single && pattern.type != rules::PatternType::Single) {
+        return;
+    }
+    existing = observation;
+}
 
-        REQUIRE(state.IsRoundOver());
-        ++wins[rules::PlayerIndex(state.LastRoundRecord().winner)];
+void RemoveSimCards(rules::Cards& hand, const rules::Cards& cards) {
+    for (rules::Card card : cards) {
+        const auto it = std::find_if(hand.begin(), hand.end(), [card](rules::Card owned) {
+            return owned.rank == card.rank && owned.suit == card.suit;
+        });
+        REQUIRE(it != hand.end());
+        hand.erase(it);
+    }
+}
+
+game::AiContext MakeSimContext(
+    const std::array<rules::Cards, 3>& hands,
+    rules::PlayerId current,
+    const std::optional<rules::HandPattern>& lastPattern,
+    rules::PlayerId lastMovePlayer,
+    rules::PlayerId trickLeader,
+    rules::PlayerId roundLeader,
+    int passCount,
+    const rules::Cards& playedCards,
+    const std::array<std::optional<game::PassObservation>, 3>& observations,
+    const std::array<std::vector<game::PassObservation>, 3>& history) {
+    const int currentIndex = rules::PlayerIndex(current);
+    game::AiContext context;
+    context.leading = !lastPattern.has_value();
+    if (lastPattern) {
+        context.previous = *lastPattern;
+    }
+    context.ownRemainingCards = static_cast<int>(hands[static_cast<std::size_t>(currentIndex)].size());
+    context.currentPlayerIndex = currentIndex;
+    context.lastMovePlayerIndex = rules::PlayerIndex(lastMovePlayer);
+    context.trickLeaderIndex = rules::PlayerIndex(lastPattern ? trickLeader : current);
+    context.roundLeaderIndex = rules::PlayerIndex(roundLeader);
+    context.currentTrickPassCount = passCount;
+    for (int i = 0; i < 3; ++i) {
+        context.remainingCards[static_cast<std::size_t>(i)] = static_cast<int>(hands[static_cast<std::size_t>(i)].size());
+    }
+    context.nextPlayerRemainingCards =
+        static_cast<int>(hands[static_cast<std::size_t>(rules::PlayerIndex(NextSimPlayer(current)))].size());
+    context.minOpponentRemainingCards = 100;
+    for (int i = 0; i < 3; ++i) {
+        if (i != currentIndex) {
+            context.minOpponentRemainingCards = std::min(context.minOpponentRemainingCards, context.remainingCards[i]);
+        }
+    }
+    context.playedCards = playedCards;
+    context.passObservations = observations;
+    context.passHistory = history;
+    return context;
+}
+
+struct SimRoundResult {
+    rules::PlayerId winner{rules::PlayerId::Player};
+    rules::PlayerId leader{rules::PlayerId::Player};
+};
+
+std::string SimPlayerName(rules::PlayerId player) {
+    switch (player) {
+    case rules::PlayerId::Player: return "P";
+    case rules::PlayerId::Ai1: return "A1";
+    case rules::PlayerId::Ai2: return "A2";
+    }
+    return "?";
+}
+
+std::string SimMoveText(rules::PlayerId player, const game::AiMoveChoice& choice, int handSizeBefore) {
+    std::string text = SimPlayerName(player);
+    text += '[';
+    text += std::to_string(handSizeBefore);
+    text += "] ";
+    if (choice.pass) {
+        text += "pass";
+        return text;
+    }
+    text += rules::PatternName(choice.pattern.type);
+    text += ' ';
+    text += rules::RankName(choice.pattern.mainRank);
+    text += " cards=";
+    text += std::to_string(choice.cards.size());
+    text += " [";
+    for (std::size_t i = 0; i < choice.cards.size(); ++i) {
+        if (i != 0) {
+            text += ' ';
+        }
+        text += rules::RankName(choice.cards[i].rank);
+    }
+    text += ']';
+    return text;
+}
+
+std::string SimCardsText(const rules::Cards& cards) {
+    std::string text;
+    for (rules::Card card : cards) {
+        if (!text.empty()) {
+            text += ' ';
+        }
+        text += rules::RankName(card.rank);
+    }
+    return text;
+}
+
+SimRoundResult RunSimRound(
+    const std::array<game::AiStrategy*, 3>& strategies,
+    unsigned seed,
+    std::optional<rules::PlayerId> requestedLeader,
+    std::vector<std::string>* trace = nullptr) {
+    rules::Cards deck = rules::CreatePaoDeKuaiDeck();
+    rules::Shuffle(deck, seed);
+
+    std::array<rules::Cards, 3> hands;
+    for (std::size_t i = 0; i < deck.size(); ++i) {
+        hands[i % 3].push_back(deck[i]);
     }
 
-    return wins;
+    std::vector<rules::Cards> leaderHands{hands[0], hands[1], hands[2]};
+    rules::PlayerId current = requestedLeader.value_or(
+        rules::PlayerFromIndex(rules::FindFirstPlayerBySpadeThree(leaderHands)));
+    const rules::PlayerId leader = current;
+    rules::PlayerId lastMovePlayer = current;
+    rules::PlayerId trickLeader = current;
+    std::optional<rules::HandPattern> lastPattern;
+    rules::Cards playedCards;
+    std::array<std::optional<game::PassObservation>, 3> observations{};
+    std::array<std::vector<game::PassObservation>, 3> passHistory{};
+    int passCount = 0;
+
+    if (trace != nullptr) {
+        trace->push_back("initial P: " + SimCardsText(hands[0]));
+        trace->push_back("initial A1: " + SimCardsText(hands[1]));
+        trace->push_back("initial A2: " + SimCardsText(hands[2]));
+    }
+
+    for (int turn = 0; turn < 600; ++turn) {
+        const int currentIndex = rules::PlayerIndex(current);
+        game::AiMoveChoice choice = strategies[static_cast<std::size_t>(currentIndex)]->ChooseMove(
+            hands[static_cast<std::size_t>(currentIndex)],
+            MakeSimContext(hands, current, lastPattern, lastMovePlayer, trickLeader, leader, passCount, playedCards, observations, passHistory));
+        if (trace != nullptr) {
+            trace->push_back(SimMoveText(current, choice, static_cast<int>(hands[static_cast<std::size_t>(currentIndex)].size())));
+        }
+
+        if (choice.pass) {
+            REQUIRE(lastPattern.has_value());
+            CHECK_FALSE(rules::HasAnyFollowMove(
+                hands[static_cast<std::size_t>(currentIndex)],
+                *lastPattern,
+                static_cast<int>(hands[static_cast<std::size_t>(currentIndex)].size())));
+            passCount++;
+            RecordSimPassObservation(
+                observations,
+                passHistory,
+                current,
+                *lastPattern,
+                static_cast<int>(hands[static_cast<std::size_t>(currentIndex)].size()));
+            if (passCount >= 2) {
+                current = lastMovePlayer;
+                lastPattern.reset();
+                trickLeader = current;
+                passCount = 0;
+            } else {
+                current = NextSimPlayer(current);
+            }
+            continue;
+        }
+
+        const int handSizeBefore = static_cast<int>(hands[static_cast<std::size_t>(currentIndex)].size());
+        const auto validation = lastPattern
+            ? rules::ValidateFollow(choice.cards, *lastPattern, handSizeBefore)
+            : rules::ValidateLead(choice.cards, handSizeBefore);
+        REQUIRE(validation.ok);
+        if (!lastPattern) {
+            trickLeader = current;
+        }
+        RemoveSimCards(hands[static_cast<std::size_t>(currentIndex)], choice.cards);
+        playedCards.insert(playedCards.end(), choice.cards.begin(), choice.cards.end());
+        lastPattern = validation.pattern;
+        lastMovePlayer = current;
+        passCount = 0;
+
+        if (hands[static_cast<std::size_t>(currentIndex)].empty()) {
+            return SimRoundResult{current, leader};
+        }
+        current = NextSimPlayer(current);
+    }
+
+    FAIL("simulated round did not finish");
+    return SimRoundResult{rules::PlayerId::Player, leader};
+}
+
+struct SimSummary {
+    std::array<int, 3> wins{0, 0, 0};
+    std::array<int, 3> starts{0, 0, 0};
+    std::array<std::array<int, 3>, 3> winsByLeader{};
+    std::vector<std::array<int, 3>> bucketWins;
+    std::vector<std::array<int, 3>> bucketStarts;
+    std::vector<std::array<std::array<int, 3>, 3>> bucketWinsByLeader;
+};
+
+SimSummary RunAutoplayRounds(std::array<game::AiStrategy*, 3> strategies, unsigned seedBase, int roundCount) {
+    SimSummary summary;
+    std::optional<rules::PlayerId> nextLeader;
+    const bool continuous = RunContinuousFairnessRounds();
+    int listedAi1LeaderLosses = 0;
+    int listedLeaderLosses = 0;
+    const std::optional<rules::PlayerId> listedLeader = ListLeaderLossesFor();
+    const int listLossesFrom = ListAi1LeaderLossesFromRound();
+    const int traceRound = AiFairnessTraceRound();
+
+    for (int round = 0; round < roundCount; ++round) {
+        std::vector<std::string> trace;
+        std::vector<std::string>* tracePtr = round == traceRound ? &trace : nullptr;
+        const SimRoundResult result = RunSimRound(
+            strategies,
+            seedBase + static_cast<unsigned>(round),
+            continuous ? nextLeader : std::nullopt,
+            tracePtr);
+        const int winnerIndex = rules::PlayerIndex(result.winner);
+        const int leaderIndex = rules::PlayerIndex(result.leader);
+        if (round == traceRound) {
+            std::cout << "fairness trace round=" << round
+                << " seed=" << seedBase + static_cast<unsigned>(round)
+                << " leader=" << SimPlayerName(result.leader)
+                << " winner=" << SimPlayerName(result.winner) << "\n";
+            for (const std::string& line : trace) {
+                std::cout << "  " << line << "\n";
+            }
+        }
+        if (ListAi1LeaderLosses() &&
+            round >= listLossesFrom &&
+            result.leader == rules::PlayerId::Ai1 &&
+            result.winner != rules::PlayerId::Ai1 &&
+            listedAi1LeaderLosses < 24) {
+            std::cout << "AI1 leader loss round=" << round
+                << " seed=" << seedBase + static_cast<unsigned>(round)
+                << " winner=" << SimPlayerName(result.winner) << "\n";
+            listedAi1LeaderLosses++;
+        }
+        if (listedLeader &&
+            round >= listLossesFrom &&
+            result.leader == *listedLeader &&
+            result.winner != rules::PlayerId::Ai1 &&
+            listedLeaderLosses < 24) {
+            std::cout << "AI1 loss leader=" << SimPlayerName(*listedLeader)
+                << " round=" << round
+                << " seed=" << seedBase + static_cast<unsigned>(round)
+                << " winner=" << SimPlayerName(result.winner) << "\n";
+            listedLeaderLosses++;
+        }
+        ++summary.wins[static_cast<std::size_t>(winnerIndex)];
+        ++summary.starts[static_cast<std::size_t>(leaderIndex)];
+        ++summary.winsByLeader[static_cast<std::size_t>(leaderIndex)][static_cast<std::size_t>(winnerIndex)];
+        if (roundCount >= 200) {
+            const std::size_t bucket = static_cast<std::size_t>(round / 100);
+            if (summary.bucketWins.size() <= bucket) {
+                summary.bucketWins.resize(bucket + 1);
+                summary.bucketStarts.resize(bucket + 1);
+                summary.bucketWinsByLeader.resize(bucket + 1);
+            }
+            ++summary.bucketWins[bucket][static_cast<std::size_t>(winnerIndex)];
+            ++summary.bucketStarts[bucket][static_cast<std::size_t>(leaderIndex)];
+            ++summary.bucketWinsByLeader[bucket][static_cast<std::size_t>(leaderIndex)][static_cast<std::size_t>(winnerIndex)];
+        }
+        if (continuous) {
+            nextLeader = result.winner;
+        }
+    }
+
+    return summary;
 }
 
 class MockExternalAiController final : public game::ExternalAiController {
@@ -137,43 +515,116 @@ TEST_CASE("game state can finish a full three player autoplay round") {
     CHECK(record.scores[0] + record.scores[1] + record.scores[2] == 0);
 }
 
-TEST_CASE("disabled ai fairness smoke over 100 all-basic autoplay rounds" * doctest::skip(!RunAiFairnessTest())) {
-    constexpr int roundCount = 100;
-    constexpr int minExpectedWins = 20;
-    constexpr int maxExpectedWins = 47;
+TEST_CASE("disabled strong ai beats basic over 1000 autoplay rounds" * doctest::skip(!RunAiFairnessTest())) {
+    const int roundCount = AiFairnessRoundCount();
+    const int minStrongWins = (roundCount * 47 + 99) / 100;
 
-    game::GameState state;
-    const std::array<int, 3> wins = RunAutoplayRounds(state, 20260619u, roundCount);
+    game::BasicAiStrategy playerAi;
+    game::BasicAiStrategy ai1Basic;
+    game::StrongAiStrategy strongAi;
+    game::BasicAiStrategy ai2;
+    game::AiStrategy* ai1 = RunStrongFairnessStrategy() ? static_cast<game::AiStrategy*>(&strongAi) : &ai1Basic;
+    const SimSummary summary = RunAutoplayRounds(
+        std::array<game::AiStrategy*, 3>{&playerAi, ai1, &ai2},
+        20260619u,
+        roundCount);
+    const std::array<int, 3>& wins = summary.wins;
 
-    INFO("All-basic wins: Player=" << wins[0] << ", AI1=" << wins[1] << ", AI2=" << wins[2]);
+    std::cout << "AI1 vs Basic wins: Player=" << wins[0] << ", AI1=" << wins[1] << ", AI2=" << wins[2]
+        << "; leaders: Player=" << summary.starts[0] << ", AI1=" << summary.starts[1] << ", AI2=" << summary.starts[2]
+        << "; by leader P=(" << summary.winsByLeader[0][0] << ", " << summary.winsByLeader[0][1] << ", " << summary.winsByLeader[0][2]
+        << ") A1=(" << summary.winsByLeader[1][0] << ", " << summary.winsByLeader[1][1] << ", " << summary.winsByLeader[1][2]
+        << ") A2=(" << summary.winsByLeader[2][0] << ", " << summary.winsByLeader[2][1] << ", " << summary.winsByLeader[2][2] << ")\n";
+    for (std::size_t i = 0; i < summary.bucketWins.size(); ++i) {
+        const auto& bucket = summary.bucketWins[i];
+        const auto& starts = summary.bucketStarts[i];
+        const auto& byLeader = summary.bucketWinsByLeader[i];
+        std::cout << "  bucket " << (i * 100) << '-' << (i * 100 + 99)
+            << ": Player=" << bucket[0] << ", AI1=" << bucket[1] << ", AI2=" << bucket[2]
+            << "; leaders P=" << starts[0] << ", A1=" << starts[1] << ", A2=" << starts[2]
+            << "; rows P=(" << byLeader[0][0] << ", " << byLeader[0][1] << ", " << byLeader[0][2]
+            << ") A1=(" << byLeader[1][0] << ", " << byLeader[1][1] << ", " << byLeader[1][2]
+            << ") A2=(" << byLeader[2][0] << ", " << byLeader[2][1] << ", " << byLeader[2][2] << ")\n";
+    }
+
+    INFO("AI1 vs Basic wins: Player=" << wins[0] << ", AI1=" << wins[1] << ", AI2=" << wins[2]
+        << "; leaders: Player=" << summary.starts[0] << ", AI1=" << summary.starts[1] << ", AI2=" << summary.starts[2]
+        << "; by leader P=(" << summary.winsByLeader[0][0] << ", " << summary.winsByLeader[0][1] << ", " << summary.winsByLeader[0][2]
+        << ") A1=(" << summary.winsByLeader[1][0] << ", " << summary.winsByLeader[1][1] << ", " << summary.winsByLeader[1][2]
+        << ") A2=(" << summary.winsByLeader[2][0] << ", " << summary.winsByLeader[2][1] << ", " << summary.winsByLeader[2][2] << ")");
     CHECK(wins[0] + wins[1] + wins[2] == roundCount);
-    CHECK(wins[0] >= minExpectedWins);
-    CHECK(wins[0] <= maxExpectedWins);
-    CHECK(wins[1] >= minExpectedWins);
-    CHECK(wins[1] <= maxExpectedWins);
-    CHECK(wins[2] >= minExpectedWins);
-    CHECK(wins[2] <= maxExpectedWins);
+    CHECK(wins[rules::PlayerIndex(rules::PlayerId::Ai1)] >= minStrongWins);
 }
 
-TEST_CASE("disabled ai fairness smoke confirms injected weak AI2 wins less" * doctest::skip(!RunAiFairnessTest())) {
-    constexpr int roundCount = 100;
-    constexpr int maxWeakAiWins = 24;
+TEST_CASE("disabled compare strong ai decisions against basic seeds" * doctest::skip(!RunAiCompareDiagnostics())) {
+    const int roundCount = AiFairnessRoundCount();
+    const unsigned seedBase = AiCompareSeedBase();
+    const unsigned traceSeed = AiCompareTraceSeed();
+    const std::optional<rules::PlayerId> forcedLeader = AiCompareForcedLeader();
 
-    game::GameState basicState;
-    const std::array<int, 3> basicWins = RunAutoplayRounds(basicState, 20260619u, roundCount);
+    game::BasicAiStrategy basicPlayer;
+    game::BasicAiStrategy basicAi1;
+    game::BasicAiStrategy basicAi2;
+    game::StrongAiStrategy strongAi;
 
-    game::GameState weakState;
-    weakState.SetLocalAiStrategy(rules::PlayerId::Ai2, std::make_unique<tests::TestWeakAiStrategy>());
-    const std::array<int, 3> weakWins = RunAutoplayRounds(weakState, 20260619u, roundCount);
+    int strongGains = 0;
+    int strongRegressions = 0;
+    int sameWins = 0;
+    for (int round = 0; round < roundCount; ++round) {
+        const unsigned seed = seedBase + static_cast<unsigned>(round);
+        std::vector<std::string> basicTrace;
+        std::vector<std::string> strongTrace;
+        std::vector<std::string>* basicTracePtr = traceSeed == seed ? &basicTrace : nullptr;
+        std::vector<std::string>* strongTracePtr = traceSeed == seed ? &strongTrace : nullptr;
 
-    INFO("All-basic wins: Player=" << basicWins[0] << ", AI1=" << basicWins[1] << ", AI2=" << basicWins[2]
-        << "; weak-AI2 wins: Player=" << weakWins[0] << ", AI1=" << weakWins[1] << ", AI2=" << weakWins[2]);
-    CHECK(basicWins[0] + basicWins[1] + basicWins[2] == roundCount);
-    CHECK(weakWins[0] + weakWins[1] + weakWins[2] == roundCount);
-    CHECK(weakWins[2] < basicWins[2]);
-    CHECK(weakWins[2] <= maxWeakAiWins);
-    CHECK(weakWins[2] < weakWins[0]);
-    CHECK(weakWins[2] < weakWins[1]);
+        const SimRoundResult basic = RunSimRound(
+            std::array<game::AiStrategy*, 3>{&basicPlayer, &basicAi1, &basicAi2},
+            seed,
+            forcedLeader,
+            basicTracePtr);
+        const SimRoundResult strong = RunSimRound(
+            std::array<game::AiStrategy*, 3>{&basicPlayer, &strongAi, &basicAi2},
+            seed,
+            forcedLeader,
+            strongTracePtr);
+
+        const bool basicAi1Win = basic.winner == rules::PlayerId::Ai1;
+        const bool strongAi1Win = strong.winner == rules::PlayerId::Ai1;
+        if (basicAi1Win && !strongAi1Win) {
+            strongRegressions++;
+            if (strongRegressions <= 12) {
+                std::cout << "regression seed=" << seed
+                    << " basicWinner=" << SimPlayerName(basic.winner)
+                    << " strongWinner=" << SimPlayerName(strong.winner)
+                    << " leader=" << SimPlayerName(strong.leader) << "\n";
+            }
+        } else if (!basicAi1Win && strongAi1Win) {
+            strongGains++;
+            if (strongGains <= 12) {
+                std::cout << "gain seed=" << seed
+                    << " basicWinner=" << SimPlayerName(basic.winner)
+                    << " strongWinner=" << SimPlayerName(strong.winner)
+                    << " leader=" << SimPlayerName(strong.leader) << "\n";
+            }
+        } else if (basicAi1Win && strongAi1Win) {
+            sameWins++;
+        }
+
+        if (traceSeed == seed) {
+            std::cout << "basic trace seed=" << seed << " winner=" << SimPlayerName(basic.winner) << "\n";
+            for (const std::string& line : basicTrace) {
+                std::cout << "  " << line << "\n";
+            }
+            std::cout << "strong trace seed=" << seed << " winner=" << SimPlayerName(strong.winner) << "\n";
+            for (const std::string& line : strongTrace) {
+                std::cout << "  " << line << "\n";
+            }
+        }
+    }
+
+    std::cout << "compare strong-vs-basic independent seeds: gains=" << strongGains
+        << ", regressions=" << strongRegressions
+        << ", sameAi1Wins=" << sameWins << "\n";
 }
 
 TEST_CASE("first round starts from the spade three holder") {

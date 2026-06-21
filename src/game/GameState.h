@@ -146,11 +146,14 @@ private:
     std::shared_ptr<ExternalAiController> externalAi_;
     rules::PlayerId currentPlayer_{rules::PlayerId::Player};
     rules::PlayerId lastMovePlayer_{rules::PlayerId::Player};
+    rules::PlayerId trickLeader_{rules::PlayerId::Player};
+    rules::PlayerId roundLeader_{rules::PlayerId::Player};
     std::optional<rules::HandPattern> lastPattern_;
     std::optional<rules::PlayerId> nextRoundLeader_;
     rules::Cards lastCards_;
     rules::Cards playedCards_;
     std::array<std::optional<PassObservation>, 3> passObservations_{};
+    std::array<std::vector<PassObservation>, 3> passHistory_{};
     int passCount_{0};
     bool roundOver_{true};
     bool autoplay_{false};
