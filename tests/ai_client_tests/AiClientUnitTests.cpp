@@ -185,7 +185,7 @@ TEST_CASE("appsettings loads and preserves AI provider configuration") {
     REQUIRE(loaded.aiProviders.count("mimo") == 1);
     CHECK(loaded.aiProviders.at("mimo").type == "openai");
     CHECK(loaded.aiProviders.at("mimo").apiKey == "fake-secret-key");
-    CHECK(loaded.ai1 == "local");
+    CHECK(loaded.ai1 == "basic");
     CHECK(loaded.ai2 == "mimo");
 
     REQUIRE(stats::SaveAppSettings(loaded, path.string()));

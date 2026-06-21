@@ -79,6 +79,7 @@ public:
     const stats::RoundRecord& LastRoundRecord() const { return lastRoundRecord_; }
     const std::vector<TurnRecord>& TurnRecords() const { return turnRecords_; }
     bool ExternalAiPending() const { return externalAiPending_; }
+    bool RemoteAiPending() const;
     bool CanCurrentPlayerPass() const;
     bool IsInLeadState() const { return CurrentPlayerLeads(); }
 
@@ -93,6 +94,7 @@ public:
     bool SelectByHoverPattern(int handIndex);
     bool SelectBestPatternFromDraggedCards(const std::vector<int>& handIndices);
     void SetExternalAiController(std::shared_ptr<ExternalAiController> controller);
+    void SetExternalAiControllers(std::vector<std::shared_ptr<ExternalAiController>> controllers);
     void SetLocalAiStrategy(rules::PlayerId player, std::unique_ptr<AiStrategy> strategy);
 
     void TestSetRound(
@@ -122,7 +124,10 @@ private:
         TurnDecisionTrace trace) const;
     void AppendRecord(TurnRecord record);
     TurnDecisionTrace SyntheticTrace(const TurnRecord& record) const;
+    std::shared_ptr<ExternalAiController> AiControllerFor(rules::PlayerId player) const;
+    bool UsesRemoteAi(rules::PlayerId player) const;
     bool ApplyExternalAiResult(const ExternalAiResult& result);
+    bool ApplyLocalAiResult(const AiMoveChoice& choice, TurnDecisionSource source);
     void StartExternalAiTurn();
     bool TryCompleteExternalAiTurn();
     void PlayLocalAiTurn(rules::PlayerId player);
@@ -143,7 +148,8 @@ private:
     rules::PaoDeKuaiRules rules_;
     std::array<PlayerState, 3> players_;
     std::array<AiPlayer, 3> aiPlayers_;
-    std::shared_ptr<ExternalAiController> externalAi_;
+    std::vector<std::shared_ptr<ExternalAiController>> externalAiControllers_;
+    std::shared_ptr<ExternalAiController> activeExternalAi_;
     rules::PlayerId currentPlayer_{rules::PlayerId::Player};
     rules::PlayerId lastMovePlayer_{rules::PlayerId::Player};
     rules::PlayerId trickLeader_{rules::PlayerId::Player};

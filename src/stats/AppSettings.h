@@ -17,8 +17,8 @@ struct AppSettings {
     float masterVolume{0.8f};
     int windowWidth{1280};
     int windowHeight{720};
-    std::string ai1{"local"};
-    std::string ai2{"local"};
+    std::string ai1{"basic"};
+    std::string ai2{"basic"};
     std::map<std::string, AiProviderSettings> aiProviders;
 };
 

@@ -22,8 +22,8 @@ TEST_CASE("settings and daily stats use current working directory style json") {
     const stats::AppSettings loaded = stats::LoadAppSettings(settingsPath);
     CHECK(loaded.playerName == "Tester");
     CHECK(loaded.masterVolume == doctest::Approx(0.5));
-    CHECK(loaded.ai1 == "local");
-    CHECK(loaded.ai2 == "local");
+    CHECK(loaded.ai1 == "basic");
+    CHECK(loaded.ai2 == "basic");
     std::ifstream settingsFile(settingsPath, std::ios::binary);
     const std::string settingsJson((std::istreambuf_iterator<char>(settingsFile)), std::istreambuf_iterator<char>());
     settingsFile.close();

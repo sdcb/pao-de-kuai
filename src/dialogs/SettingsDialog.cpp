@@ -56,9 +56,20 @@ std::string TrimAscii(std::string text) {
     return text;
 }
 
+bool IsBuiltInAiSelection(const std::string& value) {
+    return value == "local" || value == "basic" || value == "strong";
+}
+
+std::string NormalizeAiSelection(std::string value) {
+    if (value.empty() || value == "local") {
+        return "basic";
+    }
+    return value;
+}
+
 std::string UniqueProviderName(const std::map<std::string, stats::AiProviderSettings>& providers, const std::string& desired, const std::string& current = {}) {
     std::string base = TrimAscii(desired);
-    if (base.empty() || base == "local") {
+    if (base.empty() || IsBuiltInAiSelection(base)) {
         base = "provider";
     }
     if ((base == current) || !providers.contains(base)) {
@@ -315,13 +326,14 @@ void SettingsDialog::RefreshAiCombos() {
     auto refresh = [&](int id, const std::string& selected) {
         HWND combo = GetDlgItem(hwnd_, id);
         SendMessageW(combo, CB_RESETCONTENT, 0, 0);
-        SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"local"));
+        SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"basic"));
+        SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"strong"));
         for (const std::string& name : providerNames_) {
             SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(Utf8ToWide(name).c_str()));
         }
-        SetComboSelectionByText(id, Utf8ToWide(selected.empty() ? "local" : selected));
+        SetComboSelectionByText(id, Utf8ToWide(NormalizeAiSelection(selected)));
         if (ComboSelection(id) == CB_ERR) {
-            SetComboSelectionByText(id, L"local");
+            SetComboSelectionByText(id, L"basic");
         }
     };
     refresh(IdAi1, draft_.ai1);
@@ -384,10 +396,10 @@ void SettingsDialog::RemoveProvider() {
     const std::string name = providerNames_[static_cast<std::size_t>(selectedProvider_)];
     draft_.aiProviders.erase(name);
     if (draft_.ai1 == name) {
-        draft_.ai1 = "local";
+        draft_.ai1 = "basic";
     }
     if (draft_.ai2 == name) {
-        draft_.ai2 = "local";
+        draft_.ai2 = "basic";
     }
     RefreshProviderList(std::min(selectedProvider_, static_cast<int>(draft_.aiProviders.size()) - 1));
     RefreshAiCombos();
@@ -398,12 +410,8 @@ void SettingsDialog::SaveAndClose() {
     draft_.masterVolume = std::clamp(static_cast<int>(SendDlgItemMessageW(hwnd_, IdVolume, TBM_GETPOS, 0, 0)) / 100.0f, 0.0f, 1.0f);
     draft_.ai1 = WideToUtf8(ComboText(IdAi1));
     draft_.ai2 = WideToUtf8(ComboText(IdAi2));
-    if (draft_.ai1.empty()) {
-        draft_.ai1 = "local";
-    }
-    if (draft_.ai2.empty()) {
-        draft_.ai2 = "local";
-    }
+    draft_.ai1 = NormalizeAiSelection(draft_.ai1);
+    draft_.ai2 = NormalizeAiSelection(draft_.ai2);
     CommitSelectedProvider();
     app_.Settings() = draft_;
     app_.Audio().SetMasterVolume(draft_.masterVolume);

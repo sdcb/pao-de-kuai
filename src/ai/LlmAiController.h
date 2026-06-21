@@ -16,6 +16,7 @@ public:
     ~LlmAiController() override;
 
     bool CanHandle(rules::PlayerId player) const override;
+    bool IsRemote(rules::PlayerId player) const override;
     bool HasPending() const override;
     void Start(game::ExternalAiRequest request) override;
     std::optional<game::ExternalAiResult> TryGetResult() override;

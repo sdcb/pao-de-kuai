@@ -27,6 +27,24 @@ bool SameCard(rules::Card lhs, rules::Card rhs) {
     return lhs.rank == rhs.rank && lhs.suit == rhs.suit;
 }
 
+bool ContainsCards(const rules::Cards& hand, const rules::Cards& cards) {
+    std::vector<bool> used(hand.size(), false);
+    for (rules::Card card : cards) {
+        bool found = false;
+        for (std::size_t i = 0; i < hand.size(); ++i) {
+            if (!used[i] && SameCard(hand[i], card)) {
+                used[i] = true;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::vector<std::string> RanksOf(const rules::Cards& cards) {
     std::vector<std::string> ranks;
     ranks.reserve(cards.size());
@@ -381,6 +399,7 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     lastPattern_.reset();
     passCount_ = 0;
     roundOver_ = false;
+    autoplay_ = false;
     aiDelay_ = 0.45f;
     talkCooldown_ = 0.0f;
     talkText_.clear();
@@ -388,8 +407,11 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     turnRecords_.clear();
     nextTurnNo_ = 1;
     externalAiPending_ = false;
-    if (externalAi_) {
-        externalAi_->Cancel();
+    activeExternalAi_.reset();
+    for (const auto& controller : externalAiControllers_) {
+        if (controller) {
+            controller->Cancel();
+        }
     }
     toast_ = "新一局开始";
     startedAt_ = stats::NowTimeText();
@@ -443,7 +465,7 @@ void GameState::Update(float dt) {
         return;
     }
 
-    if (externalAi_ && externalAi_->CanHandle(currentPlayer_)) {
+    if (AiControllerFor(currentPlayer_)) {
         StartExternalAiTurn();
     } else {
         PlayLocalAiTurn(currentPlayer_);
@@ -774,8 +796,11 @@ void GameState::TestSetRound(
     turnRecords_.clear();
     nextTurnNo_ = 1;
     externalAiPending_ = false;
-    if (externalAi_) {
-        externalAi_->Cancel();
+    activeExternalAi_.reset();
+    for (const auto& controller : externalAiControllers_) {
+        if (controller) {
+            controller->Cancel();
+        }
     }
 }
 
@@ -785,6 +810,10 @@ bool GameState::CurrentPlayerLeads() const {
 
 bool GameState::CanCurrentPlayerPass() const {
     return IsHumanTurn() && !CurrentPlayerLeads() && !HasPlayableFollow(rules::PlayerId::Player);
+}
+
+bool GameState::RemoteAiPending() const {
+    return externalAiPending_ && activeExternalAi_ && activeExternalAi_->IsRemote(currentPlayer_);
 }
 
 AiContext GameState::MakeAiContext(rules::PlayerId player) const {
@@ -920,7 +949,7 @@ TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
         reasoning += "。";
     }
     trace.reasoningContent = reasoning;
-    if (externalAi_ && externalAi_->CanHandle(record.actor) &&
+    if (UsesRemoteAi(record.actor) &&
         (record.reason == TurnDecisionReason::CannotBeat || record.reason == TurnDecisionReason::OnlyLegalMove)) {
         trace.toolCallId = "synthetic_turn_" + std::to_string(record.turnNo);
         trace.toolName = "record_forced_move";
@@ -931,15 +960,44 @@ TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
 }
 
 void GameState::SetExternalAiController(std::shared_ptr<ExternalAiController> controller) {
-    if (externalAi_) {
-        externalAi_->Cancel();
+    std::vector<std::shared_ptr<ExternalAiController>> controllers;
+    if (controller) {
+        controllers.push_back(std::move(controller));
     }
-    externalAi_ = std::move(controller);
+    SetExternalAiControllers(std::move(controllers));
+}
+
+void GameState::SetExternalAiControllers(std::vector<std::shared_ptr<ExternalAiController>> controllers) {
+    for (const auto& controller : externalAiControllers_) {
+        if (controller) {
+            controller->Cancel();
+        }
+    }
+    externalAiControllers_ = std::move(controllers);
+    activeExternalAi_.reset();
     externalAiPending_ = false;
 }
 
 void GameState::SetLocalAiStrategy(rules::PlayerId player, std::unique_ptr<AiStrategy> strategy) {
     aiPlayers_[Index(player)].SetStrategy(std::move(strategy));
+}
+
+std::shared_ptr<ExternalAiController> GameState::AiControllerFor(rules::PlayerId player) const {
+    for (const auto& controller : externalAiControllers_) {
+        if (controller && controller->CanHandle(player)) {
+            return controller;
+        }
+    }
+    return {};
+}
+
+bool GameState::UsesRemoteAi(rules::PlayerId player) const {
+    for (const auto& controller : externalAiControllers_) {
+        if (controller && controller->CanHandle(player) && controller->IsRemote(player)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void GameState::PlayLocalAiTurn(rules::PlayerId player) {
@@ -1002,26 +1060,35 @@ void GameState::StartExternalAiTurn() {
         return;
     }
 
+    std::shared_ptr<ExternalAiController> controller = AiControllerFor(currentPlayer_);
+    if (!controller) {
+        PlayLocalAiTurn(currentPlayer_);
+        return;
+    }
+
     externalAiPending_ = true;
-    externalAi_->Start(ExternalAiRequest{
+    activeExternalAi_ = controller;
+    controller->Start(ExternalAiRequest{
         nextTurnNo_,
         currentPlayer_,
         playerName_,
         Snapshot(),
+        MakeAiContext(currentPlayer_),
         turnRecords_
     });
 }
 
 bool GameState::TryCompleteExternalAiTurn() {
-    if (!externalAi_) {
+    if (!activeExternalAi_) {
         externalAiPending_ = false;
         return false;
     }
-    std::optional<ExternalAiResult> result = externalAi_->TryGetResult();
+    std::optional<ExternalAiResult> result = activeExternalAi_->TryGetResult();
     if (!result) {
         return false;
     }
     externalAiPending_ = false;
+    activeExternalAi_.reset();
     if (!ApplyExternalAiResult(*result)) {
         PlayLocalAiTurn(currentPlayer_);
     }
@@ -1029,6 +1096,13 @@ bool GameState::TryCompleteExternalAiTurn() {
 }
 
 bool GameState::ApplyExternalAiResult(const ExternalAiResult& result) {
+    if (result.source == TurnDecisionSource::LocalAi) {
+        if (!result.ok || !result.localChoice) {
+            return false;
+        }
+        return ApplyLocalAiResult(*result.localChoice, result.source);
+    }
+
     const TurnSnapshot before = Snapshot();
     const rules::PlayerId actor = currentPlayer_;
     auto useLlmTalk = [&](const std::string& talk) {
@@ -1176,6 +1250,63 @@ bool GameState::ApplyExternalAiResult(const ExternalAiResult& result) {
         true,
         "LLM 出牌合法",
         std::move(trace));
+    AppendRecord(std::move(record));
+    return true;
+}
+
+bool GameState::ApplyLocalAiResult(const AiMoveChoice& choice, TurnDecisionSource source) {
+    const TurnSnapshot before = Snapshot();
+    const rules::PlayerId actor = currentPlayer_;
+
+    if (choice.pass) {
+        if (CurrentPlayerLeads() || HasPlayableFollow(actor)) {
+            return false;
+        }
+        if (!Pass(actor)) {
+            return false;
+        }
+        TurnRecord record = BuildTurnRecord(
+            before,
+            actor,
+            source,
+            TurnDecisionReason::CannotBeat,
+            ActionFromCards({}, true),
+            ActionFromCards({}, true),
+            {},
+            std::nullopt,
+            true,
+            "本地异步 AI 不要合法",
+            {});
+        AppendRecord(std::move(record));
+        return true;
+    }
+
+    const rules::Cards& hand = players_[Index(actor)].hand;
+    if (!ContainsCards(hand, choice.cards)) {
+        return false;
+    }
+
+    const int handSize = static_cast<int>(hand.size());
+    const auto validation = CurrentPlayerLeads()
+        ? rules_.ValidateLeadMove(choice.cards, handSize)
+        : rules_.ValidateFollowMove(choice.cards, *lastPattern_, handSize);
+    if (!validation.ok) {
+        return false;
+    }
+
+    PlayCards(actor, choice.cards, validation.pattern, choice.disruptionPenalty);
+    TurnRecord record = BuildTurnRecord(
+        before,
+        actor,
+        source,
+        TurnDecisionReason::NormalChoice,
+        ActionFromCards(choice.cards),
+        ActionFromCards(choice.cards),
+        choice.cards,
+        validation.pattern,
+        true,
+        "本地异步 AI 出牌合法",
+        {});
     AppendRecord(std::move(record));
     return true;
 }

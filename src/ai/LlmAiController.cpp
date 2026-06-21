@@ -331,6 +331,10 @@ bool LlmAiController::CanHandle(rules::PlayerId player) const {
         !provider.model.empty();
 }
 
+bool LlmAiController::IsRemote(rules::PlayerId player) const {
+    return CanHandle(player);
+}
+
 bool LlmAiController::HasPending() const {
     std::lock_guard lock(state_->mutex);
     return state_->pending;

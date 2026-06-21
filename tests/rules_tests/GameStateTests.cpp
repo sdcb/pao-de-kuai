@@ -3,11 +3,14 @@
 #include "TestHelpers.h"
 #include "game/AiStrategy.h"
 #include "game/GameState.h"
+#include "game/LocalAiController.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 using namespace pdk;
 using tests::C;
@@ -463,6 +466,10 @@ public:
         return player == handledPlayer_;
     }
 
+    bool IsRemote(rules::PlayerId player) const override {
+        return CanHandle(player);
+    }
+
     bool HasPending() const override {
         return pending_;
     }
@@ -493,6 +500,15 @@ private:
     rules::PlayerId handledPlayer_{rules::PlayerId::Ai1};
     bool pending_{false};
 };
+
+void WaitForAsyncAi(game::GameState& state) {
+    for (int i = 0; i < 200 && state.ExternalAiPending(); ++i) {
+        state.Update(0.05f);
+        if (state.ExternalAiPending()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+}
 
 } // namespace
 
@@ -688,6 +704,16 @@ TEST_CASE("next round starts from previous winner and later winner overrides it"
     CHECK(state.Events().back().message == "上局赢家先出");
 }
 
+TEST_CASE("starting a new round cancels autoplay") {
+    game::GameState state;
+    state.StartNewRound("Tester", 20260606u);
+    state.ToggleAutoplay();
+    REQUIRE(state.Autoplay());
+
+    state.StartNewRound("Tester", 20260607u);
+    CHECK_FALSE(state.Autoplay());
+}
+
 TEST_CASE("turn order is counterclockwise so the left-hand player is upstream") {
     game::GameState state;
     bool foundAi2Start = false;
@@ -733,9 +759,11 @@ TEST_CASE("AI1 can use external LLM controller and records the decision") {
 
     state.Update(1.0f);
     CHECK(state.ExternalAiPending());
+    CHECK(state.RemoteAiPending());
     REQUIRE(controller->startCount == 1);
     REQUIRE(controller->lastRequest.has_value());
     CHECK(controller->lastRequest->history.empty());
+    CHECK(controller->lastRequest->context.currentPlayerIndex == rules::PlayerIndex(rules::PlayerId::Ai1));
 
     state.Update(0.1f);
     CHECK_FALSE(state.ExternalAiPending());
@@ -746,6 +774,39 @@ TEST_CASE("AI1 can use external LLM controller and records the decision") {
     CHECK(record.accepted);
     CHECK(record.finalAction.ranks == std::vector<std::string>{"5"});
     CHECK(state.LastCards().front().rank == rules::Rank::Five);
+}
+
+TEST_CASE("AI1 can use local async strong controller and records a local decision") {
+    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    auto controller = std::make_shared<game::LocalAiController>();
+    controller->SetStrategy(rules::PlayerId::Ai1, game::LocalAiKind::Strong);
+
+    game::GameState state;
+    state.SetExternalAiController(controller);
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Five), C(rules::Rank::Six)},
+            rules::Cards{C(rules::Rank::Seven)}
+        },
+        rules::PlayerId::Ai1,
+        fourLead,
+        rules::PlayerId::Player);
+
+    state.Update(1.0f);
+    CHECK(state.ExternalAiPending());
+    CHECK_FALSE(state.RemoteAiPending());
+    WaitForAsyncAi(state);
+
+    CHECK_FALSE(state.ExternalAiPending());
+    REQUIRE(state.TurnRecords().size() == 1);
+    const game::TurnRecord& record = state.TurnRecords().back();
+    CHECK(record.actor == rules::PlayerId::Ai1);
+    CHECK(record.source == game::TurnDecisionSource::LocalAi);
+    CHECK(record.accepted);
+    CHECK(record.finalAction.action == "play");
+    REQUIRE_FALSE(state.LastCards().empty());
+    CHECK(rules::RankValue(state.LastCards().front().rank) > rules::RankValue(rules::Rank::Four));
 }
 
 TEST_CASE("AI1 only legal move is recorded without calling external LLM") {
@@ -855,6 +916,7 @@ TEST_CASE("AI2 can use external LLM controller and records the decision") {
 
     state.Update(1.0f);
     CHECK(state.ExternalAiPending());
+    CHECK(state.RemoteAiPending());
     REQUIRE(controller->startCount == 1);
     REQUIRE(controller->lastRequest.has_value());
     CHECK(controller->lastRequest->player == rules::PlayerId::Ai2);
@@ -868,6 +930,45 @@ TEST_CASE("AI2 can use external LLM controller and records the decision") {
     CHECK(record.accepted);
     CHECK(record.trace.toolName == "play_cards");
     CHECK(record.finalAction.ranks == std::vector<std::string>{"5"});
+}
+
+TEST_CASE("AI2 can use local async basic controller through multi controller routing") {
+    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    auto remoteController = std::make_shared<MockExternalAiController>(
+        game::ExternalAiResult{},
+        rules::PlayerId::Ai1);
+    auto localController = std::make_shared<game::LocalAiController>();
+    localController->SetStrategy(rules::PlayerId::Ai2, game::LocalAiKind::Basic);
+
+    game::GameState state;
+    state.SetExternalAiControllers({
+        remoteController,
+        localController
+    });
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(rules::Rank::Seven)},
+            rules::Cards{C(rules::Rank::Five), C(rules::Rank::Six)}
+        },
+        rules::PlayerId::Ai2,
+        fourLead,
+        rules::PlayerId::Player);
+
+    state.Update(1.0f);
+    CHECK(state.ExternalAiPending());
+    CHECK_FALSE(state.RemoteAiPending());
+    CHECK(remoteController->startCount == 0);
+    WaitForAsyncAi(state);
+
+    CHECK_FALSE(state.ExternalAiPending());
+    REQUIRE(state.TurnRecords().size() == 1);
+    const game::TurnRecord& record = state.TurnRecords().back();
+    CHECK(record.actor == rules::PlayerId::Ai2);
+    CHECK(record.source == game::TurnDecisionSource::LocalAi);
+    CHECK(record.accepted);
+    REQUIRE_FALSE(state.LastCards().empty());
+    CHECK(rules::RankValue(state.LastCards().front().rank) > rules::RankValue(rules::Rank::Four));
 }
 
 TEST_CASE("invalid LLM decision falls back to local AI silently") {

@@ -32,6 +32,13 @@ std::string JsonString(const cJSON* object, const char* key) {
     return {};
 }
 
+std::string NormalizeAiSelection(std::string value) {
+    if (value.empty() || value == "local") {
+        return "basic";
+    }
+    return value;
+}
+
 std::string Base64Encode(const BYTE* data, DWORD size) {
     DWORD chars = 0;
     if (!CryptBinaryToStringA(data, size, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, nullptr, &chars) || chars == 0) {
@@ -131,11 +138,11 @@ AppSettings LoadAppSettings(const std::string& path) {
     }
     if (const cJSON* value = cJSON_GetObjectItemCaseSensitive(root, "ai1");
         cJSON_IsString(value) && value->valuestring) {
-        settings.ai1 = value->valuestring;
+        settings.ai1 = NormalizeAiSelection(value->valuestring);
     }
     if (const cJSON* value = cJSON_GetObjectItemCaseSensitive(root, "ai2");
         cJSON_IsString(value) && value->valuestring) {
-        settings.ai2 = value->valuestring;
+        settings.ai2 = NormalizeAiSelection(value->valuestring);
     }
     const cJSON* providers = cJSON_GetObjectItemCaseSensitive(root, "aiProviders");
     if (cJSON_IsObject(providers)) {
@@ -163,8 +170,10 @@ bool SaveAppSettings(const AppSettings& settings, const std::string& path) {
     cJSON_AddNumberToObject(root, "masterVolume", settings.masterVolume);
     cJSON_AddNumberToObject(root, "windowWidth", settings.windowWidth);
     cJSON_AddNumberToObject(root, "windowHeight", settings.windowHeight);
-    cJSON_AddStringToObject(root, "ai1", settings.ai1.c_str());
-    cJSON_AddStringToObject(root, "ai2", settings.ai2.c_str());
+    const std::string ai1 = NormalizeAiSelection(settings.ai1);
+    const std::string ai2 = NormalizeAiSelection(settings.ai2);
+    cJSON_AddStringToObject(root, "ai1", ai1.c_str());
+    cJSON_AddStringToObject(root, "ai2", ai2.c_str());
     if (!settings.aiProviders.empty()) {
         cJSON* providers = cJSON_CreateObject();
         for (const auto& [name, provider] : settings.aiProviders) {

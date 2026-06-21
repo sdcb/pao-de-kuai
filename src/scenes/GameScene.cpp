@@ -4,6 +4,7 @@
 #include "app/App.h"
 #include "audio/SoundIds.h"
 #include "core/StringUtil.h"
+#include "game/LocalAiController.h"
 #include "overlays/ReturnToMenuOverlay.h"
 #include "overlays/RoundResultOverlay.h"
 #include "overlays/TalkBubbleOverlay.h"
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <vector>
 
 namespace pdk::scenes {
 namespace {
@@ -124,23 +126,47 @@ void GameScene::StartNextRound() {
 }
 
 void GameScene::InitializeExternalAi() {
-    if (!mock_ && !app_.ViewerMode()) {
-        std::map<rules::PlayerId, stats::AiProviderSettings> remotePlayers;
-        auto addRemotePlayer = [&](rules::PlayerId player, const std::string& providerName) {
-            if (providerName.empty() || providerName == "local") {
-                return;
-            }
-            const auto provider = app_.Settings().aiProviders.find(providerName);
-            if (provider != app_.Settings().aiProviders.end()) {
-                remotePlayers[player] = provider->second;
-            }
-        };
-        addRemotePlayer(rules::PlayerId::Ai1, app_.Settings().ai1);
-        addRemotePlayer(rules::PlayerId::Ai2, app_.Settings().ai2);
-        if (!remotePlayers.empty()) {
-            game_.SetExternalAiController(std::make_shared<ai::LlmAiController>(std::move(remotePlayers)));
-        }
+    if (mock_ || app_.ViewerMode()) {
+        game_.SetExternalAiControllers({});
+        return;
     }
+
+    auto localController = std::make_shared<game::LocalAiController>();
+    bool hasLocal = false;
+    std::map<rules::PlayerId, stats::AiProviderSettings> remotePlayers;
+
+    auto addPlayer = [&](rules::PlayerId player, const std::string& selection) {
+        const std::string choice = selection.empty() || selection == "local" ? "basic" : selection;
+        if (choice == "strong") {
+            localController->SetStrategy(player, game::LocalAiKind::Strong);
+            hasLocal = true;
+            return;
+        }
+        if (choice == "basic") {
+            localController->SetStrategy(player, game::LocalAiKind::Basic);
+            hasLocal = true;
+            return;
+        }
+        const auto provider = app_.Settings().aiProviders.find(choice);
+        if (provider != app_.Settings().aiProviders.end()) {
+            remotePlayers[player] = provider->second;
+            return;
+        }
+        localController->SetStrategy(player, game::LocalAiKind::Basic);
+        hasLocal = true;
+    };
+
+    addPlayer(rules::PlayerId::Ai1, app_.Settings().ai1);
+    addPlayer(rules::PlayerId::Ai2, app_.Settings().ai2);
+
+    std::vector<std::shared_ptr<game::ExternalAiController>> controllers;
+    if (hasLocal) {
+        controllers.push_back(std::move(localController));
+    }
+    if (!remotePlayers.empty()) {
+        controllers.push_back(std::make_shared<ai::LlmAiController>(std::move(remotePlayers)));
+    }
+    game_.SetExternalAiControllers(std::move(controllers));
 }
 
 void GameScene::Update(float dt) {
@@ -392,7 +418,7 @@ void GameScene::DrawAiArea(graphics::RenderContext& context, rules::PlayerId pla
     text += " 张  今日分 ";
     core::AppendNumber(text, todayScores_[rules::PlayerIndex(player)]);
     if (game_.CurrentPlayer() == player) {
-        text += game_.ExternalAiPending() ? "  联网思考中" : "  思考中";
+        text += game_.RemoteAiPending() ? "  联网思考中" : "  思考中";
     }
     context.DrawTextUtf8(text, {area.x + 16.0f, area.y + 12.0f, area.width - 32.0f, 28.0f}, 19.0f, Color(0.94f, 0.96f, 0.84f));
     const int count = static_cast<int>(state.hand.size());
