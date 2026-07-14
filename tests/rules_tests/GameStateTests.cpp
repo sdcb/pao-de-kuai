@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -81,6 +82,20 @@ bool RunStrongFairnessStrategy() {
 bool RunAiCompareDiagnostics() {
     const char* value = std::getenv("PDK_AI_COMPARE_BASIC");
     return value != nullptr && value[0] != '\0' && value[0] != '0';
+}
+
+bool RunStrongBaselineDiagnostics() {
+    const char* value = std::getenv("PDK_AI_STRONG_BASELINE_DIAGNOSTICS");
+    return value != nullptr && value[0] != '\0' && value[0] != '0';
+}
+
+int StrongTimingRoundCount() {
+    const char* value = std::getenv("PDK_AI_STRONG_TIMING_ROUNDS");
+    if (value == nullptr || value[0] == '\0') {
+        return 30;
+    }
+    const int parsed = std::atoi(value);
+    return parsed > 0 ? parsed : 30;
 }
 
 bool ListAi1LeaderLosses() {
@@ -383,6 +398,132 @@ struct SimSummary {
     std::vector<std::array<std::array<int, 3>, 3>> bucketWinsByLeader;
 };
 
+struct AiTimingStats {
+    std::int64_t calls{0};
+    std::int64_t totalMicros{0};
+    std::int64_t maxMicros{0};
+    std::vector<std::int64_t> samples;
+
+    void Add(std::int64_t micros) {
+        calls++;
+        totalMicros += micros;
+        maxMicros = std::max(maxMicros, micros);
+        samples.push_back(micros);
+    }
+
+    double AverageMillis() const {
+        return calls == 0 ? 0.0 : static_cast<double>(totalMicros) / static_cast<double>(calls) / 1000.0;
+    }
+
+    double MaxMillis() const {
+        return static_cast<double>(maxMicros) / 1000.0;
+    }
+
+    double PercentileMillis(double percentile) {
+        if (samples.empty()) {
+            return 0.0;
+        }
+        std::sort(samples.begin(), samples.end());
+        const double index = percentile * static_cast<double>(samples.size() - 1);
+        return static_cast<double>(samples[static_cast<std::size_t>(index + 0.5)]) / 1000.0;
+    }
+};
+
+class TimedAiStrategy final : public game::AiStrategy {
+public:
+    explicit TimedAiStrategy(std::unique_ptr<game::AiStrategy> inner) : inner_(std::move(inner)) {}
+
+    game::AiMoveChoice ChooseMove(const rules::Cards& hand, const game::AiContext& context) override {
+        const auto start = std::chrono::steady_clock::now();
+        game::AiMoveChoice choice = inner_->ChooseMove(hand, context);
+        const auto end = std::chrono::steady_clock::now();
+        stats.Add(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+        return choice;
+    }
+
+    AiTimingStats stats;
+
+private:
+    std::unique_ptr<game::AiStrategy> inner_;
+};
+
+void PrintTiming(const char* name, AiTimingStats& stats) {
+    std::cout << name
+        << " calls=" << stats.calls
+        << " avg_ms=" << stats.AverageMillis()
+        << " p95_ms=" << stats.PercentileMillis(0.95)
+        << " p99_ms=" << stats.PercentileMillis(0.99)
+        << " max_ms=" << stats.MaxMillis()
+        << "\n";
+}
+
+void RunRotatedStrongTimingDiagnostic(const char* title) {
+    const int roundCount = StrongTimingRoundCount();
+    const int roundsPerRotation = std::max(1, roundCount / 3);
+    TimedAiStrategy timed0(std::make_unique<game::StrongAiStrategy>());
+    TimedAiStrategy timed1(std::make_unique<game::StrongAiStrategy>());
+    TimedAiStrategy timed2(std::make_unique<game::StrongAiStrategy>());
+    std::array<TimedAiStrategy*, 3> timed{&timed0, &timed1, &timed2};
+    SimSummary summary;
+    std::array<int, 3> strategyWins{0, 0, 0};
+
+    const auto start = std::chrono::steady_clock::now();
+    for (int rotation = 0; rotation < 3; ++rotation) {
+        for (int round = 0; round < roundsPerRotation; ++round) {
+            std::array<TimedAiStrategy*, 3> seated{
+                timed[static_cast<std::size_t>(rotation % 3)],
+                timed[static_cast<std::size_t>((rotation + 1) % 3)],
+                timed[static_cast<std::size_t>((rotation + 2) % 3)]
+            };
+            std::array<game::AiStrategy*, 3> strategies{seated[0], seated[1], seated[2]};
+            const SimRoundResult result = RunSimRound(
+                strategies,
+                20260714u + static_cast<unsigned>(round),
+                std::nullopt);
+            const int winnerIndex = rules::PlayerIndex(result.winner);
+            const int leaderIndex = rules::PlayerIndex(result.leader);
+            ++summary.wins[static_cast<std::size_t>(winnerIndex)];
+            ++summary.starts[static_cast<std::size_t>(leaderIndex)];
+            ++summary.winsByLeader[static_cast<std::size_t>(leaderIndex)][static_cast<std::size_t>(winnerIndex)];
+            TimedAiStrategy* winnerStrategy = seated[static_cast<std::size_t>(winnerIndex)];
+            for (std::size_t i = 0; i < timed.size(); ++i) {
+                if (timed[i] == winnerStrategy) {
+                    ++strategyWins[i];
+                    break;
+                }
+            }
+        }
+    }
+    const auto end = std::chrono::steady_clock::now();
+    const double elapsedSeconds =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / 1000.0;
+
+    const std::array<int, 3>& wins = summary.wins;
+    std::cout << title
+        << " rotated_rounds=" << roundsPerRotation * 3
+        << " rounds_per_rotation=" << roundsPerRotation
+        << " elapsed_s=" << elapsedSeconds
+        << " wins: Player=" << wins[0]
+        << ", AI1=" << wins[1]
+        << ", AI2=" << wins[2]
+        << "; strategy_wins: Strong0=" << strategyWins[0]
+        << ", Strong1=" << strategyWins[1]
+        << ", StrongSlot2=" << strategyWins[2]
+        << "; leaders: Player=" << summary.starts[0]
+        << ", AI1=" << summary.starts[1]
+        << ", AI2=" << summary.starts[2]
+        << "\n";
+    PrintTiming("Strong0", timed0.stats);
+    PrintTiming("Strong1", timed1.stats);
+    PrintTiming("StrongSlot2", timed2.stats);
+
+    CHECK(wins[0] + wins[1] + wins[2] == roundsPerRotation * 3);
+    CHECK(timed0.stats.calls > 0);
+    CHECK(timed1.stats.calls > 0);
+    CHECK(timed2.stats.calls > 0);
+    CHECK(strategyWins[0] + strategyWins[1] + strategyWins[2] == roundsPerRotation * 3);
+}
+
 SimSummary RunAutoplayRounds(std::array<game::AiStrategy*, 3> strategies, unsigned seedBase, int roundCount) {
     SimSummary summary;
     std::optional<rules::PlayerId> nextLeader;
@@ -570,6 +711,10 @@ TEST_CASE("disabled strong ai beats basic over 1000 autoplay rounds" * doctest::
         << ") A2=(" << summary.winsByLeader[2][0] << ", " << summary.winsByLeader[2][1] << ", " << summary.winsByLeader[2][2] << ")");
     CHECK(wins[0] + wins[1] + wins[2] == roundCount);
     CHECK(wins[rules::PlayerIndex(rules::PlayerId::Ai1)] >= minStrongWins);
+}
+
+TEST_CASE("disabled strong baseline timing diagnostics over rotated 30 rounds" * doctest::skip(!RunStrongBaselineDiagnostics())) {
+    RunRotatedStrongTimingDiagnostic("Strong timing diagnostics");
 }
 
 TEST_CASE("disabled compare strong ai decisions against basic seeds" * doctest::skip(!RunAiCompareDiagnostics())) {

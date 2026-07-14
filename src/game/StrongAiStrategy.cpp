@@ -487,6 +487,63 @@ int SampledControlBonus(const Candidate& candidate, const AiContext& context, co
     return score / sampleCount;
 }
 
+int CachedUnknownSampledControlBonus(
+    const Candidate& candidate,
+    const AiContext& context,
+    const rules::Cards& unknown) {
+    const int sampleCount = context.currentPlayerIndex == context.roundLeaderIndex ? 7 : 5;
+    const int nextIndex = (context.currentPlayerIndex + 2) % 3;
+    const int otherIndex = (context.currentPlayerIndex + 1) % 3;
+    const int nextCards = context.remainingCards[static_cast<std::size_t>(nextIndex)];
+    const int otherCards = context.remainingCards[static_cast<std::size_t>(otherIndex)];
+    if (static_cast<int>(unknown.size()) != nextCards + otherCards) {
+        return 0;
+    }
+
+    int score = 0;
+    std::uint32_t seed = CandidateSeed(candidate, context);
+    for (int sample = 0; sample < sampleCount; ++sample) {
+        rules::Cards shuffled = unknown;
+        ShuffleSample(shuffled, MixSeed(seed, static_cast<std::uint32_t>(sample + 1)));
+
+        rules::Cards nextHand;
+        rules::Cards otherHand;
+        nextHand.reserve(static_cast<std::size_t>(nextCards));
+        otherHand.reserve(static_cast<std::size_t>(otherCards));
+        for (int i = 0; i < nextCards; ++i) {
+            nextHand.push_back(shuffled[static_cast<std::size_t>(i)]);
+        }
+        for (int i = 0; i < otherCards; ++i) {
+            otherHand.push_back(shuffled[static_cast<std::size_t>(nextCards + i)]);
+        }
+
+        if (!IsConsistentWithPassHistory(nextHand, nextIndex, context) ||
+            !IsConsistentWithPassHistory(otherHand, otherIndex, context)) {
+            continue;
+        }
+
+        const bool nextCanBeat = CachedHasAnyFollowMove(nextHand, candidate.pattern, nextCards);
+        const bool otherCanBeat = CachedHasAnyFollowMove(otherHand, candidate.pattern, otherCards);
+        if (!nextCanBeat && !otherCanBeat) {
+            score += context.leading ? 620 : 520;
+        } else {
+            if (nextCanBeat) {
+                score -= context.nextPlayerRemainingCards <= 3 ? 520 : 170;
+                if (rules::ValidateFollow(nextHand, candidate.pattern, nextCards).ok) {
+                    score -= 900;
+                }
+            }
+            if (otherCanBeat) {
+                score -= otherCards <= 3 ? 460 : 130;
+                if (rules::ValidateFollow(otherHand, candidate.pattern, otherCards).ok) {
+                    score -= 760;
+                }
+            }
+        }
+    }
+    return score / sampleCount;
+}
+
 int NextIndex(int index) {
     return (index + 2) % 3;
 }
@@ -750,7 +807,28 @@ std::optional<int> EnumeratedRolloutBonus(
     return total / count;
 }
 
-int RolloutBonus(const Candidate& candidate, const AiContext& context, const rules::Cards& hand) {
+bool ShouldUseExactRolloutEnumeration(int unknownCount, int nextCards) {
+    if (unknownCount > 12 || nextCards < 0 || nextCards > unknownCount) {
+        return false;
+    }
+
+    int combinations = 0;
+    const int limit = 1 << unknownCount;
+    for (int mask = 0; mask < limit; ++mask) {
+        if (CountMaskBits(mask) == nextCards) {
+            combinations++;
+            if (combinations > 1200) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+int FastRolloutBonus(
+    const Candidate& candidate,
+    const AiContext& context,
+    const rules::Cards& unknown) {
     if (candidate.remainder.size() > 10 && context.minOpponentRemainingCards > 8) {
         return 0;
     }
@@ -761,13 +839,14 @@ int RolloutBonus(const Candidate& candidate, const AiContext& context, const rul
     constexpr int sampleCount = 5;
     const int nextCards = context.remainingCards[static_cast<std::size_t>(next)];
     const int otherCards = context.remainingCards[static_cast<std::size_t>(other)];
-    rules::Cards unknown = UnknownOpponentCards(hand, context);
     if (static_cast<int>(unknown.size()) != nextCards + otherCards) {
         return 0;
     }
 
-    if (std::optional<int> enumerated = EnumeratedRolloutBonus(candidate, context, unknown, self, next, other, nextCards)) {
-        return *enumerated;
+    if (ShouldUseExactRolloutEnumeration(static_cast<int>(unknown.size()), nextCards)) {
+        if (std::optional<int> enumerated = EnumeratedRolloutBonus(candidate, context, unknown, self, next, other, nextCards)) {
+            return *enumerated;
+        }
     }
 
     int score = 0;
@@ -909,11 +988,26 @@ int StrongAdjustment(const Candidate& candidate, const AiContext& context) {
     return score;
 }
 
+bool StrongCandidateBetter(const Candidate& lhs, const Candidate& rhs) {
+    if (lhs.score != rhs.score) {
+        return lhs.score > rhs.score;
+    }
+    if (lhs.cards.size() != rhs.cards.size()) {
+        return lhs.cards.size() > rhs.cards.size();
+    }
+    if (lhs.pattern.type != rhs.pattern.type) {
+        return PatternBaseScore(lhs.pattern.type) > PatternBaseScore(rhs.pattern.type);
+    }
+    return rules::RankValue(lhs.pattern.mainRank) < rules::RankValue(rhs.pattern.mainRank);
+}
+
 } // namespace ai_internal
 
 using namespace ai_internal;
 
-AiMoveChoice StrongAiStrategy::ChooseMove(const rules::Cards& hand, const AiContext& context) {
+namespace {
+
+AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context) {
     std::vector<Candidate> candidates = GenerateCandidates(hand, context);
     if (candidates.empty()) {
         return AiMoveChoice{true, {}, {}, context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败"};
@@ -923,21 +1017,18 @@ AiMoveChoice StrongAiStrategy::ChooseMove(const rules::Cards& hand, const AiCont
         candidate.score += StrongAdjustment(candidate, context);
     }
 
-    std::sort(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
-        if (lhs.score != rhs.score) {
-            return lhs.score > rhs.score;
-        }
-        if (lhs.cards.size() != rhs.cards.size()) {
-            return lhs.cards.size() > rhs.cards.size();
-        }
-        if (lhs.pattern.type != rhs.pattern.type) {
-            return PatternBaseScore(lhs.pattern.type) > PatternBaseScore(rhs.pattern.type);
-        }
-        return rules::RankValue(lhs.pattern.mainRank) < rules::RankValue(rhs.pattern.mainRank);
-    });
+    std::sort(candidates.begin(), candidates.end(), StrongCandidateBetter);
     if (context.leading && context.currentPlayerIndex == context.roundLeaderIndex) {
         DeduplicateCandidates(candidates);
     }
+
+    std::optional<rules::Cards> unknown;
+    const auto getUnknown = [&]() -> const rules::Cards& {
+        if (!unknown) {
+            unknown = UnknownOpponentCards(hand, context);
+        }
+        return *unknown;
+    };
 
     const int planLimit = std::min(context.leading ? 24 : 18, static_cast<int>(candidates.size()));
     for (int i = 0; i < planLimit; ++i) {
@@ -948,24 +1039,13 @@ AiMoveChoice StrongAiStrategy::ChooseMove(const rules::Cards& hand, const AiCont
             candidate.score += context.leading ? planBonus * leadPlanWeight : planBonus;
         }
         if (!context.leading && context.currentTrickPassCount > 0 && candidate.remainder.size() <= 10) {
-            candidate.score += SampledControlBonus(candidate, context, hand);
+            candidate.score += CachedUnknownSampledControlBonus(candidate, context, getUnknown());
         }
         if (!context.leading && candidate.remainder.size() <= 8) {
             candidate.score += RemainderFinishSafetyBonus(candidate, context) / 2;
         }
     }
-    std::sort(candidates.begin(), candidates.begin() + planLimit, [](const Candidate& lhs, const Candidate& rhs) {
-        if (lhs.score != rhs.score) {
-            return lhs.score > rhs.score;
-        }
-        if (lhs.cards.size() != rhs.cards.size()) {
-            return lhs.cards.size() > rhs.cards.size();
-        }
-        if (lhs.pattern.type != rhs.pattern.type) {
-            return PatternBaseScore(lhs.pattern.type) > PatternBaseScore(rhs.pattern.type);
-        }
-        return rules::RankValue(lhs.pattern.mainRank) < rules::RankValue(rhs.pattern.mainRank);
-    });
+    std::sort(candidates.begin(), candidates.begin() + planLimit, StrongCandidateBetter);
 
     const int leaderRolloutLimit = 8;
     const int followRolloutLimit = 4;
@@ -981,23 +1061,12 @@ AiMoveChoice StrongAiStrategy::ChooseMove(const rules::Cards& hand, const AiCont
             context.currentTrickPassCount > 0 &&
             candidate.remainder.size() <= 8;
         if (context.leading ? ShouldUseRollout(candidate, context) : useFollowRollout) {
-            const int rolloutBonus = RolloutBonus(candidate, context, hand);
+            const int rolloutBonus = FastRolloutBonus(candidate, context, getUnknown());
             candidate.score = rolloutBonus * 24 + candidate.score / 120;
         }
         candidate.score += StrongPostRolloutAdjustment(candidate, context);
     }
-    std::sort(candidates.begin(), candidates.begin() + rolloutLimit, [](const Candidate& lhs, const Candidate& rhs) {
-        if (lhs.score != rhs.score) {
-            return lhs.score > rhs.score;
-        }
-        if (lhs.cards.size() != rhs.cards.size()) {
-            return lhs.cards.size() > rhs.cards.size();
-        }
-        if (lhs.pattern.type != rhs.pattern.type) {
-            return PatternBaseScore(lhs.pattern.type) > PatternBaseScore(rhs.pattern.type);
-        }
-        return rules::RankValue(lhs.pattern.mainRank) < rules::RankValue(rhs.pattern.mainRank);
-    });
+    std::sort(candidates.begin(), candidates.begin() + rolloutLimit, StrongCandidateBetter);
 
     const Candidate& best = candidates.front();
     return AiMoveChoice{
@@ -1007,6 +1076,12 @@ AiMoveChoice StrongAiStrategy::ChooseMove(const rules::Cards& hand, const AiCont
         "强 AI 推荐 " + rules::PatternName(best.pattern.type),
         best.disruptionPenalty
     };
+}
+
+} // namespace
+
+AiMoveChoice StrongAiStrategy::ChooseMove(const rules::Cards& hand, const AiContext& context) {
+    return ChooseStrongMove(hand, context);
 }
 
 } // namespace pdk::game
