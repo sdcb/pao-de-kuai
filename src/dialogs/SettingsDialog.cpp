@@ -25,6 +25,7 @@ constexpr int IdAddProvider = 1012;
 constexpr int IdRemoveProvider = 1013;
 constexpr int IdSave = 1014;
 constexpr int IdCancel = 1015;
+constexpr int IdRoundTrace = 1016;
 
 std::wstring Utf8ToWide(const std::string& text) {
     if (text.empty()) {
@@ -274,23 +275,25 @@ void SettingsDialog::CreateControls() {
     AddControl(L"STATIC", L"AI2", 0, -1, 380, 70, 60, 24);
     AddControl(L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL, IdAi2, 430, 66, 230, 220);
 
-    AddControl(L"STATIC", L"AI Providers", 0, -1, 24, 118, 180, 24);
-    AddControl(L"LISTBOX", L"", WS_TABSTOP | WS_BORDER | LBS_NOTIFY | WS_VSCROLL, IdProviderList, 24, 146, 185, 280);
-    AddControl(L"BUTTON", L"新增", WS_TABSTOP, IdAddProvider, 24, 438, 86, 30);
-    AddControl(L"BUTTON", L"删除", WS_TABSTOP, IdRemoveProvider, 123, 438, 86, 30);
+    AddControl(L"BUTTON", L"记录每局复盘 JSON", WS_TABSTOP | BS_AUTOCHECKBOX, IdRoundTrace, 24, 112, 220, 24);
 
-    AddControl(L"STATIC", L"名称", 0, -1, 235, 146, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderName, 320, 143, 390, 26);
-    AddControl(L"STATIC", L"type", 0, -1, 235, 188, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderType, 320, 185, 390, 26);
-    AddControl(L"STATIC", L"endpoint", 0, -1, 235, 230, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderEndpoint, 320, 227, 390, 26);
-    AddControl(L"STATIC", L"apiKey", 0, -1, 235, 272, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL | ES_PASSWORD, IdProviderApiKey, 320, 269, 390, 26);
-    AddControl(L"STATIC", L"model", 0, -1, 235, 314, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderModel, 320, 311, 390, 26);
+    AddControl(L"STATIC", L"AI Providers", 0, -1, 24, 142, 180, 24);
+    AddControl(L"LISTBOX", L"", WS_TABSTOP | WS_BORDER | LBS_NOTIFY | WS_VSCROLL, IdProviderList, 24, 170, 185, 250);
+    AddControl(L"BUTTON", L"新增", WS_TABSTOP, IdAddProvider, 24, 432, 86, 30);
+    AddControl(L"BUTTON", L"删除", WS_TABSTOP, IdRemoveProvider, 123, 432, 86, 30);
 
-    AddControl(L"STATIC", L"apiKey 保存到 appsettings.json 时会使用 Windows DPAPI 加密；明文旧配置仍可读取。", 0, -1, 235, 356, 480, 44);
+    AddControl(L"STATIC", L"名称", 0, -1, 235, 170, 80, 24);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderName, 320, 167, 390, 26);
+    AddControl(L"STATIC", L"type", 0, -1, 235, 210, 80, 24);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderType, 320, 207, 390, 26);
+    AddControl(L"STATIC", L"endpoint", 0, -1, 235, 250, 80, 24);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderEndpoint, 320, 247, 390, 26);
+    AddControl(L"STATIC", L"apiKey", 0, -1, 235, 290, 80, 24);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL | ES_PASSWORD, IdProviderApiKey, 320, 287, 390, 26);
+    AddControl(L"STATIC", L"model", 0, -1, 235, 330, 80, 24);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderModel, 320, 327, 390, 26);
+
+    AddControl(L"STATIC", L"apiKey 保存到 appsettings.json 时会使用 Windows DPAPI 加密；明文旧配置仍可读取。", 0, -1, 235, 370, 480, 44);
 
     AddControl(L"BUTTON", L"保存", WS_TABSTOP | BS_DEFPUSHBUTTON, IdSave, 520, 474, 90, 34);
     AddControl(L"BUTTON", L"取消", WS_TABSTOP, IdCancel, 620, 474, 90, 34);
@@ -301,6 +304,7 @@ void SettingsDialog::LoadSettingsToControls() {
     const int volume = std::clamp(static_cast<int>(draft_.masterVolume * 100.0f + 0.5f), 0, 100);
     SendDlgItemMessageW(hwnd_, IdVolume, TBM_SETPOS, TRUE, volume);
     SetText(IdVolumeText, std::to_wstring(volume) + L"%");
+    SendDlgItemMessageW(hwnd_, IdRoundTrace, BM_SETCHECK, draft_.roundTraceEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
     RefreshProviderList(providerNames_.empty() ? -1 : 0);
     RefreshAiCombos();
 }
@@ -412,6 +416,7 @@ void SettingsDialog::SaveAndClose() {
     draft_.ai2 = WideToUtf8(ComboText(IdAi2));
     draft_.ai1 = NormalizeAiSelection(draft_.ai1);
     draft_.ai2 = NormalizeAiSelection(draft_.ai2);
+    draft_.roundTraceEnabled = SendDlgItemMessageW(hwnd_, IdRoundTrace, BM_GETCHECK, 0, 0) == BST_CHECKED;
     CommitSelectedProvider();
     app_.Settings() = draft_;
     app_.Audio().SetMasterVolume(draft_.masterVolume);

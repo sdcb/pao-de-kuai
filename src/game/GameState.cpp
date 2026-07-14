@@ -381,6 +381,9 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     if (seed == 0) {
         seed = static_cast<unsigned>(std::time(nullptr));
     }
+    roundSeed_ = seed;
+    roundTraceWritten_ = false;
+    lastRoundTracePath_.clear();
     const std::optional<rules::PlayerId> requestedLeader = nextRoundLeader_;
     nextRoundLeader_.reset();
     playerName_ = playerName.empty() ? "\xE6\x9D\x8E\xE5\xA7\x90" : playerName;
@@ -423,6 +426,7 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     for (std::size_t i = 0; i < deck.size(); ++i) {
         players_[i % 3].hand.push_back(deck[i]);
     }
+    initialPlayers_ = players_;
     std::vector<rules::Cards> hands;
     for (const PlayerState& player : players_) {
         hands.push_back(player.hand);
@@ -577,7 +581,24 @@ bool GameState::ApplyHint() {
     AiMoveChoice choice = aiPlayers_[0].ChooseMove(players_[0].hand, MakeAiContext(rules::PlayerId::Player));
     if (choice.pass) {
         if (!CurrentPlayerLeads()) {
-            return Pass(rules::PlayerId::Player);
+            const TurnSnapshot before = Snapshot();
+            if (!Pass(rules::PlayerId::Player)) {
+                return false;
+            }
+            TurnRecord record = BuildTurnRecord(
+                before,
+                rules::PlayerId::Player,
+                TurnDecisionSource::Human,
+                TurnDecisionReason::CannotBeat,
+                ActionFromCards({}, true),
+                ActionFromCards({}, true),
+                {},
+                std::nullopt,
+                true,
+                "提示直接不要",
+                {});
+            AppendRecord(std::move(record));
+            return true;
         }
         toast_ = choice.reason;
         AddEvent(GameEvent{GameEventType::Hint, rules::PlayerId::Player, choice.reason, {}});
@@ -774,6 +795,9 @@ void GameState::TestSetRound(
     players_[0] = PlayerState{"Tester", hands[0], false};
     players_[1] = PlayerState{"AI1", hands[1], true};
     players_[2] = PlayerState{"AI2", hands[2], true};
+    initialPlayers_ = players_;
+    playerName_ = players_[0].name;
+    startedAt_ = stats::NowTimeText();
     currentPlayer_ = currentPlayer;
     lastMovePlayer_ = lastMovePlayer;
     trickLeader_ = previousPattern ? lastMovePlayer : currentPlayer;
@@ -795,6 +819,9 @@ void GameState::TestSetRound(
     toast_.clear();
     turnRecords_.clear();
     nextTurnNo_ = 1;
+    roundTraceWritten_ = false;
+    lastRoundTracePath_.clear();
+    roundSeed_ = 0;
     externalAiPending_ = false;
     activeExternalAi_.reset();
     for (const auto& controller : externalAiControllers_) {
@@ -930,6 +957,27 @@ void GameState::AppendRecord(TurnRecord record) {
     }
     turnRecords_.push_back(std::move(record));
     nextTurnNo_++;
+    MaybeWriteRoundTrace();
+}
+
+void GameState::MaybeWriteRoundTrace() {
+    if (!roundTraceEnabled_ || roundTraceWritten_ || !roundOver_) {
+        return;
+    }
+
+    RoundTrace trace;
+    trace.seed = roundSeed_;
+    trace.playerName = playerName_;
+    trace.startedAt = startedAt_;
+    trace.roundLeader = roundLeader_;
+    trace.initialPlayers = initialPlayers_;
+    trace.turns = turnRecords_;
+    trace.result = lastRoundRecord_;
+
+    RoundTraceRecorder recorder(roundTraceRoot_);
+    if (recorder.WriteRound(trace, &lastRoundTracePath_)) {
+        roundTraceWritten_ = true;
+    }
 }
 
 TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
@@ -980,6 +1028,14 @@ void GameState::SetExternalAiControllers(std::vector<std::shared_ptr<ExternalAiC
 
 void GameState::SetLocalAiStrategy(rules::PlayerId player, std::unique_ptr<AiStrategy> strategy) {
     aiPlayers_[Index(player)].SetStrategy(std::move(strategy));
+}
+
+void GameState::SetRoundTraceEnabled(bool enabled) {
+    roundTraceEnabled_ = enabled;
+}
+
+void GameState::SetRoundTraceRoot(std::string root) {
+    roundTraceRoot_ = std::move(root);
 }
 
 std::shared_ptr<ExternalAiController> GameState::AiControllerFor(rules::PlayerId player) const {

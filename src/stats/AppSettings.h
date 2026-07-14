@@ -19,6 +19,7 @@ struct AppSettings {
     int windowHeight{720};
     std::string ai1{"basic"};
     std::string ai2{"basic"};
+    bool roundTraceEnabled{false};
     std::map<std::string, AiProviderSettings> aiProviders;
 };
 

@@ -9,6 +9,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -670,6 +672,44 @@ TEST_CASE("game state can finish a full three player autoplay round") {
            record.winner == rules::PlayerId::Ai2));
     CHECK(record.remainingCards[rules::PlayerIndex(record.winner)] == 0);
     CHECK(record.scores[0] + record.scores[1] + record.scores[2] == 0);
+}
+
+TEST_CASE("round trace writes json with human move state when enabled") {
+    const auto root = std::filesystem::temp_directory_path() / "pao_de_kuai_round_trace_tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    game::GameState state;
+    state.SetRoundTraceEnabled(true);
+    state.SetRoundTraceRoot(root.string());
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{C(rules::Rank::Three, rules::Suit::Spades)},
+            rules::Cards{C(rules::Rank::Four, rules::Suit::Spades)},
+            rules::Cards{C(rules::Rank::Five, rules::Suit::Spades)}
+        },
+        rules::PlayerId::Player,
+        std::nullopt,
+        rules::PlayerId::Player);
+
+    state.TogglePlayerCard(0);
+    REQUIRE(state.PlaySelected());
+    REQUIRE(state.IsRoundOver());
+    REQUIRE_FALSE(state.LastRoundTracePath().empty());
+
+    std::ifstream file(state.LastRoundTracePath(), std::ios::binary);
+    REQUIRE(file.good());
+    const std::string json((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    CHECK(json.find("pdk_round_trace") != std::string::npos);
+    CHECK(json.find("\"initialHands\"") != std::string::npos);
+    CHECK(json.find("\"turns\"") != std::string::npos);
+    CHECK(json.find("\"source\":\t\"human\"") != std::string::npos);
+    CHECK(json.find("\"finalCards\"") != std::string::npos);
+    CHECK(json.find("\"3S\"") != std::string::npos);
+    CHECK(json.find("\"winner\":\t\"player\"") != std::string::npos);
+
+    file.close();
+    std::filesystem::remove_all(root);
 }
 
 TEST_CASE("disabled strong ai beats basic over 1000 autoplay rounds" * doctest::skip(!RunAiFairnessTest())) {

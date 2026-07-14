@@ -3,6 +3,7 @@
 #include "game/AiPlayer.h"
 #include "game/ExternalAiController.h"
 #include "game/Player.h"
+#include "game/RoundTraceRecorder.h"
 #include "rules/PaoDeKuaiRules.h"
 #include "stats/DailyStat.h"
 
@@ -96,6 +97,9 @@ public:
     void SetExternalAiController(std::shared_ptr<ExternalAiController> controller);
     void SetExternalAiControllers(std::vector<std::shared_ptr<ExternalAiController>> controllers);
     void SetLocalAiStrategy(rules::PlayerId player, std::unique_ptr<AiStrategy> strategy);
+    void SetRoundTraceEnabled(bool enabled);
+    void SetRoundTraceRoot(std::string root);
+    const std::string& LastRoundTracePath() const { return lastRoundTracePath_; }
 
     void TestSetRound(
         const std::array<rules::Cards, 3>& hands,
@@ -123,6 +127,7 @@ private:
         const std::string& validationMessage,
         TurnDecisionTrace trace) const;
     void AppendRecord(TurnRecord record);
+    void MaybeWriteRoundTrace();
     TurnDecisionTrace SyntheticTrace(const TurnRecord& record) const;
     std::shared_ptr<ExternalAiController> AiControllerFor(rules::PlayerId player) const;
     bool UsesRemoteAi(rules::PlayerId player) const;
@@ -179,6 +184,12 @@ private:
     std::vector<TurnRecord> turnRecords_;
     bool externalAiPending_{false};
     int nextTurnNo_{1};
+    bool roundTraceEnabled_{false};
+    bool roundTraceWritten_{false};
+    unsigned roundSeed_{0};
+    std::string roundTraceRoot_;
+    std::string lastRoundTracePath_;
+    std::array<PlayerState, 3> initialPlayers_;
 };
 
 } // namespace pdk::game

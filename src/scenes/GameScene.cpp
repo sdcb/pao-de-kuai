@@ -100,6 +100,7 @@ void GameScene::OnEnter() {
 }
 
 void GameScene::StartNextRound() {
+    game_.SetRoundTraceEnabled(app_.Settings().roundTraceEnabled);
     game_.StartNewRound(app_.Settings().playerName, mock_ ? 20260606u : 0u);
     recordedRound_ = false;
     roundResultPending_ = false;

@@ -17,11 +17,13 @@ TEST_CASE("settings and daily stats use current working directory style json") {
     stats::AppSettings settings;
     settings.playerName = "Tester";
     settings.masterVolume = 0.5f;
+    settings.roundTraceEnabled = true;
     const auto settingsPath = (root / "appsettings.json").string();
     CHECK(stats::SaveAppSettings(settings, settingsPath));
     const stats::AppSettings loaded = stats::LoadAppSettings(settingsPath);
     CHECK(loaded.playerName == "Tester");
     CHECK(loaded.masterVolume == doctest::Approx(0.5));
+    CHECK(loaded.roundTraceEnabled);
     CHECK(loaded.ai1 == "basic");
     CHECK(loaded.ai2 == "basic");
     std::ifstream settingsFile(settingsPath, std::ios::binary);
@@ -29,6 +31,7 @@ TEST_CASE("settings and daily stats use current working directory style json") {
     settingsFile.close();
     CHECK(settingsJson.find("cardScale") == std::string::npos);
     CHECK(settingsJson.find("animationSpeed") == std::string::npos);
+    CHECK(settingsJson.find("roundTraceEnabled") != std::string::npos);
 
     stats::StatStore store(root.string());
     stats::RoundRecord round;

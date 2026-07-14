@@ -1,5 +1,6 @@
 build*/
 stat/
+round-traces/
 *.user
 *.log
 appsettings.json

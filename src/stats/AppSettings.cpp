@@ -144,6 +144,9 @@ AppSettings LoadAppSettings(const std::string& path) {
         cJSON_IsString(value) && value->valuestring) {
         settings.ai2 = NormalizeAiSelection(value->valuestring);
     }
+    if (const cJSON* value = cJSON_GetObjectItemCaseSensitive(root, "roundTraceEnabled"); cJSON_IsBool(value)) {
+        settings.roundTraceEnabled = cJSON_IsTrue(value);
+    }
     const cJSON* providers = cJSON_GetObjectItemCaseSensitive(root, "aiProviders");
     if (cJSON_IsObject(providers)) {
         const cJSON* item = nullptr;
@@ -174,6 +177,7 @@ bool SaveAppSettings(const AppSettings& settings, const std::string& path) {
     const std::string ai2 = NormalizeAiSelection(settings.ai2);
     cJSON_AddStringToObject(root, "ai1", ai1.c_str());
     cJSON_AddStringToObject(root, "ai2", ai2.c_str());
+    cJSON_AddBoolToObject(root, "roundTraceEnabled", settings.roundTraceEnabled);
     if (!settings.aiProviders.empty()) {
         cJSON* providers = cJSON_CreateObject();
         for (const auto& [name, provider] : settings.aiProviders) {
