@@ -20,6 +20,7 @@ int PatternBaseScore(rules::PatternType type);
 std::map<rules::Rank, int> CountRanks(const rules::Cards& cards);
 int UnknownRankCount(const Candidate& candidate, const AiContext& context, rules::Rank rank);
 int UnknownHigherControlCount(const Candidate& candidate, const AiContext& context, rules::Rank rank);
+int KickerControlPenalty(const Candidate& candidate);
 std::vector<Candidate> GenerateCandidates(const rules::Cards& hand, const AiContext& context);
 void DeduplicateCandidates(std::vector<Candidate>& candidates);
 std::string CandidateKey(const Candidate& candidate);

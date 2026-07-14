@@ -40,7 +40,8 @@ TEST_CASE("ai lead prefers triple with two loose kickers over triple with one") 
         C(rules::Rank::Six, rules::Suit::Diamonds),
         C(rules::Rank::Seven),
         C(rules::Rank::Nine),
-        C(rules::Rank::King)
+        C(rules::Rank::King),
+        C(rules::Rank::Ace)
     };
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
@@ -49,6 +50,35 @@ TEST_CASE("ai lead prefers triple with two loose kickers over triple with one") 
     CHECK(choice.pattern.type == rules::PatternType::TripleWithPair);
     CHECK(choice.cards.size() == 5);
     CHECK(CountRank(choice.cards, rules::Rank::Six) == 3);
+    CHECK(CountRank(choice.cards, rules::Rank::Seven) == 1);
+    CHECK(CountRank(choice.cards, rules::Rank::Nine) == 1);
+    CHECK(CountRank(choice.cards, rules::Rank::King) == 0);
+    CHECK(CountRank(choice.cards, rules::Rank::Ace) == 0);
+}
+
+TEST_CASE("strong ai triple with two preserves high control kickers") {
+    game::StrongAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Six),
+        C(rules::Rank::Six, rules::Suit::Hearts),
+        C(rules::Rank::Six, rules::Suit::Diamonds),
+        C(rules::Rank::Seven),
+        C(rules::Rank::Nine),
+        C(rules::Rank::King),
+        C(rules::Rank::Ace),
+        C(rules::Rank::Two)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::TripleWithPair);
+    CHECK(CountRank(choice.cards, rules::Rank::Six) == 3);
+    CHECK(CountRank(choice.cards, rules::Rank::Seven) == 1);
+    CHECK(CountRank(choice.cards, rules::Rank::Nine) == 1);
+    CHECK(CountRank(choice.cards, rules::Rank::King) == 0);
+    CHECK(CountRank(choice.cards, rules::Rank::Ace) == 0);
+    CHECK(CountRank(choice.cards, rules::Rank::Two) == 0);
 }
 
 TEST_CASE("ai lead uses the full consecutive pairs run") {
@@ -339,6 +369,42 @@ TEST_CASE("strong ai urgent follow uses a high singleton blocker") {
     game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
     context.nextPlayerRemainingCards = 1;
     context.minOpponentRemainingCards = 1;
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::King);
+}
+
+TEST_CASE("strong ai lead blocks a one-card opponent even when not next player") {
+    game::StrongAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Three),
+        C(rules::Rank::Eight),
+        C(rules::Rank::Ace)
+    };
+    game::AiContext context = LeadContext(static_cast<int>(hand.size()), 6, 1);
+    context.remainingCards = {static_cast<int>(hand.size()), 6, 1};
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::Ace);
+}
+
+TEST_CASE("strong ai follow blocks a one-card opponent even when not next player") {
+    game::StrongAiStrategy ai;
+    const auto previous = rules::IdentifyPattern({C(rules::Rank::Seven)}).pattern;
+    rules::Cards hand{
+        C(rules::Rank::Eight),
+        C(rules::Rank::King)
+    };
+    game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
+    context.nextPlayerRemainingCards = 6;
+    context.minOpponentRemainingCards = 1;
+    context.remainingCards = {static_cast<int>(hand.size()), 6, 1};
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
 

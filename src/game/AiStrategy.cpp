@@ -165,6 +165,38 @@ int GroupDisruptionPenalty(
     return penalty;
 }
 
+int KickerControlPenalty(const Candidate& candidate) {
+    if (candidate.remainder.empty()) {
+        return 0;
+    }
+    if (candidate.pattern.type != rules::PatternType::TripleWithOne &&
+        candidate.pattern.type != rules::PatternType::TripleWithPair &&
+        candidate.pattern.type != rules::PatternType::Plane) {
+        return 0;
+    }
+
+    const auto playedCounts = CountRanks(candidate.cards);
+    const auto coreUsage = CoreUsage(candidate.cards, candidate.pattern);
+    int penalty = 0;
+    for (const auto& [rank, used] : playedCounts) {
+        const int coreUsed = coreUsage.contains(rank) ? coreUsage.at(rank) : 0;
+        const int kickerUsed = std::max(0, used - coreUsed);
+        if (kickerUsed <= 0) {
+            continue;
+        }
+        if (rank == rules::Rank::Two) {
+            penalty += 1800 * kickerUsed;
+        } else if (rank == rules::Rank::Ace) {
+            penalty += 1300 * kickerUsed;
+        } else if (rank == rules::Rank::King) {
+            penalty += 850 * kickerUsed;
+        } else if (rank == rules::Rank::Queen) {
+            penalty += 360 * kickerUsed;
+        }
+    }
+    return penalty;
+}
+
 int EvaluateRemainingHand(const rules::Cards& cards) {
     if (cards.empty()) {
         return 6000;
@@ -344,24 +376,31 @@ std::vector<std::uint64_t> FollowCandidateMasks(int n, const rules::HandPattern&
 int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
     const int leaves = static_cast<int>(candidate.remainder.size());
     int score = 0;
+    const bool anyOpponentSingle = context.minOpponentRemainingCards == 1;
     const bool urgentDefense = context.nextPlayerRemainingCards == 1 ||
         (context.minOpponentRemainingCards > 0 && context.minOpponentRemainingCards <= 2);
 
-    if (context.leading && context.nextPlayerRemainingCards == 1) {
+    if (context.leading && anyOpponentSingle) {
         if (candidate.pattern.type == rules::PatternType::Single) {
             score -= 900;
-            score += rules::RankValue(candidate.pattern.mainRank) * 55;
+            score += rules::RankValue(candidate.pattern.mainRank) * 85;
+            if (candidate.pattern.mainRank >= rules::Rank::King) {
+                score += 360;
+            }
         } else {
             score += 420 + candidate.pattern.cardCount * 25;
         }
     }
-    if (!context.leading && context.nextPlayerRemainingCards == 1 &&
+    if (!context.leading && anyOpponentSingle &&
         context.previous.type == rules::PatternType::Single &&
         candidate.pattern.type == rules::PatternType::Single) {
-        // When the next player has reported single, following with the minimum
+        // When any opponent has reported single, following with the minimum
         // card often hands them the turn. A single-card follow should therefore
         // favor the largest available blocker over preserving a high singleton.
-        score += rules::RankValue(candidate.pattern.mainRank) * 95;
+        score += rules::RankValue(candidate.pattern.mainRank) * 115;
+        if (candidate.pattern.mainRank >= rules::Rank::King) {
+            score += 420;
+        }
     }
 
     if (context.minOpponentRemainingCards > 0 && context.minOpponentRemainingCards <= 2) {
@@ -486,6 +525,7 @@ std::vector<Candidate> GenerateCandidates(const rules::Cards& hand, const AiCont
             score += EvaluateRemainingHand(remainder);
         }
         Candidate candidate{cards, validation.pattern, remainder, disruption, score};
+        candidate.score -= KickerControlPenalty(candidate) * (context.leading ? 2 : 3);
         candidate.score += TacticalAdjustment(candidate, context);
         candidates.push_back(std::move(candidate));
     };

@@ -822,6 +822,22 @@ bool ShouldUseRollout(const Candidate& candidate, const AiContext& context) {
     return candidate.remainder.size() <= 10 || context.minOpponentRemainingCards <= 8;
 }
 
+int StrongPostRolloutAdjustment(const Candidate& candidate, const AiContext& context) {
+    int score = -KickerControlPenalty(candidate) * 10;
+    const bool anyOpponentSingle = context.minOpponentRemainingCards == 1;
+    const bool singleBlocker = candidate.pattern.type == rules::PatternType::Single &&
+        (context.leading || (!context.leading && context.previous.type == rules::PatternType::Single));
+    if (anyOpponentSingle && singleBlocker && !candidate.remainder.empty()) {
+        score += rules::RankValue(candidate.pattern.mainRank) * 180;
+        if (candidate.pattern.mainRank >= rules::Rank::King) {
+            score += 1100;
+        } else if (candidate.pattern.mainRank <= rules::Rank::Ten) {
+            score -= 900;
+        }
+    }
+    return score;
+}
+
 int StrongAdjustment(const Candidate& candidate, const AiContext& context) {
     int score = 0;
     if (context.leading && candidate.pattern.type == rules::PatternType::Bomb &&
@@ -968,6 +984,7 @@ AiMoveChoice StrongAiStrategy::ChooseMove(const rules::Cards& hand, const AiCont
             const int rolloutBonus = RolloutBonus(candidate, context, hand);
             candidate.score = rolloutBonus * 24 + candidate.score / 120;
         }
+        candidate.score += StrongPostRolloutAdjustment(candidate, context);
     }
     std::sort(candidates.begin(), candidates.begin() + rolloutLimit, [](const Candidate& lhs, const Candidate& rhs) {
         if (lhs.score != rhs.score) {
