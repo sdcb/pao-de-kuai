@@ -335,6 +335,14 @@ bool LlmAiController::IsRemote(rules::PlayerId player) const {
     return CanHandle(player);
 }
 
+game::StrategyMetadata LlmAiController::MetadataFor(rules::PlayerId player) const {
+    const auto it = providers_.find(player);
+    if (it == providers_.end()) {
+        return {"llm", "1", {}, {}};
+    }
+    return {"llm", "1", it->second.type, it->second.model};
+}
+
 bool LlmAiController::HasPending() const {
     std::lock_guard lock(state_->mutex);
     return state_->pending;

@@ -4,10 +4,13 @@
 #include "rules/Deck.h"
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <cstdint>
 #include <map>
+#include <mutex>
 #include <optional>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -178,13 +181,20 @@ bool CachedHasAnyFollowMove(const rules::Cards& hand, const rules::HandPattern& 
     };
 
     static std::map<FollowKey, bool> cache;
+    static std::mutex cacheMutex;
     const FollowKey key{CardSetMask(hand), PatternKey(previous), handSizeBeforePlay};
-    const auto cached = cache.find(key);
-    if (cached != cache.end()) {
-        return cached->second;
+    {
+        const std::lock_guard<std::mutex> lock(cacheMutex);
+        const auto cached = cache.find(key);
+        if (cached != cache.end()) {
+            return cached->second;
+        }
     }
     const bool result = rules::HasAnyFollowMove(hand, previous, handSizeBeforePlay);
-    cache[key] = result;
+    {
+        const std::lock_guard<std::mutex> lock(cacheMutex);
+        cache[key] = result;
+    }
     return result;
 }
 
@@ -198,10 +208,14 @@ int MinimumLeadCount(const rules::Cards& cards) {
     }
 
     static std::map<std::uint64_t, int> cache;
+    static std::mutex cacheMutex;
     const std::uint64_t cacheKey = CardSetMask(cards);
-    const auto cached = cache.find(cacheKey);
-    if (cached != cache.end()) {
-        return cached->second;
+    {
+        const std::lock_guard<std::mutex> lock(cacheMutex);
+        const auto cached = cache.find(cacheKey);
+        if (cached != cache.end()) {
+            return cached->second;
+        }
     }
 
     const int fullMask = (1 << n) - 1;
@@ -220,24 +234,36 @@ int MinimumLeadCount(const rules::Cards& cards) {
         }
     }
 
-    constexpr int inf = 99;
-    std::vector<int> dp(static_cast<std::size_t>(fullMask + 1), inf);
-    dp[0] = 0;
-    for (int mask = 0; mask <= fullMask; ++mask) {
-        const int current = dp[static_cast<std::size_t>(mask)];
-        if (current >= inf) {
-            continue;
-        }
-        const int remaining = fullMask ^ mask;
-        for (int legal : legalMasks) {
-            if ((legal & remaining) == legal) {
-                int& next = dp[static_cast<std::size_t>(mask | legal)];
-                next = std::min(next, current + 1);
+    std::vector<std::vector<int>> legalByCard(static_cast<std::size_t>(n));
+    for (int legal : legalMasks) {
+        for (int i = 0; i < n; ++i) {
+            if ((legal & (1 << i)) != 0) {
+                legalByCard[static_cast<std::size_t>(i)].push_back(legal);
             }
         }
     }
+
+    constexpr int inf = 99;
+    std::vector<int> dp(static_cast<std::size_t>(fullMask + 1), inf);
+    dp[0] = 0;
+    for (int remaining = 1; remaining <= fullMask; ++remaining) {
+        int first = 0;
+        while ((remaining & (1 << first)) == 0) {
+            ++first;
+        }
+        int best = inf;
+        for (int legal : legalByCard[static_cast<std::size_t>(first)]) {
+            if ((legal & remaining) == legal) {
+                best = std::min(best, 1 + dp[static_cast<std::size_t>(remaining ^ legal)]);
+            }
+        }
+        dp[static_cast<std::size_t>(remaining)] = best;
+    }
     const int result = dp[static_cast<std::size_t>(fullMask)];
-    cache[cacheKey] = result;
+    {
+        const std::lock_guard<std::mutex> lock(cacheMutex);
+        cache[cacheKey] = result;
+    }
     return result;
 }
 
@@ -633,7 +659,6 @@ AiMoveChoice ChooseRolloutMove(const rules::Cards& hand, const AiContext& contex
     if (context.leading && context.currentPlayerIndex == context.roundLeaderIndex) {
         DeduplicateCandidates(candidates);
     }
-
     const int planLimit = std::min(context.leading ? 10 : 8, static_cast<int>(candidates.size()));
     for (int i = 0; i < planLimit; ++i) {
         Candidate& candidate = candidates[static_cast<std::size_t>(i)];
@@ -664,9 +689,12 @@ int RolloutWinner(RolloutState state, int strongIndex) {
     BasicAiStrategy basic;
     for (int turn = 0; turn < 240; ++turn) {
         rules::Cards& hand = state.hands[static_cast<std::size_t>(state.currentIndex)];
-        AiMoveChoice choice = state.currentIndex == strongIndex
-            ? ChooseRolloutMove(hand, RolloutContext(state), true)
-            : basic.ChooseMove(hand, RolloutContext(state));
+        AiMoveChoice choice;
+        if (state.currentIndex == strongIndex) {
+            choice = ChooseRolloutMove(hand, RolloutContext(state), true);
+        } else {
+            choice = basic.ChooseMove(hand, RolloutContext(state));
+        }
         if (choice.pass) {
             if (!state.lastPattern) {
                 return -1;
@@ -756,7 +784,8 @@ std::optional<int> EnumeratedRolloutBonus(
     int self,
     int next,
     int other,
-    int nextCards) {
+    int nextCards,
+    bool parallelEvaluation) {
     const int n = static_cast<int>(unknown.size());
     if (n > 14 || nextCards < 0 || nextCards > n) {
         return std::nullopt;
@@ -773,11 +802,9 @@ std::optional<int> EnumeratedRolloutBonus(
         }
     }
 
-    int total = 0;
-    int count = 0;
-    for (int mask = 0; mask < limit; ++mask) {
+    const auto scoreMask = [&](int mask, int& total, int& count) {
         if (CountMaskBits(mask) != nextCards) {
-            continue;
+            return;
         }
 
         rules::Cards nextHand;
@@ -794,11 +821,48 @@ std::optional<int> EnumeratedRolloutBonus(
 
         if (!IsConsistentWithPassHistory(nextHand, next, context) ||
             !IsConsistentWithPassHistory(otherHand, other, context)) {
-            continue;
+            return;
         }
 
-        total += ScoreRolloutDistribution(candidate, context, self, next, other, std::move(nextHand), std::move(otherHand));
+        total += ScoreRolloutDistribution(
+            candidate, context, self, next, other,
+            std::move(nextHand), std::move(otherHand));
         count++;
+    };
+
+    int total = 0;
+    int count = 0;
+    if (parallelEvaluation) {
+        std::atomic<int> nextMask{0};
+        std::atomic<int> parallelTotal{0};
+        std::atomic<int> parallelCount{0};
+        const auto worker = [&]() {
+            int localTotal = 0;
+            int localCount = 0;
+            for (;;) {
+                const int mask = nextMask.fetch_add(1);
+                if (mask >= limit) {
+                    break;
+                }
+                scoreMask(mask, localTotal, localCount);
+            }
+            parallelTotal.fetch_add(localTotal);
+            parallelCount.fetch_add(localCount);
+        };
+        std::array<std::thread, 8> workers{
+            std::thread(worker), std::thread(worker), std::thread(worker), std::thread(worker),
+            std::thread(worker), std::thread(worker), std::thread(worker), std::thread(worker)
+        };
+        worker();
+        for (std::thread& thread : workers) {
+            thread.join();
+        }
+        total = parallelTotal.load();
+        count = parallelCount.load();
+    } else {
+        for (int mask = 0; mask < limit; ++mask) {
+            scoreMask(mask, total, count);
+        }
     }
 
     if (count == 0) {
@@ -828,7 +892,8 @@ bool ShouldUseExactRolloutEnumeration(int unknownCount, int nextCards) {
 int FastRolloutBonus(
     const Candidate& candidate,
     const AiContext& context,
-    const rules::Cards& unknown) {
+    const rules::Cards& unknown,
+    int sampleCount = 5) {
     if (candidate.remainder.size() > 10 && context.minOpponentRemainingCards > 8) {
         return 0;
     }
@@ -836,7 +901,6 @@ int FastRolloutBonus(
     const int self = context.currentPlayerIndex;
     const int next = NextIndex(self);
     const int other = NextIndex(next);
-    constexpr int sampleCount = 5;
     const int nextCards = context.remainingCards[static_cast<std::size_t>(next)];
     const int otherCards = context.remainingCards[static_cast<std::size_t>(other)];
     if (static_cast<int>(unknown.size()) != nextCards + otherCards) {
@@ -844,15 +908,30 @@ int FastRolloutBonus(
     }
 
     if (ShouldUseExactRolloutEnumeration(static_cast<int>(unknown.size()), nextCards)) {
-        if (std::optional<int> enumerated = EnumeratedRolloutBonus(candidate, context, unknown, self, next, other, nextCards)) {
+        if (std::optional<int> enumerated = EnumeratedRolloutBonus(
+                candidate, context, unknown, self, next, other, nextCards,
+                sampleCount > 5)) {
             return *enumerated;
         }
     }
 
-    int score = 0;
-    int validSamples = 0;
-    std::uint32_t seed = CandidateSeed(candidate, context);
-    for (int sample = 0; sample < sampleCount * 4 && validSamples < sampleCount; ++sample) {
+    const int attemptCount = sampleCount * 4;
+    std::vector<int> sampleScores(static_cast<std::size_t>(attemptCount));
+    std::vector<unsigned char> sampleValid(static_cast<std::size_t>(attemptCount));
+    const std::uint32_t seed = CandidateSeed(candidate, context);
+    std::vector<int> validAttemptIndices;
+    validAttemptIndices.reserve(static_cast<std::size_t>(sampleCount));
+    for (int sample = 0; sample < attemptCount && static_cast<int>(validAttemptIndices.size()) < sampleCount; ++sample) {
+        rules::Cards shuffled = unknown;
+        ShuffleSample(shuffled, MixSeed(seed, static_cast<std::uint32_t>(sample + 17)));
+        rules::Cards nextHand(shuffled.begin(), shuffled.begin() + nextCards);
+        rules::Cards otherHand(shuffled.begin() + nextCards, shuffled.end());
+        if (IsConsistentWithPassHistory(nextHand, next, context) &&
+            IsConsistentWithPassHistory(otherHand, other, context)) {
+            validAttemptIndices.push_back(sample);
+        }
+    }
+    const auto runSample = [&](int sample) {
         rules::Cards shuffled = unknown;
         ShuffleSample(shuffled, MixSeed(seed, static_cast<std::uint32_t>(sample + 17)));
 
@@ -868,9 +947,9 @@ int FastRolloutBonus(
         }
         if (!IsConsistentWithPassHistory(nextHand, next, context) ||
             !IsConsistentWithPassHistory(otherHand, other, context)) {
-            continue;
+            return;
         }
-        validSamples++;
+        sampleValid[static_cast<std::size_t>(sample)] = 1;
 
         RolloutState state;
         state.hands[static_cast<std::size_t>(self)] = candidate.remainder;
@@ -889,10 +968,45 @@ int FastRolloutBonus(
         const int winner = RolloutWinner(std::move(state), self);
         const int selfWinScore = self == context.roundLeaderIndex ? 3800 : 2600;
         if (winner == self) {
-            score += selfWinScore;
+            sampleScores[static_cast<std::size_t>(sample)] = selfWinScore;
         } else if (winner >= 0) {
-            score += winner == other ? -700 : -2300;
+            sampleScores[static_cast<std::size_t>(sample)] = winner == other ? -700 : -2300;
         }
+    };
+
+    if (sampleCount > 5) {
+        std::atomic<int> nextTask{0};
+        const auto worker = [&]() {
+            for (;;) {
+                const int task = nextTask.fetch_add(1);
+                if (task >= static_cast<int>(validAttemptIndices.size())) {
+                    return;
+                }
+                runSample(validAttemptIndices[static_cast<std::size_t>(task)]);
+            }
+        };
+        std::array<std::thread, 8> workers{
+            std::thread(worker), std::thread(worker), std::thread(worker), std::thread(worker),
+            std::thread(worker), std::thread(worker), std::thread(worker), std::thread(worker)
+        };
+        worker();
+        for (std::thread& thread : workers) {
+            thread.join();
+        }
+    } else {
+        for (int sample : validAttemptIndices) {
+            runSample(sample);
+        }
+    }
+
+    int score = 0;
+    int validSamples = 0;
+    for (int sample = 0; sample < attemptCount && validSamples < sampleCount; ++sample) {
+        if (sampleValid[static_cast<std::size_t>(sample)] == 0) {
+            continue;
+        }
+        score += sampleScores[static_cast<std::size_t>(sample)];
+        validSamples++;
     }
     return validSamples > 0 ? score / validSamples : 0;
 }
@@ -917,6 +1031,13 @@ int StrongPostRolloutAdjustment(const Candidate& candidate, const AiContext& con
     return score;
 }
 
+bool IsPreferredEarlyLead(rules::PatternType type) {
+    return type == rules::PatternType::Straight ||
+        type == rules::PatternType::ConsecutivePairs ||
+        type == rules::PatternType::TripleWithPair ||
+        type == rules::PatternType::Plane;
+}
+
 int StrongAdjustment(const Candidate& candidate, const AiContext& context) {
     int score = 0;
     if (context.leading && candidate.pattern.type == rules::PatternType::Bomb &&
@@ -927,7 +1048,7 @@ int StrongAdjustment(const Candidate& candidate, const AiContext& context) {
     if (context.leading &&
         context.currentPlayerIndex == context.roundLeaderIndex &&
         context.ownRemainingCards >= 13 &&
-        candidate.pattern.cardCount >= 5 &&
+        candidate.pattern.cardCount >= 4 && IsPreferredEarlyLead(candidate.pattern.type) &&
         candidate.remainder.size() <= 11) {
         score += 950 + candidate.pattern.cardCount * 85;
     }
@@ -1001,6 +1122,94 @@ bool StrongCandidateBetter(const Candidate& lhs, const Candidate& rhs) {
     return rules::RankValue(lhs.pattern.mainRank) < rules::RankValue(rhs.pattern.mainRank);
 }
 
+int PartialBombCardsUsed(const Candidate& candidate, const rules::Cards& hand) {
+    const auto handCounts = CountRanks(hand);
+    const auto playedCounts = CountRanks(candidate.cards);
+    int used = 0;
+    for (const auto& [rank, count] : handCounts) {
+        if (count != 4) {
+            continue;
+        }
+        const auto it = playedCounts.find(rank);
+        if (it != playedCounts.end() && it->second > 0 && it->second < 4) {
+            used = std::max(used, it->second);
+        }
+    }
+    return used;
+}
+
+void FilterStrongBombSplits(std::vector<Candidate>& candidates, const rules::Cards& hand, const AiContext& context) {
+    if (!context.leading || hand.size() > 7) {
+        return;
+    }
+    const auto handCounts = CountRanks(hand);
+    const bool hasBomb = std::any_of(handCounts.begin(), handCounts.end(), [](const auto& entry) {
+        return entry.second == 4;
+    });
+    if (!hasBomb) {
+        return;
+    }
+
+    candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&](const Candidate& candidate) {
+        const int used = PartialBombCardsUsed(candidate, hand);
+        if (used == 0 || candidate.remainder.empty()) {
+            return false;
+        }
+        return used >= 3;
+    }), candidates.end());
+}
+
+void FilterStrongMidgameSingleSplits(
+    std::vector<Candidate>& candidates,
+    const rules::Cards& hand,
+    const AiContext& context) {
+    if (!context.leading || hand.size() < 5 || hand.size() > 8) {
+        return;
+    }
+    const auto handCounts = CountRanks(hand);
+    const bool hasSingleton = std::any_of(handCounts.begin(), handCounts.end(), [](const auto& entry) {
+        return entry.second == 1;
+    });
+    if (!hasSingleton) {
+        return;
+    }
+    candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&](const Candidate& candidate) {
+        if (candidate.pattern.type != rules::PatternType::Single || candidate.cards.empty()) {
+            return false;
+        }
+        const auto found = handCounts.find(candidate.cards.front().rank);
+        return found != handCounts.end() && found->second >= 2;
+    }), candidates.end());
+}
+
+void PromotePreferredLeadTypes(std::vector<Candidate>& candidates, int limit) {
+    if (limit <= 0 || static_cast<int>(candidates.size()) <= limit) {
+        return;
+    }
+    const std::array<rules::PatternType, 4> preferred{
+        rules::PatternType::Straight,
+        rules::PatternType::ConsecutivePairs,
+        rules::PatternType::TripleWithPair,
+        rules::PatternType::Plane
+    };
+    int replace = limit - 1;
+    for (rules::PatternType type : preferred) {
+        const bool alreadyPresent = std::any_of(candidates.begin(), candidates.begin() + limit, [type](const Candidate& candidate) {
+            return candidate.pattern.type == type;
+        });
+        if (alreadyPresent) {
+            continue;
+        }
+        const auto found = std::find_if(candidates.begin() + limit, candidates.end(), [type](const Candidate& candidate) {
+            return candidate.pattern.type == type;
+        });
+        if (found != candidates.end() && replace >= 0) {
+            std::iter_swap(candidates.begin() + replace, found);
+            --replace;
+        }
+    }
+}
+
 } // namespace ai_internal
 
 using namespace ai_internal;
@@ -1021,6 +1230,11 @@ AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context
     if (context.leading && context.currentPlayerIndex == context.roundLeaderIndex) {
         DeduplicateCandidates(candidates);
     }
+    FilterStrongBombSplits(candidates, hand, context);
+    FilterStrongMidgameSingleSplits(candidates, hand, context);
+    if (candidates.empty()) {
+        return AiMoveChoice{true, {}, {}, context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败"};
+    }
 
     std::optional<rules::Cards> unknown;
     const auto getUnknown = [&]() -> const rules::Cards& {
@@ -1031,11 +1245,18 @@ AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context
     };
 
     const int planLimit = std::min(context.leading ? 24 : 18, static_cast<int>(candidates.size()));
+    if (context.leading && context.ownRemainingCards >= 13) {
+        PromotePreferredLeadTypes(candidates, planLimit);
+    }
     for (int i = 0; i < planLimit; ++i) {
         Candidate& candidate = candidates[static_cast<std::size_t>(i)];
         if (!context.leading || candidate.remainder.size() <= 12) {
             const int planBonus = LeadCountPlanBonus(candidate.remainder);
-            const int leadPlanWeight = context.currentPlayerIndex == context.roundLeaderIndex ? 3 : 5;
+            const bool strongEarlyLead = context.currentPlayerIndex == context.roundLeaderIndex &&
+                context.ownRemainingCards >= 13;
+            const int leadPlanWeight = strongEarlyLead
+                ? 5
+                : (context.currentPlayerIndex == context.roundLeaderIndex ? 3 : 5);
             candidate.score += context.leading ? planBonus * leadPlanWeight : planBonus;
         }
         if (!context.leading && context.currentTrickPassCount > 0 && candidate.remainder.size() <= 10) {
@@ -1047,11 +1268,24 @@ AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context
     }
     std::sort(candidates.begin(), candidates.begin() + planLimit, StrongCandidateBetter);
 
+    const bool useStrongLeadPlanner = context.leading && context.ownRemainingCards >= 9;
     const int leaderRolloutLimit = 8;
     const int followRolloutLimit = 4;
     const int rolloutLimit = context.leading
         ? std::min(leaderRolloutLimit, static_cast<int>(candidates.size()))
         : std::min(followRolloutLimit, static_cast<int>(candidates.size()));
+    int strongPlannerBestPlan = 99;
+    if (useStrongLeadPlanner) {
+        for (int i = 0; i < rolloutLimit; ++i) {
+            const Candidate& candidate = candidates[static_cast<std::size_t>(i)];
+            const int plan = candidate.remainder.size() <= 12
+                ? MinimumLeadCount(candidate.remainder)
+                : 99;
+            if (plan < strongPlannerBestPlan) {
+                strongPlannerBestPlan = plan;
+            }
+        }
+    }
     for (int i = 0; i < rolloutLimit; ++i) {
         Candidate& candidate = candidates[static_cast<std::size_t>(i)];
         if (candidate.remainder.empty()) {
@@ -1060,21 +1294,69 @@ AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context
         const bool useFollowRollout = !context.leading &&
             context.currentTrickPassCount > 0 &&
             candidate.remainder.size() <= 8;
-        if (context.leading ? ShouldUseRollout(candidate, context) : useFollowRollout) {
-            const int rolloutBonus = FastRolloutBonus(candidate, context, getUnknown());
+        bool replacedByRollout = false;
+        const int plannerCandidatePlan = useStrongLeadPlanner && candidate.remainder.size() <= 12
+            ? MinimumLeadCount(candidate.remainder)
+            : 99;
+        const bool canWinStrongPlanner = !useStrongLeadPlanner ||
+            plannerCandidatePlan == strongPlannerBestPlan;
+        if (canWinStrongPlanner &&
+            (context.leading ? ShouldUseRollout(candidate, context) : useFollowRollout)) {
+            const int rolloutBonus = FastRolloutBonus(
+                candidate, context, getUnknown(),
+                useStrongLeadPlanner ? 9 : 5);
             candidate.score = rolloutBonus * 24 + candidate.score / 120;
+            replacedByRollout = true;
         }
         candidate.score += StrongPostRolloutAdjustment(candidate, context);
+        if (replacedByRollout && hand.size() <= 7 &&
+            PartialBombCardsUsed(candidate, hand) > 0) {
+            candidate.score -= candidate.disruptionPenalty * 2;
+        }
+        if (replacedByRollout &&
+            context.leading &&
+                context.currentPlayerIndex == context.roundLeaderIndex &&
+                context.ownRemainingCards >= 13) {
+            candidate.score += LeadCountPlanBonus(candidate.remainder) * 3;
+        }
+        if (!context.leading && !candidate.remainder.empty() &&
+            context.ownRemainingCards <= 4 &&
+            context.minOpponentRemainingCards > 4 &&
+            (candidate.pattern.type == rules::PatternType::Single ||
+             candidate.pattern.type == rules::PatternType::Pair)) {
+            candidate.score -= rules::RankValue(candidate.pattern.mainRank) * 30;
+        }
     }
     std::sort(candidates.begin(), candidates.begin() + rolloutLimit, StrongCandidateBetter);
 
-    const Candidate& best = candidates.front();
+    const Candidate* best = &candidates.front();
+    if (context.leading &&
+        context.ownRemainingCards >= 9) {
+        const int plannerLimit = std::min(8, static_cast<int>(candidates.size()));
+        long long bestSelectionScore = -0x7fffffffffffffffLL;
+        for (int i = 0; i < plannerLimit; ++i) {
+            const Candidate& candidate = candidates[static_cast<std::size_t>(i)];
+            const int candidatePlan = candidate.remainder.size() <= 12
+                ? MinimumLeadCount(candidate.remainder)
+                : 99;
+            if (candidatePlan != strongPlannerBestPlan) {
+                continue;
+            }
+            const long long selectionScore = static_cast<long long>(candidate.score) -
+                static_cast<long long>(candidatePlan) * 20000LL +
+                static_cast<long long>(candidate.cards.size()) * 1000LL;
+            if (selectionScore > bestSelectionScore) {
+                best = &candidate;
+                bestSelectionScore = selectionScore;
+            }
+        }
+    }
     return AiMoveChoice{
         false,
-        best.cards,
-        best.pattern,
-        "强 AI 推荐 " + rules::PatternName(best.pattern.type),
-        best.disruptionPenalty
+        best->cards,
+        best->pattern,
+        "强 AI 推荐 " + rules::PatternName(best->pattern.type),
+        best->disruptionPenalty
     };
 }
 

@@ -9,6 +9,14 @@
 #include <algorithm>
 #include <utility>
 
+#ifndef PDK_APP_VERSION
+#define PDK_APP_VERSION "unknown"
+#endif
+
+#ifndef PDK_BUILD_REVISION
+#define PDK_BUILD_REVISION "unknown"
+#endif
+
 namespace pdk::game {
 namespace {
 
@@ -102,6 +110,17 @@ cJSON* TraceMetaToJson(const TurnDecisionTrace& trace) {
     return object;
 }
 
+void AddStrategyFields(cJSON* object, const StrategyMetadata& strategy) {
+    cJSON_AddStringToObject(object, "strategy", strategy.strategy.c_str());
+    cJSON_AddStringToObject(object, "strategyVersion", strategy.strategyVersion.c_str());
+    if (!strategy.providerType.empty()) {
+        cJSON_AddStringToObject(object, "providerType", strategy.providerType.c_str());
+    }
+    if (!strategy.model.empty()) {
+        cJSON_AddStringToObject(object, "model", strategy.model.c_str());
+    }
+}
+
 cJSON* TurnToJson(const TurnRecord& record) {
     cJSON* object = cJSON_CreateObject();
     cJSON_AddNumberToObject(object, "turnNo", record.turnNo);
@@ -110,6 +129,7 @@ cJSON* TurnToJson(const TurnRecord& record) {
     cJSON_AddStringToObject(object, "reason", ReasonLabel(record.reason).c_str());
     cJSON_AddBoolToObject(object, "accepted", record.accepted);
     cJSON_AddStringToObject(object, "validationMessage", record.validationMessage.c_str());
+    AddStrategyFields(object, record.strategy);
     cJSON_AddItemToObject(object, "before", SnapshotToJson(record.before));
     cJSON_AddItemToObject(object, "after", SnapshotToJson(record.after));
     cJSON_AddItemToObject(object, "requestedAction", ActionToJson(record.requestedAction));
@@ -120,7 +140,9 @@ cJSON* TurnToJson(const TurnRecord& record) {
     return object;
 }
 
-cJSON* PlayersToJson(const std::array<PlayerState, 3>& players) {
+cJSON* PlayersToJson(
+    const std::array<PlayerState, 3>& players,
+    const std::array<StrategyMetadata, 3>& strategies) {
     cJSON* array = cJSON_CreateArray();
     for (int i = 0; i < 3; ++i) {
         cJSON* object = cJSON_CreateObject();
@@ -128,6 +150,7 @@ cJSON* PlayersToJson(const std::array<PlayerState, 3>& players) {
         cJSON_AddStringToObject(object, "id", rules::PlayerKey(id).c_str());
         cJSON_AddStringToObject(object, "name", players[static_cast<std::size_t>(i)].name.c_str());
         cJSON_AddStringToObject(object, "kind", id == rules::PlayerId::Player ? "human" : "ai");
+        AddStrategyFields(object, strategies[static_cast<std::size_t>(i)]);
         cJSON_AddItemToObject(object, "initialHand", CardsToJson(players[static_cast<std::size_t>(i)].hand));
         cJSON_AddItemToArray(array, object);
     }
@@ -193,14 +216,18 @@ RoundTraceRecorder::RoundTraceRecorder(std::string root)
 
 bool RoundTraceRecorder::WriteRound(const RoundTrace& trace, std::string* writtenPath) const {
     cJSON* root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "schemaVersion", 1);
+    cJSON_AddNumberToObject(root, "schemaVersion", 2);
     cJSON_AddStringToObject(root, "recordType", "pdk_round_trace");
+    cJSON_AddStringToObject(root, "appVersion", PDK_APP_VERSION);
+    cJSON_AddStringToObject(root, "buildRevision", PDK_BUILD_REVISION);
+    cJSON_AddStringToObject(root, "rulesVersion", "pdk48-v1");
+    cJSON_AddStringToObject(root, "turnOrder", "counterclockwise");
     cJSON_AddStringToObject(root, "date", stats::TodayDateKey().c_str());
     cJSON_AddNumberToObject(root, "seed", trace.seed);
     cJSON_AddStringToObject(root, "playerName", trace.playerName.c_str());
     cJSON_AddStringToObject(root, "startedAt", trace.startedAt.c_str());
     cJSON_AddStringToObject(root, "roundLeader", rules::PlayerKey(trace.roundLeader).c_str());
-    cJSON_AddItemToObject(root, "players", PlayersToJson(trace.initialPlayers));
+    cJSON_AddItemToObject(root, "players", PlayersToJson(trace.initialPlayers, trace.strategies));
     cJSON_AddItemToObject(root, "initialHands", HandsToJson({
         trace.initialPlayers[0].hand,
         trace.initialPlayers[1].hand,

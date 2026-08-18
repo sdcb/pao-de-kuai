@@ -15,6 +15,8 @@ public:
         return strategy_->ChooseMove(hand, context);
     }
 
+    StrategyMetadata Metadata() const { return strategy_->Metadata(); }
+
     void SetStrategy(std::unique_ptr<AiStrategy> strategy) {
         strategy_ = strategy ? std::move(strategy) : std::make_unique<BasicAiStrategy>();
     }

@@ -125,7 +125,8 @@ private:
         const std::optional<rules::HandPattern>& finalPattern,
         bool accepted,
         const std::string& validationMessage,
-        TurnDecisionTrace trace) const;
+        TurnDecisionTrace trace,
+        StrategyMetadata strategy = {}) const;
     void AppendRecord(TurnRecord record);
     void MaybeWriteRoundTrace();
     TurnDecisionTrace SyntheticTrace(const TurnRecord& record) const;
@@ -190,6 +191,9 @@ private:
     std::string roundTraceRoot_;
     std::string lastRoundTracePath_;
     std::array<PlayerState, 3> initialPlayers_;
+    std::array<StrategyMetadata, 3> roundStrategies_{
+        HumanStrategyMetadata(), BasicStrategyMetadata(), BasicStrategyMetadata()};
+    std::array<StrategyMetadata, 3> initialStrategies_{};
 };
 
 } // namespace pdk::game

@@ -701,6 +701,14 @@ TEST_CASE("round trace writes json with human move state when enabled") {
     REQUIRE(file.good());
     const std::string json((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     CHECK(json.find("pdk_round_trace") != std::string::npos);
+    CHECK(json.find("\"schemaVersion\":\t2") != std::string::npos);
+    CHECK(json.find("\"appVersion\"") != std::string::npos);
+    CHECK(json.find("\"buildRevision\"") != std::string::npos);
+    CHECK(json.find("\"rulesVersion\":\t\"pdk48-v1\"") != std::string::npos);
+    CHECK(json.find("\"turnOrder\":\t\"counterclockwise\"") != std::string::npos);
+    CHECK(json.find("\"strategy\":\t\"human\"") != std::string::npos);
+    CHECK(json.find("\"strategy\":\t\"basic\"") != std::string::npos);
+    CHECK(json.find("\"strategyVersion\":\t\"1\"") != std::string::npos);
     CHECK(json.find("\"initialHands\"") != std::string::npos);
     CHECK(json.find("\"turns\"") != std::string::npos);
     CHECK(json.find("\"source\":\t\"human\"") != std::string::npos);
@@ -965,6 +973,9 @@ TEST_CASE("AI1 can use local async strong controller and records a local decisio
     const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
     auto controller = std::make_shared<game::LocalAiController>();
     controller->SetStrategy(rules::PlayerId::Ai1, game::LocalAiKind::Strong);
+    const game::StrategyMetadata metadata = controller->MetadataFor(rules::PlayerId::Ai1);
+    CHECK(metadata.strategy == "strong");
+    CHECK(metadata.strategyVersion == "2.1");
 
     game::GameState state;
     state.SetExternalAiController(controller);
@@ -988,6 +999,8 @@ TEST_CASE("AI1 can use local async strong controller and records a local decisio
     const game::TurnRecord& record = state.TurnRecords().back();
     CHECK(record.actor == rules::PlayerId::Ai1);
     CHECK(record.source == game::TurnDecisionSource::LocalAi);
+    CHECK(record.strategy.strategy == "strong");
+    CHECK(record.strategy.strategyVersion == "2.1");
     CHECK(record.accepted);
     CHECK(record.finalAction.action == "play");
     REQUIRE_FALSE(state.LastCards().empty());

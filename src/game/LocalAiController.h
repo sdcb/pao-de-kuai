@@ -22,6 +22,7 @@ public:
     void SetStrategy(rules::PlayerId player, LocalAiKind kind);
 
     bool CanHandle(rules::PlayerId player) const override;
+    StrategyMetadata MetadataFor(rules::PlayerId player) const override;
     bool HasPending() const override;
     void Start(ExternalAiRequest request) override;
     std::optional<ExternalAiResult> TryGetResult() override;

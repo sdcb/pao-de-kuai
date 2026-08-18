@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game/StrategyMetadata.h"
 #include "rules/MoveValidator.h"
 
 #include <array>
@@ -46,17 +47,20 @@ class AiStrategy {
 public:
     virtual ~AiStrategy() = default;
     virtual AiMoveChoice ChooseMove(const rules::Cards& hand, const AiContext& context) = 0;
+    virtual StrategyMetadata Metadata() const { return {"unknown", "unknown", {}, {}}; }
 };
 
 class BasicAiStrategy final : public AiStrategy {
 public:
     AiMoveChoice ChooseMove(const rules::Cards& hand, const AiContext& context) override;
+    StrategyMetadata Metadata() const override { return BasicStrategyMetadata(); }
     std::vector<AiMoveChoice> RecommendMoves(const rules::Cards& hand, const AiContext& context, int limit = 3) const;
 };
 
 class StrongAiStrategy final : public AiStrategy {
 public:
     AiMoveChoice ChooseMove(const rules::Cards& hand, const AiContext& context) override;
+    StrategyMetadata Metadata() const override { return StrongStrategyMetadata(); }
 };
 
 } // namespace pdk::game

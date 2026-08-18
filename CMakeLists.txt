@@ -16,7 +16,22 @@ else()
 endif()
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version for third-party dependencies")
 
-project(PaoDeKuai VERSION 0.1.0 LANGUAGES C CXX RC)
+project(PaoDeKuai VERSION 1.2 LANGUAGES C CXX RC)
+
+set(PDK_BUILD_REVISION "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" describe --always --dirty
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE PDK_GIT_DESCRIPTION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    if(PDK_GIT_DESCRIPTION)
+        set(PDK_BUILD_REVISION "${PDK_GIT_DESCRIPTION}")
+    endif()
+endif()
 
 option(PDK_BUILD_TESTS "Build rule tests" ON)
 option(PDK_USE_VC_LTL "Use vendored VC-LTL CRT libraries for smaller MSVC binaries when available" ON)
@@ -179,6 +194,10 @@ set(PDK_CORE_SOURCES
 add_library(pdk_core STATIC ${PDK_CORE_SOURCES})
 target_include_directories(pdk_core PUBLIC src)
 target_link_libraries(pdk_core PUBLIC cjson_static pdk_vc_ltl crypt32)
+target_compile_definitions(pdk_core PRIVATE
+    PDK_APP_VERSION="${PROJECT_VERSION}"
+    PDK_BUILD_REVISION="${PDK_BUILD_REVISION}"
+)
 
 add_library(pdk_ai STATIC
     src/ai/LlmAiController.cpp

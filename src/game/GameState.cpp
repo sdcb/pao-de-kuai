@@ -384,6 +384,7 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     roundSeed_ = seed;
     roundTraceWritten_ = false;
     lastRoundTracePath_.clear();
+    initialStrategies_ = roundStrategies_;
     const std::optional<rules::PlayerId> requestedLeader = nextRoundLeader_;
     nextRoundLeader_.reset();
     playerName_ = playerName.empty() ? "\xE6\x9D\x8E\xE5\xA7\x90" : playerName;
@@ -796,6 +797,7 @@ void GameState::TestSetRound(
     players_[1] = PlayerState{"AI1", hands[1], true};
     players_[2] = PlayerState{"AI2", hands[2], true};
     initialPlayers_ = players_;
+    initialStrategies_ = roundStrategies_;
     playerName_ = players_[0].name;
     startedAt_ = stats::NowTimeText();
     currentPlayer_ = currentPlayer;
@@ -933,7 +935,8 @@ TurnRecord GameState::BuildTurnRecord(
     const std::optional<rules::HandPattern>& finalPattern,
     bool accepted,
     const std::string& validationMessage,
-    TurnDecisionTrace trace) const {
+    TurnDecisionTrace trace,
+    StrategyMetadata strategy) const {
     TurnRecord record;
     record.turnNo = nextTurnNo_;
     record.actor = actor;
@@ -947,6 +950,20 @@ TurnRecord GameState::BuildTurnRecord(
     record.finalPattern = finalPattern;
     record.accepted = accepted;
     record.validationMessage = validationMessage;
+    if (strategy.strategy.empty()) {
+        if (source == TurnDecisionSource::System ||
+            reason == TurnDecisionReason::CannotBeat ||
+            reason == TurnDecisionReason::OnlyLegalMove) {
+            strategy = RulesStrategyMetadata();
+        } else if (source == TurnDecisionSource::Human) {
+            strategy = HumanStrategyMetadata();
+        } else if (source == TurnDecisionSource::LocalAi && actor == rules::PlayerId::Player) {
+            strategy = aiPlayers_[Index(actor)].Metadata();
+        } else {
+            strategy = roundStrategies_[static_cast<std::size_t>(Index(actor))];
+        }
+    }
+    record.strategy = std::move(strategy);
     record.trace = std::move(trace);
     return record;
 }
@@ -971,6 +988,7 @@ void GameState::MaybeWriteRoundTrace() {
     trace.startedAt = startedAt_;
     trace.roundLeader = roundLeader_;
     trace.initialPlayers = initialPlayers_;
+    trace.strategies = initialStrategies_;
     trace.turns = turnRecords_;
     trace.result = lastRoundRecord_;
 
@@ -1022,12 +1040,26 @@ void GameState::SetExternalAiControllers(std::vector<std::shared_ptr<ExternalAiC
         }
     }
     externalAiControllers_ = std::move(controllers);
+    roundStrategies_[0] = HumanStrategyMetadata();
+    roundStrategies_[1] = BasicStrategyMetadata();
+    roundStrategies_[2] = BasicStrategyMetadata();
+    for (int i = 1; i < 3; ++i) {
+        const rules::PlayerId player = rules::PlayerFromIndex(i);
+        for (const auto& controller : externalAiControllers_) {
+            if (controller && controller->CanHandle(player)) {
+                roundStrategies_[static_cast<std::size_t>(i)] = controller->MetadataFor(player);
+                break;
+            }
+        }
+    }
     activeExternalAi_.reset();
     externalAiPending_ = false;
 }
 
 void GameState::SetLocalAiStrategy(rules::PlayerId player, std::unique_ptr<AiStrategy> strategy) {
+    const StrategyMetadata metadata = strategy ? strategy->Metadata() : BasicStrategyMetadata();
     aiPlayers_[Index(player)].SetStrategy(std::move(strategy));
+    roundStrategies_[static_cast<std::size_t>(Index(player))] = metadata;
 }
 
 void GameState::SetRoundTraceEnabled(bool enabled) {
@@ -1198,7 +1230,8 @@ bool GameState::ApplyExternalAiResult(const ExternalAiResult& result) {
                 std::nullopt,
                 false,
                 result.errorMessage,
-                std::move(trace));
+                std::move(trace),
+                aiPlayers_[Index(actor)].Metadata());
             AppendRecord(std::move(record));
             return true;
         }
@@ -1214,7 +1247,8 @@ bool GameState::ApplyExternalAiResult(const ExternalAiResult& result) {
             fallback.pattern,
             false,
             result.errorMessage,
-            std::move(trace));
+            std::move(trace),
+            aiPlayers_[Index(actor)].Metadata());
         AppendRecord(std::move(record));
         return true;
     }

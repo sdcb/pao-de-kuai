@@ -412,3 +412,86 @@ TEST_CASE("strong ai follow blocks a one-card opponent even when not next player
     CHECK(choice.pattern.type == rules::PatternType::Single);
     CHECK(choice.pattern.mainRank == rules::Rank::King);
 }
+
+TEST_CASE("strong ai early lead prefers a multi-card plan") {
+    game::StrongAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Three), C(rules::Rank::Three, rules::Suit::Hearts),
+        C(rules::Rank::Four), C(rules::Rank::Four, rules::Suit::Hearts),
+        C(rules::Rank::Seven), C(rules::Rank::Seven, rules::Suit::Hearts),
+        C(rules::Rank::Five), C(rules::Rank::Nine), C(rules::Rank::Jack),
+        C(rules::Rank::Queen), C(rules::Rank::King), C(rules::Rank::Ace), C(rules::Rank::Two)
+    };
+    game::AiContext context = LeadContext(static_cast<int>(hand.size()), 13, 13);
+    context.currentPlayerIndex = 1;
+    context.roundLeaderIndex = 1;
+    context.remainingCards = {13, static_cast<int>(hand.size()), 13};
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.cards.size() >= 4);
+    CHECK(choice.pattern.type != rules::PatternType::Single);
+}
+
+TEST_CASE("strong ai does not use three cards from a bomb as a triple") {
+    game::StrongAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Seven), C(rules::Rank::Seven, rules::Suit::Hearts),
+        C(rules::Rank::Seven, rules::Suit::Diamonds), C(rules::Rank::Seven, rules::Suit::Clubs),
+        C(rules::Rank::Three), C(rules::Rank::Four), C(rules::Rank::Ace)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
+
+    CHECK_FALSE(choice.pass);
+    const int bombRankUsed = CountRank(choice.cards, rules::Rank::Seven);
+    CHECK((bombRankUsed == 0 || bombRankUsed == 4));
+}
+
+TEST_CASE("strong ai ordinary singleton follow uses the lower beater") {
+    game::StrongAiStrategy ai;
+    const auto previous = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const rules::Cards hand{
+        C(rules::Rank::Five), C(rules::Rank::Six), C(rules::Rank::King), C(rules::Rank::Ace)
+    };
+    game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
+    context.minOpponentRemainingCards = 6;
+    context.nextPlayerRemainingCards = 6;
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == rules::PatternType::Single);
+    CHECK(choice.pattern.mainRank == rules::Rank::Five);
+}
+
+TEST_CASE("strong ai urgent singleton follow keeps the high blocker") {
+    game::StrongAiStrategy ai;
+    const auto previous = rules::IdentifyPattern({C(rules::Rank::Seven)}).pattern;
+    const rules::Cards hand{C(rules::Rank::Eight), C(rules::Rank::King)};
+    game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
+    context.minOpponentRemainingCards = 1;
+    context.nextPlayerRemainingCards = 1;
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.mainRank == rules::Rank::King);
+}
+
+TEST_CASE("strong ai midgame lead does not split a pair when a singleton is available") {
+    game::StrongAiStrategy ai;
+    const rules::Cards hand{
+        C(rules::Rank::Four), C(rules::Rank::Four, rules::Suit::Hearts),
+        C(rules::Rank::Eight), C(rules::Rank::Nine),
+        C(rules::Rank::King), C(rules::Rank::Ace)
+    };
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
+
+    CHECK_FALSE(choice.pass);
+    if (choice.pattern.type == rules::PatternType::Single) {
+        CHECK(choice.pattern.mainRank != rules::Rank::Four);
+    }
+}

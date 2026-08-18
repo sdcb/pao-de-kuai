@@ -37,6 +37,7 @@ public:
 
     virtual bool CanHandle(rules::PlayerId player) const = 0;
     virtual bool IsRemote(rules::PlayerId player) const { return false; }
+    virtual StrategyMetadata MetadataFor(rules::PlayerId player) const { return {"unknown", "unknown", {}, {}}; }
     virtual bool HasPending() const = 0;
     virtual void Start(ExternalAiRequest request) = 0;
     virtual std::optional<ExternalAiResult> TryGetResult() = 0;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game/StrategyMetadata.h"
 #include "rules/Card.h"
 #include "rules/HandPattern.h"
 #include "rules/Scoring.h"
@@ -64,6 +65,7 @@ struct TurnRecord {
     std::optional<rules::HandPattern> finalPattern;
     bool accepted{true};
     std::string validationMessage;
+    StrategyMetadata strategy;
     TurnDecisionTrace trace;
 };
 

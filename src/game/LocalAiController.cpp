@@ -39,6 +39,14 @@ bool LocalAiController::CanHandle(rules::PlayerId player) const {
     return strategies_.contains(player);
 }
 
+StrategyMetadata LocalAiController::MetadataFor(rules::PlayerId player) const {
+    const auto it = strategies_.find(player);
+    if (it == strategies_.end()) {
+        return {"unknown", "unknown", {}, {}};
+    }
+    return it->second == LocalAiKind::Strong ? StrongStrategyMetadata() : BasicStrategyMetadata();
+}
+
 bool LocalAiController::HasPending() const {
     std::lock_guard lock(state_->mutex);
     return state_->pending;
