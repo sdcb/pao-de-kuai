@@ -290,6 +290,12 @@ function(pdk_add_vc_ltl_link_dependency target)
     endif()
 endfunction()
 
+# rc.exe dependency scanning does not see RCDATA/ICON payloads, so list them explicitly.
+file(GLOB PDK_AUDIO_RESOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/*.mp3")
+set_source_files_properties(src/resources/resources.rc PROPERTIES OBJECT_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/pao-de-kuai.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/poker-cards.png;${PDK_AUDIO_RESOURCES}"
+)
+
 add_executable(pao_de_kuai WIN32
     src/app/WinMain.cpp
     src/resources/resources.rc

@@ -17,6 +17,12 @@ constexpr UINT32 PcmBitsPerSample = 16;
 constexpr UINT32 PcmBlockAlign = PcmChannels * PcmBitsPerSample / 8;
 constexpr UINT32 PcmAvgBytesPerSecond = PcmSampleRate * PcmBlockAlign;
 
+// Media Foundation outputs LAME's encoder delay as leading padding: 577 samples at 44.1 kHz for the
+// Xing-less files written by assets/audio/generate_sfx.ps1. Pre-echo from sharp transients can reach
+// -12 dB of peak inside that padding, so a level gate cannot find the real start; trim a fixed amount.
+constexpr std::size_t Mp3EncoderDelaySamples = 577;
+constexpr std::size_t DelayFadeSamples = 32;
+
 using Microsoft::WRL::ComPtr;
 
 bool ConfigurePcmOutput(IMFSourceReader* reader) {
@@ -53,6 +59,19 @@ void AppendSampleBytes(IMFSample* sample, std::vector<std::uint8_t>& pcm) {
     const auto* begin = static_cast<const std::uint8_t*>(data);
     pcm.insert(pcm.end(), begin, begin + currentLength);
     buffer->Unlock();
+}
+
+void TrimEncoderDelay(std::vector<std::uint8_t>& pcm) {
+    constexpr std::size_t trim = Mp3EncoderDelaySamples - DelayFadeSamples;
+    if (pcm.size() / sizeof(std::int16_t) <= Mp3EncoderDelaySamples) {
+        return;
+    }
+
+    pcm.erase(pcm.begin(), pcm.begin() + static_cast<std::ptrdiff_t>(trim * sizeof(std::int16_t)));
+    auto* samples = reinterpret_cast<std::int16_t*>(pcm.data());
+    for (std::size_t i = 0; i < DelayFadeSamples; ++i) {
+        samples[i] = static_cast<std::int16_t>(samples[i] * static_cast<int>(i) / static_cast<int>(DelayFadeSamples));
+    }
 }
 
 } // namespace
@@ -115,6 +134,7 @@ bool DecodeMp3ToPcm(std::span<const std::uint8_t> bytes, AudioData& out) {
         }
     }
 
+    TrimEncoderDelay(out.pcm);
     return !out.pcm.empty();
 }
 
