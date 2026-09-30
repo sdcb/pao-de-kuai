@@ -59,9 +59,6 @@ int Window::Run() {
             if (msg.message == WM_QUIT) {
                 return static_cast<int>(msg.wParam);
             }
-            if (app_->ProcessDialogMessage(&msg)) {
-                continue;
-            }
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
@@ -111,6 +108,29 @@ LRESULT Window::WndProc(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_LBUTTONUP:
         ForwardMouse(message, lParam);
         return 0;
+    case WM_KEYDOWN:
+        if (app_) {
+            const bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            if (app_->OnKeyDown(core::KeyEvent{static_cast<unsigned>(wParam), ctrl, shift})) {
+                return 0;
+            }
+        }
+        break;
+    case WM_CHAR:
+        // Control characters arrive through WM_KEYDOWN instead.
+        if (app_ && wParam >= 0x20 && wParam != 0x7F) {
+            app_->OnText(std::wstring(1, static_cast<wchar_t>(wParam)));
+        }
+        return 0;
+    case WM_IME_SETCONTEXT:
+    case WM_IME_STARTCOMPOSITION:
+    case WM_IME_COMPOSITION:
+    case WM_IME_ENDCOMPOSITION:
+        if (app_ && app_->HandleImeMessage(message, wParam, lParam)) {
+            return 0;
+        }
+        break;
     case WM_CLOSE:
         if (app_) {
             app_->RequestClose();

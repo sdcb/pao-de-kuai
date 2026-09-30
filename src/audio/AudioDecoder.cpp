@@ -13,7 +13,7 @@ namespace {
 
 constexpr UINT32 PcmSampleRate = 44100;
 constexpr UINT32 PcmChannels = 1;
-constexpr UINT32 PcmBitsPerSample = 16;
+constexpr UINT32 PcmBitsPerSample = 32;
 constexpr UINT32 PcmBlockAlign = PcmChannels * PcmBitsPerSample / 8;
 constexpr UINT32 PcmAvgBytesPerSecond = PcmSampleRate * PcmBlockAlign;
 
@@ -31,7 +31,7 @@ bool ConfigurePcmOutput(IMFSourceReader* reader) {
         return false;
     }
     if (FAILED(mediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio)) ||
-        FAILED(mediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM)) ||
+        FAILED(mediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_Float)) ||
         FAILED(mediaType->SetUINT32(MF_MT_AUDIO_NUM_CHANNELS, PcmChannels)) ||
         FAILED(mediaType->SetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, PcmSampleRate)) ||
         FAILED(mediaType->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, PcmBitsPerSample)) ||
@@ -43,7 +43,7 @@ bool ConfigurePcmOutput(IMFSourceReader* reader) {
     return true;
 }
 
-void AppendSampleBytes(IMFSample* sample, std::vector<std::uint8_t>& pcm) {
+void AppendSamples(IMFSample* sample, std::vector<float>& samples) {
     ComPtr<IMFMediaBuffer> buffer;
     if (FAILED(sample->ConvertToContiguousBuffer(&buffer))) {
         return;
@@ -56,21 +56,20 @@ void AppendSampleBytes(IMFSample* sample, std::vector<std::uint8_t>& pcm) {
         return;
     }
     (void)maxLength;
-    const auto* begin = static_cast<const std::uint8_t*>(data);
-    pcm.insert(pcm.end(), begin, begin + currentLength);
+    const auto* begin = reinterpret_cast<const float*>(data);
+    samples.insert(samples.end(), begin, begin + currentLength / sizeof(float));
     buffer->Unlock();
 }
 
-void TrimEncoderDelay(std::vector<std::uint8_t>& pcm) {
+void TrimEncoderDelay(std::vector<float>& samples) {
     constexpr std::size_t trim = Mp3EncoderDelaySamples - DelayFadeSamples;
-    if (pcm.size() / sizeof(std::int16_t) <= Mp3EncoderDelaySamples) {
+    if (samples.size() <= Mp3EncoderDelaySamples) {
         return;
     }
 
-    pcm.erase(pcm.begin(), pcm.begin() + static_cast<std::ptrdiff_t>(trim * sizeof(std::int16_t)));
-    auto* samples = reinterpret_cast<std::int16_t*>(pcm.data());
+    samples.erase(samples.begin(), samples.begin() + static_cast<std::ptrdiff_t>(trim));
     for (std::size_t i = 0; i < DelayFadeSamples; ++i) {
-        samples[i] = static_cast<std::int16_t>(samples[i] * static_cast<int>(i) / static_cast<int>(DelayFadeSamples));
+        samples[i] *= static_cast<float>(i) / static_cast<float>(DelayFadeSamples);
     }
 }
 
@@ -101,13 +100,7 @@ bool DecodeMp3ToPcm(std::span<const std::uint8_t> bytes, AudioData& out) {
         return false;
     }
 
-    out.format.wFormatTag = WAVE_FORMAT_PCM;
-    out.format.nChannels = static_cast<WORD>(PcmChannels);
-    out.format.nSamplesPerSec = PcmSampleRate;
-    out.format.nAvgBytesPerSec = PcmAvgBytesPerSecond;
-    out.format.nBlockAlign = static_cast<WORD>(PcmBlockAlign);
-    out.format.wBitsPerSample = static_cast<WORD>(PcmBitsPerSample);
-    out.format.cbSize = 0;
+    out.sampleRate = PcmSampleRate;
 
     while (true) {
         DWORD streamIndex = 0;
@@ -130,12 +123,12 @@ bool DecodeMp3ToPcm(std::span<const std::uint8_t> bytes, AudioData& out) {
             break;
         }
         if (sample) {
-            AppendSampleBytes(sample.Get(), out.pcm);
+            AppendSamples(sample.Get(), out.samples);
         }
     }
 
-    TrimEncoderDelay(out.pcm);
-    return !out.pcm.empty();
+    TrimEncoderDelay(out.samples);
+    return !out.samples.empty();
 }
 
 } // namespace pdk::audio

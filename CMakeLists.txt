@@ -193,39 +193,21 @@ set(PDK_CORE_SOURCES
 
 add_library(pdk_core STATIC ${PDK_CORE_SOURCES})
 target_include_directories(pdk_core PUBLIC src)
-target_link_libraries(pdk_core PUBLIC cjson_static pdk_vc_ltl crypt32)
+target_link_libraries(pdk_core PUBLIC cjson_static pdk_vc_ltl)
 target_compile_definitions(pdk_core PRIVATE
     PDK_APP_VERSION="${PROJECT_VERSION}"
     PDK_BUILD_REVISION="${PDK_BUILD_REVISION}"
 )
 
-add_library(pdk_ai STATIC
-    src/ai/LlmAiController.cpp
-    src/ai/LlmOffscreenExperiment.cpp
-    src/ai/PdkAiClient.cpp
-    src/ai/TurnRecord.cpp
-    src/ai/WinHttpJsonClient.cpp
-)
-target_include_directories(pdk_ai PUBLIC src)
-target_link_libraries(pdk_ai PUBLIC pdk_core cjson_static)
-target_link_libraries(pdk_ai PRIVATE winhttp)
-target_compile_definitions(pdk_ai PRIVATE
-    WINVER=0x0602
-    _WIN32_WINNT=0x0602
-    UNICODE
-    _UNICODE
-    NOMINMAX
-)
-
 set(PDK_APP_SOURCES
     src/app/App.cpp
     src/app/Dpi.cpp
+    src/app/ImeInput.cpp
     src/app/Window.cpp
     src/app/WindowChrome.cpp
     src/audio/AudioDecoder.cpp
     src/audio/AudioEngine.cpp
     src/audio/SoundCatalog.cpp
-    src/dialogs/SettingsDialog.cpp
     src/graphics/D2DContext.cpp
     src/graphics/ProceduralTextures.cpp
     src/graphics/SpriteAtlas.cpp
@@ -244,16 +226,18 @@ set(PDK_APP_SOURCES
     src/overlays/InvalidMoveToast.cpp
     src/overlays/ReturnToMenuOverlay.cpp
     src/overlays/RoundResultOverlay.cpp
+    src/overlays/SettingsOverlay.cpp
     src/overlays/TalkBubbleOverlay.cpp
     src/overlays/TipOverlay.cpp
     src/ui/CardView.cpp
     src/ui/Icons.cpp
+    src/ui/Inputs.cpp
     src/ui/Widgets.cpp
 )
 
 add_library(pdk_app STATIC ${PDK_APP_SOURCES})
 target_include_directories(pdk_app PUBLIC src)
-target_link_libraries(pdk_app PUBLIC pdk_ai)
+target_link_libraries(pdk_app PUBLIC pdk_core)
 target_compile_definitions(pdk_app PUBLIC
     WINVER=0x0602
     _WIN32_WINNT=0x0602
@@ -262,18 +246,17 @@ target_compile_definitions(pdk_app PUBLIC
     NOMINMAX
 )
 target_link_libraries(pdk_app PUBLIC
-    d2d1 dwrite windowscodecs xaudio2_8 ole32 uuid shlwapi comctl32
-    mfplat mfreadwrite mfuuid gdi32 user32 comdlg32 dwmapi
+    d2d1 dwrite windowscodecs ole32 uuid shlwapi imm32 avrt
+    mfplat mfreadwrite mfuuid gdi32 user32 dwmapi
 )
 
 if(TARGET pdk_vc_ltl_build)
     add_dependencies(cjson_static pdk_vc_ltl_build)
     add_dependencies(pdk_core pdk_vc_ltl_build)
-    add_dependencies(pdk_ai pdk_vc_ltl_build)
     add_dependencies(pdk_app pdk_vc_ltl_build)
 endif()
 
-foreach(target pdk_core pdk_ai pdk_app cjson_static)
+foreach(target pdk_core pdk_app cjson_static)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -281,7 +264,6 @@ endforeach()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_VERSION VERSION_LESS "3.25")
     target_compile_options(pdk_core PUBLIC -std=c++2c)
-    target_compile_options(pdk_ai PUBLIC -std=c++2c)
     target_compile_options(pdk_app PUBLIC -std=c++2c)
 endif()
 
@@ -341,9 +323,8 @@ if(PDK_BUILD_TESTS)
         tests/rules_tests/AiStrategyTests.cpp
         tests/rules_tests/DragSelectionTests.cpp
         tests/rules_tests/StatsTests.cpp
-        tests/ai_client_tests/AiClientUnitTests.cpp
     )
-    target_link_libraries(unit_tests PRIVATE pdk_ai doctest::doctest)
+    target_link_libraries(unit_tests PRIVATE pdk_core doctest::doctest)
     pdk_add_vc_ltl_link_dependency(unit_tests)
     target_compile_definitions(unit_tests PRIVATE
         DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
@@ -356,26 +337,10 @@ if(PDK_BUILD_TESTS)
         endif()
     endif()
 
-    add_executable(ai_client_tests
-        tests/rules_tests/TestMain.cpp
-        tests/ai_client_tests/AiClientIntegrationTests.cpp
-    )
-    target_link_libraries(ai_client_tests PRIVATE pdk_ai doctest::doctest)
-    pdk_add_vc_ltl_link_dependency(ai_client_tests)
-    target_compile_definitions(ai_client_tests PRIVATE
-        DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
-    )
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_link_options(ai_client_tests PRIVATE -static-libstdc++ -static-libgcc)
-        if(CMAKE_VERSION VERSION_LESS "3.25")
-            target_compile_options(ai_client_tests PRIVATE -std=c++2c)
-        endif()
-    endif()
-
     enable_testing()
     add_test(NAME unit_tests COMMAND unit_tests)
     add_test(NAME ui_scene_start COMMAND scene_viewer --scene start --screenshot ${CMAKE_BINARY_DIR}/ui-start.jpg --quality 75)
-    add_test(NAME ui_dialog_settings COMMAND scene_viewer --scene settings --screenshot ${CMAKE_BINARY_DIR}/ui-settings.jpg --quality 75)
+    add_test(NAME ui_overlay_settings COMMAND scene_viewer --scene settings --screenshot ${CMAKE_BINARY_DIR}/ui-settings.jpg --quality 75)
     add_test(NAME ui_scene_game_deal COMMAND scene_viewer --scene game --mock deal --screenshot ${CMAKE_BINARY_DIR}/ui-game-deal.jpg --quality 75)
     add_test(NAME ui_scene_game_play COMMAND scene_viewer --scene game --mock midgame --screenshot ${CMAKE_BINARY_DIR}/ui-game-play.jpg --quality 75)
     add_test(NAME ui_overlay_result COMMAND scene_viewer --scene game --overlay result-win --screenshot ${CMAKE_BINARY_DIR}/ui-result.jpg --quality 75)

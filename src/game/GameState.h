@@ -80,7 +80,6 @@ public:
     const stats::RoundRecord& LastRoundRecord() const { return lastRoundRecord_; }
     const std::vector<TurnRecord>& TurnRecords() const { return turnRecords_; }
     bool ExternalAiPending() const { return externalAiPending_; }
-    bool RemoteAiPending() const;
     bool CanCurrentPlayerPass() const;
     bool IsInLeadState() const { return CurrentPlayerLeads(); }
 
@@ -113,7 +112,7 @@ private:
     bool HasPlayableFollow(rules::PlayerId player) const;
     std::vector<std::pair<rules::Cards, rules::HandPattern>> LegalMoves(rules::PlayerId player) const;
     TurnSnapshot Snapshot() const;
-    GameAction ActionFromCards(const rules::Cards& cards, bool pass = false, std::string talk = {}) const;
+    GameAction ActionFromCards(const rules::Cards& cards, bool pass = false) const;
     TurnRecord BuildTurnRecord(
         const TurnSnapshot& before,
         rules::PlayerId actor,
@@ -131,7 +130,6 @@ private:
     void MaybeWriteRoundTrace();
     TurnDecisionTrace SyntheticTrace(const TurnRecord& record) const;
     std::shared_ptr<ExternalAiController> AiControllerFor(rules::PlayerId player) const;
-    bool UsesRemoteAi(rules::PlayerId player) const;
     bool ApplyExternalAiResult(const ExternalAiResult& result);
     bool ApplyLocalAiResult(const AiMoveChoice& choice, TurnDecisionSource source);
     void StartExternalAiTurn();

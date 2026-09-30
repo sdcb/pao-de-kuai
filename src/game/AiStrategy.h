@@ -47,7 +47,7 @@ class AiStrategy {
 public:
     virtual ~AiStrategy() = default;
     virtual AiMoveChoice ChooseMove(const rules::Cards& hand, const AiContext& context) = 0;
-    virtual StrategyMetadata Metadata() const { return {"unknown", "unknown", {}, {}}; }
+    virtual StrategyMetadata Metadata() const { return {"unknown", "unknown"}; }
 };
 
 class BasicAiStrategy final : public AiStrategy {

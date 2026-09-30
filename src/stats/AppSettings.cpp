@@ -4,112 +4,20 @@
 
 #include <cJSON.h>
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-
 #include <algorithm>
-#include <cstdio>
-#include <string_view>
-#include <vector>
-#include <windows.h>
-#include <wincrypt.h>
 
 namespace pdk::stats {
 namespace {
-
-constexpr std::string_view DpapiPrefix = "dpapi:";
 
 float ClampFloat(double value, float min, float max) {
     return std::clamp(static_cast<float>(value), min, max);
 }
 
-std::string JsonString(const cJSON* object, const char* key) {
-    const cJSON* value = cJSON_GetObjectItemCaseSensitive(object, key);
-    if (cJSON_IsString(value) && value->valuestring) {
-        return value->valuestring;
-    }
-    return {};
-}
-
-std::string NormalizeAiSelection(std::string value) {
-    if (value.empty() || value == "local") {
-        return "basic";
-    }
-    return value;
-}
-
-std::string Base64Encode(const BYTE* data, DWORD size) {
-    DWORD chars = 0;
-    if (!CryptBinaryToStringA(data, size, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, nullptr, &chars) || chars == 0) {
-        return {};
-    }
-    std::string text(static_cast<std::size_t>(chars), '\0');
-    if (!CryptBinaryToStringA(data, size, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, text.data(), &chars)) {
-        return {};
-    }
-    if (!text.empty() && text.back() == '\0') {
-        text.pop_back();
-    }
-    return text;
-}
-
-std::vector<BYTE> Base64Decode(const std::string& text) {
-    DWORD bytes = 0;
-    if (!CryptStringToBinaryA(text.c_str(), static_cast<DWORD>(text.size()), CRYPT_STRING_BASE64, nullptr, &bytes, nullptr, nullptr) || bytes == 0) {
-        return {};
-    }
-    std::vector<BYTE> data(static_cast<std::size_t>(bytes));
-    if (!CryptStringToBinaryA(text.c_str(), static_cast<DWORD>(text.size()), CRYPT_STRING_BASE64, data.data(), &bytes, nullptr, nullptr)) {
-        return {};
-    }
-    data.resize(bytes);
-    return data;
-}
-
-std::string EncryptApiKey(const std::string& apiKey) {
-    if (apiKey.empty() || apiKey.starts_with(DpapiPrefix)) {
-        return apiKey;
-    }
-
-    DATA_BLOB input{};
-    input.pbData = reinterpret_cast<BYTE*>(const_cast<char*>(apiKey.data()));
-    input.cbData = static_cast<DWORD>(apiKey.size());
-    DATA_BLOB output{};
-    if (!CryptProtectData(&input, L"pao-de-kuai ai api key", nullptr, nullptr, nullptr, 0, &output)) {
-        return apiKey;
-    }
-
-    const std::string encoded = Base64Encode(output.pbData, output.cbData);
-    LocalFree(output.pbData);
-    return encoded.empty() ? apiKey : std::string(DpapiPrefix) + encoded;
-}
-
-std::string DecryptApiKey(const std::string& text) {
-    if (!text.starts_with(DpapiPrefix)) {
-        return text;
-    }
-
-    const std::string encoded = text.substr(DpapiPrefix.size());
-    std::vector<BYTE> encrypted = Base64Decode(encoded);
-    if (encrypted.empty()) {
-        return text;
-    }
-
-    DATA_BLOB input{};
-    input.pbData = encrypted.data();
-    input.cbData = static_cast<DWORD>(encrypted.size());
-    DATA_BLOB output{};
-    if (!CryptUnprotectData(&input, nullptr, nullptr, nullptr, nullptr, 0, &output)) {
-        return text;
-    }
-
-    std::string decrypted(reinterpret_cast<char*>(output.pbData), reinterpret_cast<char*>(output.pbData) + output.cbData);
-    LocalFree(output.pbData);
-    return decrypted;
-}
-
 } // namespace
+
+std::string NormalizeAiSelection(const std::string& value) {
+    return value == "strong" ? "strong" : "basic";
+}
 
 AppSettings LoadAppSettings(const std::string& path) {
     AppSettings settings;
@@ -147,21 +55,6 @@ AppSettings LoadAppSettings(const std::string& path) {
     if (const cJSON* value = cJSON_GetObjectItemCaseSensitive(root, "roundTraceEnabled"); cJSON_IsBool(value)) {
         settings.roundTraceEnabled = cJSON_IsTrue(value);
     }
-    const cJSON* providers = cJSON_GetObjectItemCaseSensitive(root, "aiProviders");
-    if (cJSON_IsObject(providers)) {
-        const cJSON* item = nullptr;
-        cJSON_ArrayForEach(item, providers) {
-            if (!cJSON_IsObject(item) || !item->string) {
-                continue;
-            }
-            AiProviderSettings provider;
-            provider.type = JsonString(item, "type");
-            provider.endpoint = JsonString(item, "endpoint");
-            provider.apiKey = DecryptApiKey(JsonString(item, "apiKey"));
-            provider.model = JsonString(item, "model");
-            settings.aiProviders[item->string] = std::move(provider);
-        }
-    }
 
     cJSON_Delete(root);
     return settings;
@@ -173,24 +66,9 @@ bool SaveAppSettings(const AppSettings& settings, const std::string& path) {
     cJSON_AddNumberToObject(root, "masterVolume", settings.masterVolume);
     cJSON_AddNumberToObject(root, "windowWidth", settings.windowWidth);
     cJSON_AddNumberToObject(root, "windowHeight", settings.windowHeight);
-    const std::string ai1 = NormalizeAiSelection(settings.ai1);
-    const std::string ai2 = NormalizeAiSelection(settings.ai2);
-    cJSON_AddStringToObject(root, "ai1", ai1.c_str());
-    cJSON_AddStringToObject(root, "ai2", ai2.c_str());
+    cJSON_AddStringToObject(root, "ai1", NormalizeAiSelection(settings.ai1).c_str());
+    cJSON_AddStringToObject(root, "ai2", NormalizeAiSelection(settings.ai2).c_str());
     cJSON_AddBoolToObject(root, "roundTraceEnabled", settings.roundTraceEnabled);
-    if (!settings.aiProviders.empty()) {
-        cJSON* providers = cJSON_CreateObject();
-        for (const auto& [name, provider] : settings.aiProviders) {
-            cJSON* item = cJSON_CreateObject();
-            cJSON_AddStringToObject(item, "type", provider.type.c_str());
-            cJSON_AddStringToObject(item, "endpoint", provider.endpoint.c_str());
-            const std::string storedApiKey = EncryptApiKey(provider.apiKey);
-            cJSON_AddStringToObject(item, "apiKey", storedApiKey.c_str());
-            cJSON_AddStringToObject(item, "model", provider.model.c_str());
-            cJSON_AddItemToObject(providers, name.c_str(), item);
-        }
-        cJSON_AddItemToObject(root, "aiProviders", providers);
-    }
 
     char* text = cJSON_Print(root);
     cJSON_Delete(root);

@@ -4,13 +4,12 @@
 #include <span>
 #include <vector>
 
-#include <xaudio2.h>
-
 namespace pdk::audio {
 
+// Mono float samples at the source sample rate.
 struct AudioData {
-    WAVEFORMATEX format{};
-    std::vector<std::uint8_t> pcm;
+    std::uint32_t sampleRate{44100};
+    std::vector<float> samples;
 };
 
 bool DecodeMp3ToPcm(std::span<const std::uint8_t> bytes, AudioData& out);

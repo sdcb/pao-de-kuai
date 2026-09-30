@@ -51,9 +51,6 @@ cJSON* ActionToJson(const GameAction& action) {
         cJSON_AddItemToArray(ranks, cJSON_CreateString(rank.c_str()));
     }
     cJSON_AddItemToObject(object, "ranks", ranks);
-    if (!action.talk.empty()) {
-        cJSON_AddStringToObject(object, "talk", action.talk.c_str());
-    }
     return object;
 }
 
@@ -86,24 +83,6 @@ cJSON* TraceMetaToJson(const TurnDecisionTrace& trace) {
     if (!trace.reasoningContent.empty()) {
         cJSON_AddStringToObject(object, "reasoningContent", trace.reasoningContent.c_str());
     }
-    if (!trace.toolCallId.empty()) {
-        cJSON_AddStringToObject(object, "toolCallId", trace.toolCallId.c_str());
-    }
-    if (!trace.toolName.empty()) {
-        cJSON_AddStringToObject(object, "toolName", trace.toolName.c_str());
-    }
-    if (!trace.toolArgumentsJson.empty()) {
-        cJSON_AddStringToObject(object, "toolArgumentsJson", trace.toolArgumentsJson.c_str());
-    }
-    if (!trace.toolResultJson.empty()) {
-        cJSON_AddStringToObject(object, "toolResultJson", trace.toolResultJson.c_str());
-    }
-    if (!trace.requestLogPath.empty()) {
-        cJSON_AddStringToObject(object, "requestLogPath", trace.requestLogPath.c_str());
-    }
-    if (!trace.responseLogPath.empty()) {
-        cJSON_AddStringToObject(object, "responseLogPath", trace.responseLogPath.c_str());
-    }
     if (!trace.errorMessage.empty()) {
         cJSON_AddStringToObject(object, "errorMessage", trace.errorMessage.c_str());
     }
@@ -113,12 +92,6 @@ cJSON* TraceMetaToJson(const TurnDecisionTrace& trace) {
 void AddStrategyFields(cJSON* object, const StrategyMetadata& strategy) {
     cJSON_AddStringToObject(object, "strategy", strategy.strategy.c_str());
     cJSON_AddStringToObject(object, "strategyVersion", strategy.strategyVersion.c_str());
-    if (!strategy.providerType.empty()) {
-        cJSON_AddStringToObject(object, "providerType", strategy.providerType.c_str());
-    }
-    if (!strategy.model.empty()) {
-        cJSON_AddStringToObject(object, "model", strategy.model.c_str());
-    }
 }
 
 cJSON* TurnToJson(const TurnRecord& record) {

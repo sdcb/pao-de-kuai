@@ -12,7 +12,8 @@
 
 - C++ / Win32
 - Direct2D / DirectWrite / WIC
-- Media Foundation / XAudio2.8
+- Media Foundation / WASAPI
+- IMM32（设置里的中文输入）
 - cJSON
 - doctest
 - VC-LTL
@@ -27,16 +28,17 @@
 ├── external/                # 精简签入的第三方依赖和许可证
 ├── spec/                    # 项目规格与计划文档
 ├── src/
-│   ├── app/                 # App 主流程、Win32 窗口、DPI、入口 WinMain
-│   ├── audio/               # XAudio2 音频引擎、音效目录、mp3 加载
+│   ├── app/                 # App 主流程、Win32 窗口、DPI、输入法桥接、入口 WinMain
+│   ├── audio/               # WASAPI 音频引擎与混音、音效目录、mp3 解码
 │   ├── core/                # 场景/覆盖层基类、场景管理、几何、计时、补间
 │   ├── game/                # 游戏状态、AI 出牌策略、玩家模型、对局记录
 │   ├── graphics/            # Direct2D 渲染上下文、文本渲染、WIC 图片加载、图集封装
-│   ├── overlays/            # 确认退出、返回菜单、结算、提示、AI 对话等覆盖层
+│   ├── overlays/            # 设置、确认退出、返回菜单、结算、提示、AI 对话等覆盖层
 │   ├── resources/           # Windows 资源 ID、rc 资源、图集坐标数据、资源加载
 │   ├── rules/               # 牌、牌组、牌型识别、出牌校验、规则集、计分
-│   ├── scenes/              # 开始、加载、游戏、帮助、设置、统计等页面
-│   └── stats/               # 设置 JSON、每日/每月/历史统计读写
+│   ├── scenes/              # 开始、加载、游戏、帮助、统计等页面
+│   ├── stats/               # 设置 JSON、每日/每月/历史统计读写
+│   └── ui/                  # 自绘控件：主题、按钮、面板、输入框、滑块、牌面
 ├── tests/
 │   ├── rules_tests/         # doctest 单元测试
 │   └── scene_viewer/        # UI 场景查看和截图测试工具

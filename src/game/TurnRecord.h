@@ -15,21 +15,18 @@ namespace pdk::game {
 enum class TurnDecisionSource {
     Human,
     LocalAi,
-    LlmAi,
     System
 };
 
 enum class TurnDecisionReason {
     NormalChoice,
     CannotBeat,
-    OnlyLegalMove,
-    LlmFallback
+    OnlyLegalMove
 };
 
 struct GameAction {
     std::string action;
     std::vector<std::string> ranks;
-    std::string talk;
 };
 
 struct TurnSnapshot {
@@ -43,12 +40,6 @@ struct TurnSnapshot {
 
 struct TurnDecisionTrace {
     std::string reasoningContent;
-    std::string toolCallId;
-    std::string toolName;
-    std::string toolArgumentsJson;
-    std::string toolResultJson;
-    std::string requestLogPath;
-    std::string responseLogPath;
     std::string errorMessage;
 };
 
@@ -72,7 +63,5 @@ struct TurnRecord {
 std::string PlayerLabel(rules::PlayerId player);
 std::string SourceLabel(TurnDecisionSource source);
 std::string ReasonLabel(TurnDecisionReason reason);
-std::string ActionArgumentsJson(const GameAction& action);
-std::string ForcedMoveArgumentsJson(TurnDecisionReason reason, const GameAction& action);
 
 } // namespace pdk::game

@@ -1,6 +1,5 @@
 #include "scenes/GameScene.h"
 
-#include "ai/LlmAiController.h"
 #include "app/App.h"
 #include "audio/SoundIds.h"
 #include "core/StringUtil.h"
@@ -14,7 +13,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <map>
 #include <memory>
 #include <vector>
 
@@ -151,42 +149,13 @@ void GameScene::InitializeExternalAi() {
         return;
     }
 
-    auto localController = std::make_shared<game::LocalAiController>();
-    bool hasLocal = false;
-    std::map<rules::PlayerId, stats::AiProviderSettings> remotePlayers;
-
-    auto addPlayer = [&](rules::PlayerId player, const std::string& selection) {
-        const std::string choice = selection.empty() || selection == "local" ? "basic" : selection;
-        if (choice == "strong") {
-            localController->SetStrategy(player, game::LocalAiKind::Strong);
-            hasLocal = true;
-            return;
-        }
-        if (choice == "basic") {
-            localController->SetStrategy(player, game::LocalAiKind::Basic);
-            hasLocal = true;
-            return;
-        }
-        const auto provider = app_.Settings().aiProviders.find(choice);
-        if (provider != app_.Settings().aiProviders.end()) {
-            remotePlayers[player] = provider->second;
-            return;
-        }
-        localController->SetStrategy(player, game::LocalAiKind::Basic);
-        hasLocal = true;
+    auto controller = std::make_shared<game::LocalAiController>();
+    auto kindFor = [](const std::string& selection) {
+        return selection == "strong" ? game::LocalAiKind::Strong : game::LocalAiKind::Basic;
     };
-
-    addPlayer(rules::PlayerId::Ai1, app_.Settings().ai1);
-    addPlayer(rules::PlayerId::Ai2, app_.Settings().ai2);
-
-    std::vector<std::shared_ptr<game::ExternalAiController>> controllers;
-    if (hasLocal) {
-        controllers.push_back(std::move(localController));
-    }
-    if (!remotePlayers.empty()) {
-        controllers.push_back(std::make_shared<ai::LlmAiController>(std::move(remotePlayers)));
-    }
-    game_.SetExternalAiControllers(std::move(controllers));
+    controller->SetStrategy(rules::PlayerId::Ai1, kindFor(app_.Settings().ai1));
+    controller->SetStrategy(rules::PlayerId::Ai2, kindFor(app_.Settings().ai2));
+    game_.SetExternalAiControllers({std::move(controller)});
 }
 
 void GameScene::Update(float dt) {
@@ -419,7 +388,7 @@ void GameScene::DrawAiSeat(graphics::RenderContext& context, rules::PlayerId pla
     context.DrawTextUtf8(state.name, {info.x, info.y, info.width - 96.0f, 26.0f}, nameStyle, theme::Ivory);
     if (active) {
         const float nameWidth = std::min(info.width - 96.0f, context.MeasureText(state.name, nameStyle).width);
-        std::string thinking = game_.RemoteAiPending() ? "联网思考中" : "思考中";
+        std::string thinking = "思考中";
         const int dots = static_cast<int>(time_ * 3.0f) % 4;
         thinking.append(static_cast<std::size_t>(dots), '.');
         context.DrawTextUtf8(thinking, {info.x + nameWidth + 10.0f, info.y + 3.0f, 120.0f, 22.0f}, Text(13.5f), theme::Gold);

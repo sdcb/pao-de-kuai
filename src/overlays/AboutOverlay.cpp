@@ -44,7 +44,7 @@ void AboutOverlay::Render(graphics::RenderContext& context) {
         y += height + 16.0f;
     };
     section("开源地址", "https://github.com/sdcb/pao-de-kuai", theme::GoldLight);
-    section("使用技术", "C++、Win32、Direct2D、DirectWrite、WIC、Media Foundation、XAudio2.8、cJSON、doctest、VC-LTL、CMake", theme::Ivory);
+    section("使用技术", "C++、Win32、Direct2D、DirectWrite、WIC、Media Foundation、WASAPI、cJSON、doctest、VC-LTL、CMake", theme::Ivory);
     section("第三方许可", "cJSON / doctest 使用 MIT License；VC-LTL 使用 Eclipse Public License 2.0", theme::Ivory);
 
     const std::string thanks = "如果你喜欢这个项目，欢迎到 GitHub 给一个 star";

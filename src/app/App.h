@@ -1,9 +1,9 @@
 #pragma once
 
+#include "app/ImeInput.h"
 #include "audio/AudioEngine.h"
 #include "core/Overlay.h"
 #include "core/SceneManager.h"
-#include "dialogs/SettingsDialog.h"
 #include "game/RoundRecorder.h"
 #include "graphics/D2DContext.h"
 #include "graphics/SpriteAtlas.h"
@@ -26,6 +26,11 @@ public:
     bool OnMouseMove(float x, float y);
     bool OnMouseDown(float x, float y);
     bool OnMouseUp(float x, float y);
+    bool OnKeyDown(const core::KeyEvent& key);
+    bool OnText(const std::wstring& text);
+    // Handles WM_IME_* while a text field has focus; returns false to fall back to DefWindowProc.
+    bool HandleImeMessage(UINT message, WPARAM wParam, LPARAM& lParam);
+    bool WantsTextInput() const;
 
     void ShowStart();
     void StartGame(bool mock = false);
@@ -42,7 +47,6 @@ public:
     void RequestClose();
     void ConfirmExit();
     bool ShouldQuit() const { return shouldQuit_; }
-    bool ProcessDialogMessage(MSG* msg);
 
     bool LoadGameResources();
     bool LoadCardAtlas();
@@ -56,13 +60,15 @@ public:
     const stats::AppSettings& Settings() const { return settings_; }
     game::RoundRecorder& Recorder() { return recorder_; }
     bool ViewerMode() const { return viewerMode_; }
-    HWND SettingsDialogHwnd() const;
+    HWND Hwnd() const { return hwnd_; }
 
     void SaveSettings();
     void UpdateWindowSize(int width, int height);
 
 private:
     void PlaySceneEventAudio(const std::string& eventName);
+    core::Overlay* TopOverlay() const;
+    void SyncIme();
 
     HWND hwnd_{};
     bool viewerMode_{false};
@@ -74,7 +80,7 @@ private:
     graphics::SpriteAtlas cardAtlas_;
     core::SceneManager sceneManager_;
     std::vector<std::unique_ptr<core::Overlay>> overlays_;
-    std::unique_ptr<dialogs::SettingsDialog> settingsDialog_;
+    ImeInput ime_;
     stats::AppSettings settings_;
     game::RoundRecorder recorder_;
 };

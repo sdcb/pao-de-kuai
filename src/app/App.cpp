@@ -7,6 +7,7 @@
 #include "overlays/InvalidMoveToast.h"
 #include "overlays/ReturnToMenuOverlay.h"
 #include "overlays/RoundResultOverlay.h"
+#include "overlays/SettingsOverlay.h"
 #include "overlays/TalkBubbleOverlay.h"
 #include "overlays/TipOverlay.h"
 #include "resources/ResourceIds.h"
@@ -19,11 +20,14 @@
 
 #include <algorithm>
 
+#include <imm.h>
+
 namespace pdk::app {
 
 bool App::Initialize(HWND hwnd, bool viewerMode, bool offscreen) {
     hwnd_ = hwnd;
     viewerMode_ = viewerMode;
+    ime_.Attach(hwnd_);
     settings_ = stats::LoadAppSettings();
     audio_.Initialize();
     audio_.SetMasterVolume(settings_.masterVolume);
@@ -37,7 +41,6 @@ bool App::Initialize(HWND hwnd, bool viewerMode, bool offscreen) {
 }
 
 void App::Update(float dt) {
-    audio_.Update();
     sceneFade_ = std::max(0.0f, sceneFade_ - dt / 0.28f);
     if (core::Scene* scene = sceneManager_.Current()) {
         scene->Update(dt);
@@ -56,6 +59,70 @@ void App::Update(float dt) {
             return false;
         }),
         overlays_.end());
+    SyncIme();
+}
+
+core::Overlay* App::TopOverlay() const {
+    return overlays_.empty() ? nullptr : overlays_.back().get();
+}
+
+bool App::WantsTextInput() const {
+    const core::Overlay* top = TopOverlay();
+    return top && top->WantsTextInput();
+}
+
+void App::SyncIme() {
+    const bool wants = WantsTextInput();
+    ime_.SetEnabled(wants);
+    core::Rect caret;
+    if (wants && TopOverlay()->TextCaretRect(caret)) {
+        ime_.SetCaret(caret, renderContext_.ViewTransform());
+    }
+}
+
+bool App::OnKeyDown(const core::KeyEvent& key) {
+    core::Overlay* top = TopOverlay();
+    return top && top->OnKeyDown(key);
+}
+
+bool App::OnText(const std::wstring& text) {
+    core::Overlay* top = TopOverlay();
+    return top && top->OnText(text);
+}
+
+bool App::HandleImeMessage(UINT message, WPARAM wParam, LPARAM& lParam) {
+    (void)wParam;
+    if (!WantsTextInput()) {
+        return false;
+    }
+    core::Overlay* top = TopOverlay();
+    switch (message) {
+    case WM_IME_SETCONTEXT:
+        // The field draws the composition string itself; keep only the candidate list.
+        lParam &= ~static_cast<LPARAM>(ISC_SHOWUICOMPOSITIONWINDOW);
+        return false;
+    case WM_IME_STARTCOMPOSITION:
+        SyncIme();
+        return true;
+    case WM_IME_COMPOSITION: {
+        std::wstring text;
+        if ((lParam & GCS_RESULTSTR) && ime_.ReadResult(text) && !text.empty()) {
+            top->OnImeComposition({}, 0);
+            top->OnText(text);
+        }
+        int cursor = 0;
+        if ((lParam & GCS_COMPSTR) && ime_.ReadComposition(text, cursor)) {
+            top->OnImeComposition(text, cursor);
+        }
+        SyncIme();
+        return true;
+    }
+    case WM_IME_ENDCOMPOSITION:
+        top->OnImeComposition({}, 0);
+        return true;
+    default:
+        return false;
+    }
 }
 
 void App::Render() {
@@ -142,12 +209,7 @@ void App::ShowStats() {
 }
 
 void App::ShowSettings() {
-    if (!settingsDialog_) {
-        settingsDialog_ = std::make_unique<dialogs::SettingsDialog>(*this);
-    }
-    if (!settingsDialog_->Show(hwnd_)) {
-        settingsDialog_.reset();
-    }
+    PushOverlay(std::make_unique<overlays::SettingsOverlay>(*this));
 }
 
 void App::ShowHelp() {
@@ -162,6 +224,7 @@ void App::ShowViewerScene(const std::string& scene, const std::string& overlay, 
     } else if (scene == "stats") {
         ShowStats();
     } else if (scene == "settings") {
+        ShowStart();
         ShowSettings();
     } else if (scene == "help") {
         ShowHelp();
@@ -262,17 +325,6 @@ void App::ReleaseGameResources() {
 
 void App::SaveSettings() {
     stats::SaveAppSettings(settings_);
-}
-
-bool App::ProcessDialogMessage(MSG* msg) {
-    if (settingsDialog_ && settingsDialog_->ProcessMessage(msg)) {
-        return true;
-    }
-    return false;
-}
-
-HWND App::SettingsDialogHwnd() const {
-    return settingsDialog_ && settingsDialog_->IsOpen() ? settingsDialog_->Hwnd() : nullptr;
 }
 
 void App::UpdateWindowSize(int width, int height) {

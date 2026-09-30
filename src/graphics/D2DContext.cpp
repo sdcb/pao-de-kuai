@@ -573,6 +573,25 @@ core::Size RenderContext::MeasureText(const std::string& text, const TextStyle& 
     return {metrics.widthIncludingTrailingWhitespace, metrics.height};
 }
 
+ComPtr<IDWriteTextLayout> RenderContext::CreateTextLayout(const std::wstring& text, const TextStyle& style, float maxWidth, float maxHeight) {
+    ComPtr<IDWriteTextLayout> layout;
+    TextFormatEntry* entry = Format(style);
+    if (!entry) {
+        return layout;
+    }
+    dwriteFactory_->CreateTextLayout(
+        text.c_str(), static_cast<UINT32>(text.size()), entry->format.Get(), maxWidth, maxHeight, layout.ReleaseAndGetAddressOf());
+    return layout;
+}
+
+void RenderContext::DrawTextLayout(IDWriteTextLayout* layout, core::Point origin, D2D1_COLOR_F color) {
+    ID2D1Brush* brush = Solid(color);
+    if (!target_ || !layout || !brush) {
+        return;
+    }
+    target_->DrawTextLayout(D2D1::Point2F(origin.x, origin.y), layout, brush);
+}
+
 void RenderContext::DrawBitmap(ID2D1Bitmap* bitmap, const core::Rect& dest, const D2D1_RECT_U* source, float opacity) {
     if (!target_ || !bitmap) {
         return;

@@ -106,56 +106,6 @@ bool SaveJpeg(IWICBitmapSource* source, const std::wstring& path, float quality)
     return ok;
 }
 
-bool CaptureWindowJpeg(HWND hwnd, const std::wstring& path, float quality) {
-    RECT rc{};
-    GetClientRect(hwnd, &rc);
-    const int width = rc.right - rc.left;
-    const int height = rc.bottom - rc.top;
-    if (width <= 0 || height <= 0) {
-        return false;
-    }
-
-    BITMAPINFO bmi{};
-    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth = width;
-    bmi.bmiHeader.biHeight = -height;
-    bmi.bmiHeader.biPlanes = 1;
-    bmi.bmiHeader.biBitCount = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-
-    void* pixels = nullptr;
-    HDC screen = GetDC(hwnd);
-    HDC memory = CreateCompatibleDC(screen);
-    HBITMAP bitmap = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, &pixels, nullptr, 0);
-    if (!bitmap || !pixels) {
-        if (bitmap) {
-            DeleteObject(bitmap);
-        }
-        DeleteDC(memory);
-        ReleaseDC(hwnd, screen);
-        return false;
-    }
-    HGDIOBJ old = SelectObject(memory, bitmap);
-    BitBlt(memory, 0, 0, width, height, screen, 0, 0, SRCCOPY);
-
-    bool ok = false;
-    pdk::graphics::ComPtr<IWICImagingFactory> wic;
-    if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(wic.ReleaseAndGetAddressOf())))) {
-        pdk::graphics::ComPtr<IWICBitmap> wicBitmap;
-        const UINT stride = static_cast<UINT>(width * 4);
-        const UINT bufferSize = static_cast<UINT>(stride * height);
-        if (SUCCEEDED(wic->CreateBitmapFromMemory(width, height, GUID_WICPixelFormat32bppBGRA, stride, bufferSize, static_cast<BYTE*>(pixels), wicBitmap.ReleaseAndGetAddressOf()))) {
-            ok = SaveJpeg(wicBitmap.Get(), path, quality);
-        }
-    }
-
-    SelectObject(memory, old);
-    DeleteObject(bitmap);
-    DeleteDC(memory);
-    ReleaseDC(hwnd, screen);
-    return ok;
-}
-
 } // namespace
 
 int main(int argc, char** argv) {
@@ -191,9 +141,6 @@ int main(int argc, char** argv) {
     }
     for (int frame = 0; frame < frameCount; ++frame) {
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-            if (app.ProcessDialogMessage(&msg)) {
-                continue;
-            }
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
@@ -203,12 +150,8 @@ int main(int argc, char** argv) {
         Sleep(16);
     }
 
-    // Scenes render offscreen so screenshots work even when the window is occluded;
-    // the native settings dialog is still captured from its window.
-    const std::wstring path = Utf8ToWide(args.screenshot);
-    const bool ok = app.SettingsDialogHwnd()
-        ? CaptureWindowJpeg(app.SettingsDialogHwnd(), path, args.quality)
-        : SaveJpeg(app.RenderContext().OffscreenBitmap(), path, args.quality);
+    // Scenes render offscreen so screenshots work even when the window is occluded.
+    const bool ok = SaveJpeg(app.RenderContext().OffscreenBitmap(), Utf8ToWide(args.screenshot), args.quality);
     app.ConfirmExit();
     CoUninitialize();
     return ok ? 0 : 3;

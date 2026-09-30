@@ -107,6 +107,9 @@ public:
         DWRITE_TEXT_ALIGNMENT align = DWRITE_TEXT_ALIGNMENT_LEADING,
         DWRITE_PARAGRAPH_ALIGNMENT valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
     core::Size MeasureText(const std::string& text, const TextStyle& style, float maxWidth = 4096.0f);
+    // Layouts give editors caret hit-testing; they do not depend on the device and survive target loss.
+    ComPtr<IDWriteTextLayout> CreateTextLayout(const std::wstring& text, const TextStyle& style, float maxWidth, float maxHeight);
+    void DrawTextLayout(IDWriteTextLayout* layout, core::Point origin, D2D1_COLOR_F color);
 
     void DrawBitmap(ID2D1Bitmap* bitmap, const core::Rect& dest, const D2D1_RECT_U* source = nullptr, float opacity = 1.0f);
     void DrawBitmap(ID2D1Bitmap* bitmap, const core::Rect& dest, const D2D1_RECT_F& source, float opacity = 1.0f);

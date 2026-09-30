@@ -19,15 +19,8 @@ struct ExternalAiRequest {
 
 struct ExternalAiResult {
     bool ok{false};
-    GameAction requestedAction;
-    std::string reasoningContent;
-    std::string toolCallId;
-    std::string toolName;
-    std::string toolArgumentsJson;
-    std::string requestLogPath;
-    std::string responseLogPath;
     std::string errorMessage;
-    TurnDecisionSource source{TurnDecisionSource::LlmAi};
+    TurnDecisionSource source{TurnDecisionSource::LocalAi};
     std::optional<AiMoveChoice> localChoice;
 };
 
@@ -36,8 +29,7 @@ public:
     virtual ~ExternalAiController() = default;
 
     virtual bool CanHandle(rules::PlayerId player) const = 0;
-    virtual bool IsRemote(rules::PlayerId player) const { return false; }
-    virtual StrategyMetadata MetadataFor(rules::PlayerId player) const { return {"unknown", "unknown", {}, {}}; }
+    virtual StrategyMetadata MetadataFor(rules::PlayerId player) const { return {"unknown", "unknown"}; }
     virtual bool HasPending() const = 0;
     virtual void Start(ExternalAiRequest request) = 0;
     virtual std::optional<ExternalAiResult> TryGetResult() = 0;

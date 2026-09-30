@@ -25,7 +25,10 @@ ctest --preset vs2026-release --output-on-failure
 
 - `pdk_core`：规则、AI、游戏状态、设置、统计和记录。应保持不依赖 Win32 UI。
 - `pdk_app`：应用流程、渲染、音频、场景、覆盖层、资源加载和 Win32 相关行为。
-- UI 全部使用 Direct2D / DirectWrite 自绘，不使用 user32 控件。唯一例外是设置对话框，它是原生 Win32 对话框，用来支持中文输入法和 AI 提供商配置。
+- UI 全部使用 Direct2D / DirectWrite 自绘，不使用 user32 控件，设置界面也是自绘覆盖层（`src/overlays/SettingsOverlay.*`）。
+- 文本输入：`src/ui/Inputs.*` 提供 `TextField`（光标、选区、剪贴板、内联 IME 组字）、`Slider`、`Segmented`、`Toggle`。`Window` 把 `WM_KEYDOWN`/`WM_CHAR`/`WM_IME_*` 转给 `App`，再交给最上层覆盖层；`src/app/ImeInput.*` 封装 IMM32。只有覆盖层 `WantsTextInput()` 为真时才关联输入法上下文，其余时间输入法是关闭的，候选框位置跟随 `TextCaretRect()`。
+- AI 只有本地策略（`basic`/`strong`），经 `LocalAiController` 在后台线程计算。已移除 WinHttp 大模型 AI，不要重新引入联网请求或 API Key 存储。
+- 音频：`src/audio/AudioEngine.*` 使用 WASAPI 共享模式事件驱动，在 “Pro Audio” MMCSS 线程上软件混音（最多 24 个声部、主音量实时生效、软限幅）。Win10 上用 `IAudioClient3` 的最小引擎周期降低延迟，拿不到时回退普通 `IAudioClient::Initialize`。mp3 由 Media Foundation 解码为 44.1 kHz 单声道 float，打开设备时按设备采样率做 Hermite 重采样。默认设备切换或 `AUDCLNT_E_DEVICE_INVALIDATED` 时由混音线程重开设备。`Play()` 只入队，可以在 UI 线程随意调用。
 - 视觉风格为“东方雅致”：墨绿丝绒牌桌、香槟金细线、朱红只用于印章/炸弹/危险操作；带音高的音效和配色一样统一在 D 大调五声音阶。
 - 自绘 UI 分三层：`src/graphics/D2DContext.*`（画刷/文字格式缓存、圆角、渐变、变换栈和透明度栈、`MeasureText`）、`src/graphics/ProceduralTextures.*`（CPU 生成的软阴影九宫格和绒面噪点，只依赖 Direct2D 1.0）、`src/ui/`（`Theme` 色板、`Anim` 缓动、`Widgets` 按钮/面板/胶囊/头像/印章/弹窗、`Icons` 矢量图标、`CardView` 牌面渲染）。新界面优先复用 `src/ui/`，不要在场景里直接写纯色矩形。
 - 牌图集加载时额外用 WIC Fant 预缩小 1/2 和 1/4 两级，`CardView` 按目标像素尺寸选级，小牌不会锯齿。
@@ -33,7 +36,7 @@ ctest --preset vs2026-release --output-on-failure
 - 运行资源通过 `src/resources/resources.rc` 嵌入。
 - 设置和统计路径基于进程当前工作目录，不基于 exe 所在目录。
 - 应用使用固定 1280x720 逻辑布局。窗口缩放应在场景布局外处理，窗口不应小于 1280x720。
-- Windows 基线尽量保持 Win8 兼容：`WINVER=0x0602`、`_WIN32_WINNT=0x0602`、Direct2D、DirectWrite、WIC、Media Foundation、XAudio2.8。
+- Windows 基线尽量保持 Win8 兼容：`WINVER=0x0602`、`_WIN32_WINNT=0x0602`、Direct2D、DirectWrite、WIC、Media Foundation、WASAPI（Win10 上额外使用 `IAudioClient3` 低延迟周期）、IMM32。
 - 需要处理 `D2DERR_RECREATE_TARGET`：游戏/窗口状态应保留，Direct2D 设备资源和 bitmap 应重建，音频和 CPU 数据应不受影响。
 
 ## 体积约束
@@ -53,7 +56,7 @@ ctest --preset vs2026-release --output-on-failure
 - 主要场景：Loading、Start、Game、Stats、Settings、Help。
 - 主要覆盖层：局末结算、关闭确认、关于、返回菜单、提示、非法出牌 toast、AI 对话气泡。
 - UI 控件自绘：按钮、滑块、牌、面板、覆盖层和文字。
-- 设置界面保持克制：音量是用户可见设置；牌大小和动画速度属于固定手感参数，不作为设置项。
+- 设置界面保持克制：玩家名、主音量、AI1/AI2 策略（基础/强力）、复盘记录开关。牌大小和动画速度属于固定手感参数，不作为设置项。设置弹窗里 Enter 保存、Esc 取消，取消时恢复打开前的音量。
 - 暂不以键盘操作为重点，但 Alt+F4 / 窗口关闭应弹出关闭确认。
 
 ## 资源与数据策略
@@ -62,7 +65,7 @@ ctest --preset vs2026-release --output-on-failure
 - 精灵和音频布局不依赖运行时 JSON metadata。可替换的资源元数据集中放在 `src/resources/` 或 `src/audio/` 的代码中。
 - 音频文件保持独立 mp3 资源，不合并成音频精灵。
 - 进入 GameScene 前的重资源加载应放在 LoadingScene。
-- `appsettings.json` 保存玩家名、主音量、窗口大小。不要重新引入已移除的 `cardScale` 或 `animationSpeed` 字段。
+- `appsettings.json` 保存玩家名、主音量、窗口大小、`ai1`/`ai2`（只接受 `basic`/`strong`，其他值归一为 `basic`）和 `roundTraceEnabled`。不要重新引入已移除的 `cardScale`、`animationSpeed` 或 `aiProviders` 字段；旧配置里的 `aiProviders` 读取时忽略、保存时丢弃。
 - 统计数据按每局详细记录写入 `stat/yyyyMMdd.json`；不要存缓存总分。显示时从记录聚合日、月、历史统计。
 
 ## 固定游戏规则
@@ -107,7 +110,7 @@ ctest --preset vs2026-release --output-on-failure
 ```text
 unit_tests
 ui_scene_start
-ui_dialog_settings
+ui_overlay_settings
 ui_scene_game_deal
 ui_scene_game_play
 ui_overlay_result
@@ -117,7 +120,7 @@ ui_overlay_result
 
 UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到指定场景或覆盖层，更新/渲染固定帧数，然后通过 WIC 保存 JPEG。这些是渲染冒烟测试，不做像素差异比对。
 
-截图模式下 Direct2D 渲染到离屏 WIC 位图（`RenderContext::Initialize(hwnd, true)`），不依赖窗口是否可见；窗口被遮挡或显示器休眠时，HWND 渲染目标会跳过 Present，`BitBlt` 只能截到黑屏。原生设置对话框仍然从窗口 `BitBlt` 截图。会在 2～3 秒内自动消失的覆盖层（`invalid`、`talk`）和 `loading` 场景会提前截图。
+截图模式下 Direct2D 渲染到离屏 WIC 位图（`RenderContext::Initialize(hwnd, true)`），不依赖窗口是否可见；窗口被遮挡或显示器休眠时，HWND 渲染目标会跳过 Present，`BitBlt` 只能截到黑屏。会在 2～3 秒内自动消失的覆盖层（`invalid`、`talk`）和 `loading` 场景会提前截图。
 
 `scene_viewer` 支持：
 
@@ -128,6 +131,8 @@ UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到
 --screenshot <path>
 --quality <1-100>
 ```
+
+`--scene settings` 会先进入开始场景，再叠加设置弹窗。
 
 ## rules_tests 用例说明
 
@@ -212,15 +217,19 @@ UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到
 
 验证设置 JSON 往返、已移除字段保持缺失、日/月/历史统计可从 JSON 聚合。
 
+`legacy online AI provider settings fall back to basic local AI`
+
+旧配置里带 `aiProviders` 和未知 AI 名称时，加载后回退为 `basic`，重新保存不再写出 `aiProviders` 和 API Key。
+
 ## UI 测试说明
 
 `ui_scene_start`
 
 渲染开始场景，验证窗口、Direct2D、字体和主菜单能初始化。
 
-`ui_dialog_settings`
+`ui_overlay_settings`
 
-打开原生设置对话框并截图，验证 user32/comctl32 控件、DPI 和设置入口能初始化。
+在开始场景上打开自绘设置弹窗并截图，覆盖输入框、滑块、分段选择、开关和按钮的渲染。
 
 `ui_scene_game_deal`
 
@@ -249,7 +258,8 @@ UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到
 
 - 联网。
 - user32 控件。
-- 游戏内中文输入法处理。
+- 牌桌上的文字输入；输入法只在设置的玩家名输入框接入。
+- 联网 / 大模型 AI。
 - 复杂成长系统。
 - UI 中选择多套规则。
 - 运行时资源 metadata 文件。
