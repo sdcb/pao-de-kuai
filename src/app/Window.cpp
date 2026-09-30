@@ -1,6 +1,7 @@
 #include "app/Window.h"
 
 #include "app/Dpi.h"
+#include "app/WindowChrome.h"
 #include "core/Geometry.h"
 #include "core/Timer.h"
 #include "resources/ResourceIds.h"
@@ -44,6 +45,7 @@ bool Window::Create(App& app, const wchar_t* title, int width, int height) {
     if (!hwnd_) {
         return false;
     }
+    ApplyWindowChrome(hwnd_);
     ShowWindow(hwnd_, SW_SHOW);
     UpdateWindow(hwnd_);
     return true;

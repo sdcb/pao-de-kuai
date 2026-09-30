@@ -5,6 +5,7 @@
 #include "scenes/SceneCommon.h"
 
 #include <array>
+#include <string>
 #include <vector>
 
 namespace pdk::app {
@@ -15,7 +16,8 @@ namespace pdk::scenes {
 
 class GameScene final : public core::Scene {
 public:
-    explicit GameScene(app::App& app, bool mock = false);
+    // midgame is a scene_viewer mock: skips the deal and scripts a couple of moves.
+    explicit GameScene(app::App& app, bool mock = false, bool midgame = false);
     void OnEnter() override;
     void StartNextRound();
     void Update(float dt) override;
@@ -25,16 +27,24 @@ public:
     bool OnMouseUp(float x, float y) override;
 
 private:
+    void DrawTable(graphics::RenderContext& context);
+    void DrawTurnChip(graphics::RenderContext& context);
     void DrawPlayerHand(graphics::RenderContext& context);
     void DrawPlayedCards(graphics::RenderContext& context);
-    void DrawAiArea(graphics::RenderContext& context, rules::PlayerId player, const core::Rect& area);
+    void DrawAiSeat(graphics::RenderContext& context, rules::PlayerId player);
+    void DrawPlayerPlate(graphics::RenderContext& context);
+    void DrawPassChips(graphics::RenderContext& context);
+    void DrawToast(graphics::RenderContext& context);
     void DrawDealPile(graphics::RenderContext& context);
+    void DrawBombEffect(graphics::RenderContext& context);
     void UpdateActionButtons();
+    void UpdateHandAnimation(float dt);
+    void UpdateMidgameMock();
     bool InteractionReady() const;
     int HitPlayerCard(float x, float y) const;
     core::Rect CardRect(int index) const;
     core::Rect CardRectFor(int index, int count) const;
-    core::Rect AiCardRectFor(int index, int count, const core::Rect& area) const;
+    core::Rect AiCardRectFor(rules::PlayerId player, int index, int count) const;
     void LayoutActionButtons();
     void InitializeExternalAi();
     void ConsumeEvents();
@@ -46,6 +56,8 @@ private:
     Button backButton_;
     std::vector<Button> buttons_;
     std::vector<int> dragPath_;
+    std::vector<float> handLift_;
+    std::vector<float> handHover_;
     int hoverCard_{-1};
     int dragStartCard_{-1};
     bool dragSelecting_{false};
@@ -53,17 +65,24 @@ private:
     bool recordedRound_{false};
     bool roundResultPending_{false};
     bool mock_{false};
+    bool midgameMock_{false};
+    bool mockPlayed_{false};
+    bool mockHinted_{false};
     bool actionButtonsDirty_{true};
     bool lastInteractionReady_{false};
     std::array<int, 3> todayScores_{0, 0, 0};
     std::array<rules::Cards, 3> handsBeforeSort_;
+    std::array<float, 3> passTimers_{0.0f, 0.0f, 0.0f};
     bool handsSorted_{true};
+    float time_{0.0f};
     float dealElapsed_{0.0f};
     int dealSoundCount_{0};
     float sortAnimation_{0.0f};
     float playAnimation_{0.0f};
     float bombAnimation_{0.0f};
     float roundResultDelay_{0.0f};
+    std::string toastText_;
+    float toastAge_{0.0f};
     rules::PlayerId lastAnimatedPlayer_{rules::PlayerId::Player};
 };
 

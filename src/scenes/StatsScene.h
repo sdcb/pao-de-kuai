@@ -25,6 +25,7 @@ private:
     stats::StatSummary today_;
     stats::StatSummary month_;
     stats::StatSummary history_;
+    float elapsed_{0.0f};
 };
 
 } // namespace pdk::scenes

@@ -221,11 +221,13 @@ set(PDK_APP_SOURCES
     src/app/App.cpp
     src/app/Dpi.cpp
     src/app/Window.cpp
+    src/app/WindowChrome.cpp
     src/audio/AudioDecoder.cpp
     src/audio/AudioEngine.cpp
     src/audio/SoundCatalog.cpp
     src/dialogs/SettingsDialog.cpp
     src/graphics/D2DContext.cpp
+    src/graphics/ProceduralTextures.cpp
     src/graphics/SpriteAtlas.cpp
     src/graphics/TextRenderer.cpp
     src/graphics/WicImageLoader.cpp
@@ -244,6 +246,9 @@ set(PDK_APP_SOURCES
     src/overlays/RoundResultOverlay.cpp
     src/overlays/TalkBubbleOverlay.cpp
     src/overlays/TipOverlay.cpp
+    src/ui/CardView.cpp
+    src/ui/Icons.cpp
+    src/ui/Widgets.cpp
 )
 
 add_library(pdk_app STATIC ${PDK_APP_SOURCES})
@@ -258,7 +263,7 @@ target_compile_definitions(pdk_app PUBLIC
 )
 target_link_libraries(pdk_app PUBLIC
     d2d1 dwrite windowscodecs xaudio2_8 ole32 uuid shlwapi comctl32
-    mfplat mfreadwrite mfuuid gdi32 user32 comdlg32
+    mfplat mfreadwrite mfuuid gdi32 user32 comdlg32 dwmapi
 )
 
 if(TARGET pdk_vc_ltl_build)
@@ -372,5 +377,6 @@ if(PDK_BUILD_TESTS)
     add_test(NAME ui_scene_start COMMAND scene_viewer --scene start --screenshot ${CMAKE_BINARY_DIR}/ui-start.jpg --quality 75)
     add_test(NAME ui_dialog_settings COMMAND scene_viewer --scene settings --screenshot ${CMAKE_BINARY_DIR}/ui-settings.jpg --quality 75)
     add_test(NAME ui_scene_game_deal COMMAND scene_viewer --scene game --mock deal --screenshot ${CMAKE_BINARY_DIR}/ui-game-deal.jpg --quality 75)
+    add_test(NAME ui_scene_game_play COMMAND scene_viewer --scene game --mock midgame --screenshot ${CMAKE_BINARY_DIR}/ui-game-play.jpg --quality 75)
     add_test(NAME ui_overlay_result COMMAND scene_viewer --scene game --overlay result-win --screenshot ${CMAKE_BINARY_DIR}/ui-result.jpg --quality 75)
 endif()

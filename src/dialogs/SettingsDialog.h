@@ -40,6 +40,7 @@ private:
 
     int Scale(int value) const;
     HWND AddControl(const wchar_t* className, const wchar_t* text, DWORD style, int id, int x, int y, int width, int height);
+    void AddHeader(const wchar_t* text, int x, int y, int width);
     void SetText(int id, const std::wstring& text);
     std::wstring Text(int id) const;
     int ComboSelection(int id) const;
@@ -50,6 +51,7 @@ private:
     HWND owner_{};
     HWND hwnd_{};
     HFONT font_{};
+    HFONT headerFont_{};
     UINT dpi_{96};
     stats::AppSettings draft_;
     std::vector<std::string> providerNames_;

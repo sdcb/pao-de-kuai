@@ -25,7 +25,11 @@ ctest --preset vs2026-release --output-on-failure
 
 - `pdk_core`：规则、AI、游戏状态、设置、统计和记录。应保持不依赖 Win32 UI。
 - `pdk_app`：应用流程、渲染、音频、场景、覆盖层、资源加载和 Win32 相关行为。
-- UI 全部使用 Direct2D / DirectWrite 自绘，不使用 user32 控件。
+- UI 全部使用 Direct2D / DirectWrite 自绘，不使用 user32 控件。唯一例外是设置对话框，它是原生 Win32 对话框，用来支持中文输入法和 AI 提供商配置。
+- 视觉风格为“东方雅致”：墨绿丝绒牌桌、香槟金细线、朱红只用于印章/炸弹/危险操作；带音高的音效和配色一样统一在 D 大调五声音阶。
+- 自绘 UI 分三层：`src/graphics/D2DContext.*`（画刷/文字格式缓存、圆角、渐变、变换栈和透明度栈、`MeasureText`）、`src/graphics/ProceduralTextures.*`（CPU 生成的软阴影九宫格和绒面噪点，只依赖 Direct2D 1.0）、`src/ui/`（`Theme` 色板、`Anim` 缓动、`Widgets` 按钮/面板/胶囊/头像/印章/弹窗、`Icons` 矢量图标、`CardView` 牌面渲染）。新界面优先复用 `src/ui/`，不要在场景里直接写纯色矩形。
+- 牌图集加载时额外用 WIC Fant 预缩小 1/2 和 1/4 两级，`CardView` 按目标像素尺寸选级，小牌不会锯齿。
+- 生产源码不要用 `std::lround` 等 `msvcrt.dll` 不导出的 C99 数学函数，VC-LTL 构建会链接失败；需要取整用 `ui::RoundToInt`。
 - 运行资源通过 `src/resources/resources.rc` 嵌入。
 - 设置和统计路径基于进程当前工作目录，不基于 exe 所在目录。
 - 应用使用固定 1280x720 逻辑布局。窗口缩放应在场景布局外处理，窗口不应小于 1280x720。
@@ -105,6 +109,7 @@ unit_tests
 ui_scene_start
 ui_dialog_settings
 ui_scene_game_deal
+ui_scene_game_play
 ui_overlay_result
 ```
 
@@ -112,12 +117,14 @@ ui_overlay_result
 
 UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到指定场景或覆盖层，更新/渲染固定帧数，然后通过 WIC 保存 JPEG。这些是渲染冒烟测试，不做像素差异比对。
 
+截图模式下 Direct2D 渲染到离屏 WIC 位图（`RenderContext::Initialize(hwnd, true)`），不依赖窗口是否可见；窗口被遮挡或显示器休眠时，HWND 渲染目标会跳过 Present，`BitBlt` 只能截到黑屏。原生设置对话框仍然从窗口 `BitBlt` 截图。会在 2～3 秒内自动消失的覆盖层（`invalid`、`talk`）和 `loading` 场景会提前截图。
+
 `scene_viewer` 支持：
 
 ```text
 --scene start|game|stats|settings|help|loading
 --overlay confirm-exit|about|tip|invalid|talk|return-menu|result-win
---mock deal
+--mock deal|midgame
 --screenshot <path>
 --quality <1-100>
 ```
@@ -218,6 +225,10 @@ UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到
 `ui_scene_game_deal`
 
 用 `--mock deal` 渲染游戏发牌阶段，覆盖资源加载、发牌动画、牌背/牌面和桌面布局。
+
+`ui_scene_game_play`
+
+用 `--mock midgame` 跳过发牌，脚本化地让玩家先出一手、AI 跟牌后再点一次提示，覆盖桌面出牌、牌型标签、选中抬起、提示光晕和操作按钮栏。
 
 `ui_overlay_result`
 

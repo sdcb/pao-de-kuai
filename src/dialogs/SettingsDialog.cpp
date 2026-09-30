@@ -1,6 +1,7 @@
 #include "dialogs/SettingsDialog.h"
 
 #include "app/App.h"
+#include "app/WindowChrome.h"
 #include "audio/SoundIds.h"
 
 #include <algorithm>
@@ -96,6 +97,9 @@ SettingsDialog::~SettingsDialog() {
     if (font_) {
         DeleteObject(font_);
     }
+    if (headerFont_) {
+        DeleteObject(headerFont_);
+    }
 }
 
 bool SettingsDialog::Show(HWND owner) {
@@ -131,11 +135,17 @@ bool SettingsDialog::Show(HWND owner) {
     if (dpiDc) {
         ReleaseDC(owner, dpiDc);
     }
-    font_ = CreateFontW(-MulDiv(9, static_cast<int>(dpi_), 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    if (!font_) {
+        font_ = CreateFontW(-MulDiv(10, static_cast<int>(dpi_), 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Microsoft YaHei UI");
+    }
+    if (!headerFont_) {
+        headerFont_ = CreateFontW(-MulDiv(11, static_cast<int>(dpi_), 72), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Microsoft YaHei UI");
+    }
 
-    const int width = Scale(760);
-    const int height = Scale(560);
+    const int width = Scale(780);
+    const int height = Scale(610);
     RECT ownerRect{};
     if (owner) {
         GetWindowRect(owner, &ownerRect);
@@ -162,6 +172,7 @@ bool SettingsDialog::Show(HWND owner) {
     if (!hwnd_) {
         return false;
     }
+    app::ApplyWindowChrome(hwnd_);
     CreateControls();
     LoadSettingsToControls();
     ShowWindow(hwnd_, SW_SHOW);
@@ -225,6 +236,11 @@ LRESULT SettingsDialog::WndProc(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
         break;
+    case WM_CTLCOLORSTATIC: {
+        // Labels, the trackbar and the checkbox default to the button-face grey; match the window background.
+        SetBkMode(reinterpret_cast<HDC>(wParam), TRANSPARENT);
+        return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
+    }
     case WM_CLOSE:
         Close();
         return 0;
@@ -261,42 +277,51 @@ HWND SettingsDialog::AddControl(const wchar_t* className, const wchar_t* text, D
     return control;
 }
 
+void SettingsDialog::AddHeader(const wchar_t* text, int x, int y, int width) {
+    HWND header = AddControl(L"STATIC", text, 0, -1, x, y, width, 26);
+    if (header && headerFont_) {
+        SendMessageW(header, WM_SETFONT, reinterpret_cast<WPARAM>(headerFont_), TRUE);
+    }
+    AddControl(L"STATIC", L"", SS_ETCHEDHORZ, -1, x, y + 30, 716, 2);
+}
+
 void SettingsDialog::CreateControls() {
-    AddControl(L"STATIC", L"玩家名", 0, -1, 24, 24, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdPlayerName, 108, 22, 230, 26);
+    AddHeader(L"基本设置", 28, 18, 300);
+    AddControl(L"STATIC", L"玩家名", SS_CENTERIMAGE, -1, 28, 60, 70, 28);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdPlayerName, 104, 60, 236, 28);
 
-    AddControl(L"STATIC", L"音量", 0, -1, 380, 24, 48, 24);
-    AddControl(TRACKBAR_CLASSW, L"", WS_TABSTOP | TBS_AUTOTICKS, IdVolume, 430, 20, 220, 32);
+    AddControl(L"STATIC", L"音量", SS_CENTERIMAGE, -1, 384, 60, 44, 28);
+    AddControl(TRACKBAR_CLASSW, L"", WS_TABSTOP | TBS_AUTOTICKS, IdVolume, 432, 58, 232, 32);
     SendDlgItemMessageW(hwnd_, IdVolume, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
-    AddControl(L"STATIC", L"80%", 0, IdVolumeText, 660, 24, 48, 24);
+    AddControl(L"STATIC", L"80%", SS_CENTERIMAGE, IdVolumeText, 672, 60, 60, 28);
 
-    AddControl(L"STATIC", L"AI1", 0, -1, 24, 70, 60, 24);
-    AddControl(L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL, IdAi1, 108, 66, 230, 220);
-    AddControl(L"STATIC", L"AI2", 0, -1, 380, 70, 60, 24);
-    AddControl(L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL, IdAi2, 430, 66, 230, 220);
+    AddControl(L"STATIC", L"AI1", SS_CENTERIMAGE, -1, 28, 104, 70, 28);
+    AddControl(L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL, IdAi1, 104, 104, 236, 220);
+    AddControl(L"STATIC", L"AI2", SS_CENTERIMAGE, -1, 384, 104, 44, 28);
+    AddControl(L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL, IdAi2, 432, 104, 232, 220);
 
-    AddControl(L"BUTTON", L"记录每局复盘 JSON", WS_TABSTOP | BS_AUTOCHECKBOX, IdRoundTrace, 24, 112, 220, 24);
+    AddControl(L"BUTTON", L"记录每局复盘 JSON", WS_TABSTOP | BS_AUTOCHECKBOX, IdRoundTrace, 104, 146, 260, 26);
 
-    AddControl(L"STATIC", L"AI Providers", 0, -1, 24, 142, 180, 24);
-    AddControl(L"LISTBOX", L"", WS_TABSTOP | WS_BORDER | LBS_NOTIFY | WS_VSCROLL, IdProviderList, 24, 170, 185, 250);
-    AddControl(L"BUTTON", L"新增", WS_TABSTOP, IdAddProvider, 24, 432, 86, 30);
-    AddControl(L"BUTTON", L"删除", WS_TABSTOP, IdRemoveProvider, 123, 432, 86, 30);
+    AddHeader(L"联网 AI 提供商", 28, 192, 300);
+    AddControl(L"LISTBOX", L"", WS_TABSTOP | WS_BORDER | LBS_NOTIFY | WS_VSCROLL, IdProviderList, 28, 236, 190, 236);
+    AddControl(L"BUTTON", L"新增", WS_TABSTOP, IdAddProvider, 28, 480, 90, 30);
+    AddControl(L"BUTTON", L"删除", WS_TABSTOP, IdRemoveProvider, 128, 480, 90, 30);
 
-    AddControl(L"STATIC", L"名称", 0, -1, 235, 170, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderName, 320, 167, 390, 26);
-    AddControl(L"STATIC", L"type", 0, -1, 235, 210, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderType, 320, 207, 390, 26);
-    AddControl(L"STATIC", L"endpoint", 0, -1, 235, 250, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderEndpoint, 320, 247, 390, 26);
-    AddControl(L"STATIC", L"apiKey", 0, -1, 235, 290, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL | ES_PASSWORD, IdProviderApiKey, 320, 287, 390, 26);
-    AddControl(L"STATIC", L"model", 0, -1, 235, 330, 80, 24);
-    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderModel, 320, 327, 390, 26);
+    AddControl(L"STATIC", L"名称", SS_CENTERIMAGE, -1, 244, 236, 76, 28);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderName, 324, 236, 420, 28);
+    AddControl(L"STATIC", L"类型", SS_CENTERIMAGE, -1, 244, 274, 76, 28);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderType, 324, 274, 420, 28);
+    AddControl(L"STATIC", L"接口地址", SS_CENTERIMAGE, -1, 244, 312, 76, 28);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderEndpoint, 324, 312, 420, 28);
+    AddControl(L"STATIC", L"API Key", SS_CENTERIMAGE, -1, 244, 350, 76, 28);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL | ES_PASSWORD, IdProviderApiKey, 324, 350, 420, 28);
+    AddControl(L"STATIC", L"模型", SS_CENTERIMAGE, -1, 244, 388, 76, 28);
+    AddControl(L"EDIT", L"", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, IdProviderModel, 324, 388, 420, 28);
 
-    AddControl(L"STATIC", L"apiKey 保存到 appsettings.json 时会使用 Windows DPAPI 加密；明文旧配置仍可读取。", 0, -1, 235, 370, 480, 44);
+    AddControl(L"STATIC", L"API Key 保存到 appsettings.json 时会使用 Windows DPAPI 加密；明文旧配置仍可读取。", 0, -1, 324, 428, 420, 44);
 
-    AddControl(L"BUTTON", L"保存", WS_TABSTOP | BS_DEFPUSHBUTTON, IdSave, 520, 474, 90, 34);
-    AddControl(L"BUTTON", L"取消", WS_TABSTOP, IdCancel, 620, 474, 90, 34);
+    AddControl(L"BUTTON", L"保存", WS_TABSTOP | BS_DEFPUSHBUTTON, IdSave, 548, 522, 94, 34);
+    AddControl(L"BUTTON", L"取消", WS_TABSTOP, IdCancel, 650, 522, 94, 34);
 }
 
 void SettingsDialog::LoadSettingsToControls() {

@@ -8,15 +8,18 @@
 
 namespace pdk::scenes {
 
+using namespace ui;
+
 LoadingScene::LoadingScene(app::App& app, LoadingTarget target) : app_(app), target_(target) {}
 
 void LoadingScene::OnEnter() {
-    item_ = target_ == LoadingTarget::Game ? "加载牌图和 21 个 mp3 音效" : "加载统计数据";
+    item_ = target_ == LoadingTarget::Game ? "正在铺开牌桌，准备牌图与音效" : "正在整理战绩";
     progress_ = 0.08f;
 }
 
 void LoadingScene::Update(float dt) {
     elapsed_ += dt;
+    shownProgress_ = Approach(shownProgress_, progress_, 10.0f, dt);
     if (!loaded_ && elapsed_ > 0.12f) {
         progress_ = 0.80f;
         if (target_ == LoadingTarget::Game) {
@@ -36,11 +39,19 @@ void LoadingScene::Update(float dt) {
 }
 
 void LoadingScene::Render(graphics::RenderContext& context) {
-    context.Clear(Color(0.03f, 0.20f, 0.14f));
-    context.DrawTextUtf8("加载中", {0.0f, 260.0f, 1280.0f, 50.0f}, 36.0f, Color(0.96f, 0.88f, 0.44f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-    context.DrawTextUtf8(item_, {0.0f, 318.0f, 1280.0f, 32.0f}, 20.0f, Color(0.86f, 0.93f, 0.82f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-    context.FillRect({390.0f, 380.0f, 500.0f, 18.0f}, Color(0.10f, 0.15f, 0.13f));
-    context.FillRect({390.0f, 380.0f, 500.0f * progress_, 18.0f}, Color(0.86f, 0.72f, 0.28f));
+    context.Clear(theme::Room);
+    DrawRoomBackground(context, {640.0f, 330.0f});
+    DrawRadialGlow(context, {640.0f, 300.0f}, 260.0f, WithAlpha(theme::Gold, 0.06f));
+
+    graphics::TextStyle title = Centered(Kai(76.0f));
+    title.wrap = false;
+    const core::Rect titleRect{0.0f, 230.0f, 1280.0f, 100.0f};
+    context.DrawTextUtf8("跑得快", titleRect, title, context.Linear({0.0f, 250.0f}, {0.0f, 320.0f},
+        {{0.0f, theme::GoldLight}, {0.6f, theme::Gold}, {1.0f, theme::GoldDeep}}));
+    DrawSeal(context, {782.0f, 256.0f}, 40.0f, "极\n客", theme::Cinnabar, -6.0f, 16.0f);
+
+    DrawProgressBar(context, {500.0f, 372.0f, 280.0f, 5.0f}, shownProgress_, elapsed_);
+    context.DrawTextUtf8(item_, {0.0f, 392.0f, 1280.0f, 28.0f}, Centered(Text(15.0f)), theme::Muted);
 }
 
 } // namespace pdk::scenes

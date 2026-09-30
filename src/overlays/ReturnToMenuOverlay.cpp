@@ -4,30 +4,38 @@
 #include "audio/SoundIds.h"
 
 namespace pdk::overlays {
+namespace {
+
+constexpr core::Rect Panel{400.0f, 226.0f, 480.0f, 256.0f};
+
+} // namespace
 
 ReturnToMenuOverlay::ReturnToMenuOverlay(app::App& app) : app_(app) {
     buttons_ = {
-        {{470.0f, 420.0f, 150.0f, 48.0f}, "回主菜单"},
-        {{660.0f, 420.0f, 150.0f, 48.0f}, "继续"}
+        {{Panel.x + 60.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "回主菜单", ui::ButtonStyle::Secondary},
+        {{Panel.x + 250.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "继续游戏", ui::ButtonStyle::Primary}
     };
 }
 
-void ReturnToMenuOverlay::Update(float) {}
+void ReturnToMenuOverlay::Update(float dt) {
+    elapsed_ += dt;
+    ui::ButtonGroup::UpdateAll(buttons_, dt);
+}
 
 void ReturnToMenuOverlay::Render(graphics::RenderContext& context) {
-    context.FillRect({0.0f, 0.0f, 1280.0f, 720.0f}, scenes::Color(0.0f, 0.0f, 0.0f, 0.42f));
-    scenes::DrawPanel(context, {380.0f, 250.0f, 520.0f, 260.0f}, scenes::Color(0.07f, 0.13f, 0.12f, 0.96f));
-    context.DrawTextUtf8("返回游戏菜单？", {380.0f, 300.0f, 520.0f, 60.0f}, 30.0f, scenes::Color(0.98f, 0.96f, 0.82f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-    scenes::ButtonGroup::DrawAll(context, buttons_);
+    ui::BeginModal(context, Panel, elapsed_);
+    ui::DrawDialogBody(context, Panel, ui::Icon::Back, ui::theme::Gold, "返回主菜单？", "当前这一局不会被记录。");
+    ui::ButtonGroup::DrawAll(context, buttons_);
+    ui::EndModal(context);
 }
 
 bool ReturnToMenuOverlay::OnMouseMove(float x, float y) {
-    scenes::ButtonGroup::UpdateHover(buttons_, x, y);
+    ui::ButtonGroup::UpdateHover(buttons_, x, y);
     return true;
 }
 
 bool ReturnToMenuOverlay::OnMouseDown(float x, float y) {
-    const int hit = scenes::ButtonGroup::Hit(buttons_, x, y);
+    const int hit = ui::ButtonGroup::Hit(buttons_, x, y);
     if (hit == 0) {
         app_.Audio().Play(audio::SoundId::Cancel);
         app_.ShowStart();

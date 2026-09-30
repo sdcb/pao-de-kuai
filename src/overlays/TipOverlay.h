@@ -22,6 +22,7 @@ public:
 private:
     app::App& app_;
     std::string text_;
+    float elapsed_{0.0f};
 };
 
 } // namespace pdk::overlays

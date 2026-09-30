@@ -20,7 +20,8 @@ public:
 
 private:
     app::App& app_;
-    std::vector<scenes::Button> buttons_;
+    std::vector<ui::Button> buttons_;
+    float elapsed_{0.0f};
 };
 
 } // namespace pdk::overlays

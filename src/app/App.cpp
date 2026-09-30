@@ -21,13 +21,13 @@
 
 namespace pdk::app {
 
-bool App::Initialize(HWND hwnd, bool viewerMode) {
+bool App::Initialize(HWND hwnd, bool viewerMode, bool offscreen) {
     hwnd_ = hwnd;
     viewerMode_ = viewerMode;
     settings_ = stats::LoadAppSettings();
     audio_.Initialize();
     audio_.SetMasterVolume(settings_.masterVolume);
-    if (!renderContext_.Initialize(hwnd_)) {
+    if (!renderContext_.Initialize(hwnd_, offscreen)) {
         return false;
     }
     if (!viewerMode_) {
@@ -38,6 +38,7 @@ bool App::Initialize(HWND hwnd, bool viewerMode) {
 
 void App::Update(float dt) {
     audio_.Update();
+    sceneFade_ = std::max(0.0f, sceneFade_ - dt / 0.28f);
     if (core::Scene* scene = sceneManager_.Current()) {
         scene->Update(dt);
     }
@@ -66,6 +67,10 @@ void App::Render() {
     }
     for (auto& overlay : overlays_) {
         overlay->Render(renderContext_);
+    }
+    if (sceneFade_ > 0.0f) {
+        const float t = sceneFade_ * sceneFade_ * (3.0f - 2.0f * sceneFade_);
+        renderContext_.FillRect({0.0f, 0.0f, core::LogicalWidth, core::LogicalHeight}, D2D1::ColorF(0.012f, 0.047f, 0.035f, t));
     }
     if (!renderContext_.EndFrame()) {
         ReleaseGameResources();
@@ -116,7 +121,7 @@ void App::ShowStart() {
 }
 
 void App::StartGame(bool mock) {
-    if (mock || cardAtlas_.Loaded()) {
+    if (mock || GameResourcesReady()) {
         ChangeScene(std::make_unique<scenes::GameScene>(*this, mock));
     } else {
         ChangeScene(std::make_unique<scenes::LoadingScene>(*this, scenes::LoadingTarget::Game));
@@ -150,8 +155,10 @@ void App::ShowHelp() {
 }
 
 void App::ShowViewerScene(const std::string& scene, const std::string& overlay, const std::string& mock) {
-    if (scene == "game") {
-        StartGame(mock.empty() ? true : true);
+    if (scene == "game" && mock == "midgame") {
+        ChangeScene(std::make_unique<scenes::GameScene>(*this, true, true));
+    } else if (scene == "game") {
+        StartGame(true);
     } else if (scene == "stats") {
         ShowStats();
     } else if (scene == "settings") {
@@ -189,6 +196,7 @@ void App::ShowViewerScene(const std::string& scene, const std::string& overlay, 
 
 void App::ChangeScene(std::unique_ptr<core::Scene> scene) {
     ClearOverlays();
+    sceneFade_ = 1.0f;
     sceneManager_.Change(std::move(scene));
 }
 
@@ -224,14 +232,26 @@ void App::ConfirmExit() {
 }
 
 bool App::LoadGameResources() {
-    renderContext_.EnsureDeviceResources();
-    audio_.SetMasterVolume(settings_.masterVolume);
-    audio_.LoadAllFromResources();
+    if (!audioLoaded_) {
+        audio_.SetMasterVolume(settings_.masterVolume);
+        audio_.LoadAllFromResources();
+        audioLoaded_ = true;
+    }
+    return LoadCardAtlas();
+}
 
+bool App::LoadCardAtlas() {
+    if (cardAtlas_.Loaded()) {
+        return true;
+    }
+    renderContext_.EnsureDeviceResources();
     const auto cardBytes = resources::LoadResourceBytes(IDR_POKER_CARDS);
     auto bitmap = graphics::LoadBitmapFromMemory(renderContext_.Target(), renderContext_.WicFactory(), cardBytes);
     if (bitmap) {
         cardAtlas_.SetBitmap(std::move(bitmap));
+        for (const float scale : {0.5f, 0.25f}) {
+            cardAtlas_.AddLevel(graphics::LoadBitmapFromMemory(renderContext_.Target(), renderContext_.WicFactory(), cardBytes, scale), scale);
+        }
     }
     return cardAtlas_.Loaded();
 }

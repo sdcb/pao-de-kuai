@@ -19,7 +19,7 @@ namespace pdk::app {
 
 class App {
 public:
-    bool Initialize(HWND hwnd, bool viewerMode = false);
+    bool Initialize(HWND hwnd, bool viewerMode = false, bool offscreen = false);
     void Update(float dt);
     void Render();
     void Resize(int width, int height);
@@ -45,6 +45,8 @@ public:
     bool ProcessDialogMessage(MSG* msg);
 
     bool LoadGameResources();
+    bool LoadCardAtlas();
+    bool GameResourcesReady() const { return audioLoaded_ && cardAtlas_.Loaded(); }
     void ReleaseGameResources();
 
     graphics::RenderContext& RenderContext() { return renderContext_; }
@@ -65,6 +67,8 @@ private:
     HWND hwnd_{};
     bool viewerMode_{false};
     bool shouldQuit_{false};
+    bool audioLoaded_{false};
+    float sceneFade_{0.0f};
     graphics::RenderContext renderContext_;
     audio::AudioEngine audio_;
     graphics::SpriteAtlas cardAtlas_;

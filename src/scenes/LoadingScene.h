@@ -27,6 +27,7 @@ private:
     LoadingTarget target_;
     float elapsed_{0.0f};
     float progress_{0.0f};
+    float shownProgress_{0.0f};
     std::string item_{"准备加载"};
     bool loaded_{false};
 };

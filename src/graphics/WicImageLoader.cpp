@@ -7,7 +7,8 @@ namespace pdk::graphics {
 ComPtr<ID2D1Bitmap> LoadBitmapFromMemory(
     ID2D1RenderTarget* target,
     IWICImagingFactory* wicFactory,
-    std::span<const std::uint8_t> bytes) {
+    std::span<const std::uint8_t> bytes,
+    float scale) {
     if (!target || !wicFactory || bytes.empty()) {
         return {};
     }
@@ -36,12 +37,30 @@ ComPtr<ID2D1Bitmap> LoadBitmapFromMemory(
         return {};
     }
 
+    ComPtr<IWICBitmapSource> source;
+    source.Attach(frame.Get());
+    source->AddRef();
+    if (scale < 1.0f) {
+        UINT width = 0;
+        UINT height = 0;
+        frame->GetSize(&width, &height);
+        ComPtr<IWICBitmapScaler> scaler;
+        if (SUCCEEDED(wicFactory->CreateBitmapScaler(scaler.ReleaseAndGetAddressOf())) &&
+            SUCCEEDED(scaler->Initialize(
+                frame.Get(),
+                static_cast<UINT>(static_cast<float>(width) * scale + 0.5f),
+                static_cast<UINT>(static_cast<float>(height) * scale + 0.5f),
+                WICBitmapInterpolationModeFant))) {
+            source.Attach(scaler.Detach());
+        }
+    }
+
     ComPtr<IWICFormatConverter> converter;
     if (FAILED(wicFactory->CreateFormatConverter(converter.ReleaseAndGetAddressOf()))) {
         return {};
     }
     if (FAILED(converter->Initialize(
-            frame.Get(),
+            source.Get(),
             GUID_WICPixelFormat32bppPBGRA,
             WICBitmapDitherTypeNone,
             nullptr,
