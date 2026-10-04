@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <initializer_list>
+#include <list>
 #include <map>
 #include <span>
 #include <string>
@@ -142,9 +143,13 @@ private:
     ComPtr<ID2D1StrokeStyle> roundStroke_;
 
     ComPtr<ID2D1SolidColorBrush> solid_;
+    // All gradient caches share the stops-hash key space; gradientOrder_ tracks
+    // least-recently-used order so animated gradients cannot grow them forever.
     std::map<std::uint64_t, ComPtr<ID2D1GradientStopCollection>> stops_;
     std::map<std::uint64_t, ComPtr<ID2D1LinearGradientBrush>> linear_;
     std::map<std::uint64_t, ComPtr<ID2D1RadialGradientBrush>> radial_;
+    std::list<std::uint64_t> gradientOrder_;
+    std::map<std::uint64_t, std::list<std::uint64_t>::iterator> gradientLookup_;
     std::map<std::uint64_t, TextFormatEntry> formats_;
     ProceduralTextures textures_;
 
