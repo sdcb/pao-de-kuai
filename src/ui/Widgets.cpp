@@ -265,10 +265,16 @@ std::string AvatarLabel(const std::string& name) {
 }
 
 void DrawRadialGlow(graphics::RenderContext& context, core::Point center, float radius, D2D1_COLOR_F color, float ring) {
+    // Keep the alpha out of the gradient stops and drive it with opacity:
+    // animated alphas would otherwise mint a fresh cached brush every frame.
+    const D2D1_COLOR_F solid = {color.r, color.g, color.b, 1.0f};
+    const D2D1_COLOR_F clear = {color.r, color.g, color.b, 0.0f};
+    context.PushOpacity(color.a);
     ID2D1Brush* brush = ring > 0.0f
-        ? context.Radial(center, radius, radius, {{0.0f, WithAlpha(color, 0.0f)}, {ring * 0.82f, WithAlpha(color, 0.0f)}, {ring, color}, {1.0f, WithAlpha(color, 0.0f)}})
-        : context.Radial(center, radius, radius, {{0.0f, color}, {1.0f, WithAlpha(color, 0.0f)}});
+        ? context.Radial(center, radius, radius, {{0.0f, clear}, {ring * 0.82f, clear}, {ring, solid}, {1.0f, clear}})
+        : context.Radial(center, radius, radius, {{0.0f, solid}, {1.0f, clear}});
     context.FillEllipse({center.x - radius, center.y - radius, radius * 2.0f, radius * 2.0f}, brush);
+    context.PopOpacity();
 }
 
 void DrawAvatar(graphics::RenderContext& context, const core::Rect& rect, const std::string& label, bool active, float time) {

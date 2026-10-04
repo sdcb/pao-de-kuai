@@ -33,6 +33,12 @@ const wchar_t* FamilyName(FontFamily family) {
     return family == FontFamily::Kai ? L"KaiTi" : L"Microsoft YaHei UI";
 }
 
+// Gradient and text-format caches are keyed by value, so an animated value
+// would mint a new device resource every frame and grow them forever.
+// Bound them so churn cannot retain unbounded memory.
+constexpr std::size_t kMaxCachedGradients = 128;
+constexpr std::size_t kMaxCachedTextFormats = 64;
+
 } // namespace
 
 bool RenderContext::Initialize(HWND hwnd, bool offscreen) {
@@ -124,6 +130,8 @@ void RenderContext::DiscardDeviceResources() {
     linear_.clear();
     radial_.clear();
     stops_.clear();
+    gradientOrder_.clear();
+    gradientLookup_.clear();
     textures_.Reset();
     target_.Reset();
     hwndTarget_.Reset();
@@ -252,7 +260,18 @@ ID2D1GradientStopCollection* RenderContext::Stops(std::initializer_list<Gradient
     }
     auto it = stops_.find(key);
     if (it != stops_.end()) {
+        if (auto order = gradientLookup_.find(key); order != gradientLookup_.end()) {
+            gradientOrder_.splice(gradientOrder_.end(), gradientOrder_, order->second);
+        }
         return it->second.Get();
+    }
+    while (gradientOrder_.size() >= kMaxCachedGradients) {
+        const std::uint64_t evict = gradientOrder_.front();
+        gradientOrder_.pop_front();
+        gradientLookup_.erase(evict);
+        stops_.erase(evict);
+        linear_.erase(evict);
+        radial_.erase(evict);
     }
     std::vector<D2D1_GRADIENT_STOP> d2dStops;
     d2dStops.reserve(stops.size());
@@ -270,6 +289,8 @@ ID2D1GradientStopCollection* RenderContext::Stops(std::initializer_list<Gradient
     }
     ID2D1GradientStopCollection* raw = collection.Get();
     stops_.emplace(key, std::move(collection));
+    gradientOrder_.push_back(key);
+    gradientLookup_.emplace(key, std::prev(gradientOrder_.end()));
     return raw;
 }
 
@@ -496,6 +517,9 @@ RenderContext::TextFormatEntry* RenderContext::Format(const TextStyle& style) {
         static_cast<std::uint64_t>(style.size * 16.0f);
     auto it = formats_.find(key);
     if (it == formats_.end()) {
+        if (formats_.size() >= kMaxCachedTextFormats) {
+            formats_.clear();
+        }
         TextFormatEntry entry;
         if (FAILED(dwriteFactory_->CreateTextFormat(
                 FamilyName(style.family),
