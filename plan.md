@@ -541,6 +541,32 @@
 >   `ui-settings` 与 `ui-result` 肉眼一致。
 > - `check_c_only.py` 残留 146 → **137** 处。
 > 7. S8 收尾
+>
+> **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**
+>
+> 依赖：`GameScene` 用它的 27 个方法，`tests/rules_tests/GameStateTests.cpp` 用得更多，
+> 两者合计 **35 个方法**（`ApplyHint`/`PassObservations`/`TurnRecords`/`BombEvents`/
+> `SetExternalAiControllers`/`TestSetRound`/…）。所以转换时要给 `game/CppCompat.h` 补一个
+> **35 方法的 inline C++ 门面**（`class GameState { ::GameState data_; ... }`），
+> 让测试与 GameScene 暂时不用改；测试保持 C++/doctest 是既定策略 ✓。
+>
+> 需要替换的状态（`GameState.h` 私有成员）：
+> | C++ | C 替代 |
+> |---|---|
+> | `std::array<PlayerState,3> players_` | 定长数组 `PlayerState players_[3]` |
+> | `std::optional<HandPattern> lastPattern_` | `HandPattern` + `bool hasLastPattern` |
+> | `std::set<int> selectedIndices_` | 定长 `int[]` + count（或排序数组） |
+> | `std::vector<int> hintIndices_` | 定长 `int[]` + count |
+> | `std::vector<GameEvent> events_` | 定长数组 + count（事件有上限） |
+> | `std::vector<BombScoreEvent> bombs_` | 同上 |
+> | `std::vector<TurnRecord> turnRecords_` | 同上（注意记录数可能较多，容量要按最坏情况定） |
+> | `std::string toast_` / `talkText_` | `char[]` + `Str_CopyTo` |
+> | `std::string lastRoundTracePath_` | `char[]` |
+> | `std::vector<std::pair<Cards,HandPattern>> LegalMoves()` | 调用方提供缓冲区的 out 参数，或内部定长缓冲 |
+> | `std::sort` / `std::optional` / `std::pair` | 手写插入排序 / `bool` 标志 / 具名结构 |
+>
+> **顺序**：先把 4 个小场景（本轮子代理）落地，再 `GameState`，再 `GameScene`（它依赖 GameState），
+> 再 `App`/`Window`/`WinMain`（转完 App 即可删 `AppApi.h` 整条边界），最后 `StrongAiStrategy`。
 >   是验证新分派最好的单张图）。
 >
 >
