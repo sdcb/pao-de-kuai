@@ -17,6 +17,13 @@
  *     16, so this removes every heap allocation from the rules layer and makes
  *     the type trivially copyable.  All writes go through `Cards_Push`, which
  *     clamps at `CARDS_MAX` rather than overflowing.
+ *
+ * TEMPORARY: the `#ifdef __cplusplus` block inside `Cards` gives the not-yet-ported
+ * C++ translation units the std::vector-shaped API they still use, so the container
+ * could flip to the C type in one step instead of leaving the tree broken while
+ * ~250 call sites were rewritten.  It is deleted together with
+ * src/rules/CppCompat.h, and `tools/check_c_only.py` whitelists this one header.
+ * A file that has been converted to C loses these members automatically.
  */
 
 #include <stdbool.h>
@@ -61,10 +68,9 @@ typedef struct Card {
 
 enum { CARDS_MAX = 48 };
 
-typedef struct Cards {
-    Card items[CARDS_MAX];
-    int count;
-} Cards;
+/* The tag is completed after the function declarations so that the temporary C++
+ * member shim below can call into the C API. */
+typedef struct Cards Cards;
 
 void Cards_Clear(Cards *cards);
 /* Returns false when the array is full; the card is dropped, never overflowing. */
@@ -76,6 +82,105 @@ int Cards_IndexOf(const Cards *cards, Card card);
 bool Cards_Append(Cards *dst, const Cards *src);
 /* Lexicographic (rank, then suit), matching the old defaulted operator<=>. */
 int Cards_Compare(const Cards *lhs, const Cards *rhs);
+
+struct Cards {
+    Card items[CARDS_MAX];
+    int count;
+
+#ifdef __cplusplus
+    /* ---- TEMPORARY C++ shim: delete with src/rules/CppCompat.h ---- */
+    /*
+     * A zeroing default constructor is not optional: `Cards x;` used to be an empty
+     * std::vector, and without this the C struct would leave `count` indeterminate
+     * and the first push_back would write out of bounds.  C callers use
+     * Cards_Clear instead.
+     */
+    Cards() : count(0) {}
+    Cards(const Card *first, const Card *last) : count(0)
+    {
+        for (const Card *p = first; p != last; ++p) {
+            Cards_Push(this, *p);
+        }
+    }
+    int size() const { return count; }
+    bool empty() const { return count == 0; }
+    void clear() { count = 0; }
+    void reserve(int) {}
+    void resize(int n)
+    {
+        while (count < n) {
+            Card zero;
+            zero.rank = 0;
+            zero.suit = 0;
+            items[count++] = zero;
+        }
+        if (n >= 0) {
+            count = n;
+        }
+    }
+    void push_back(Card card) { Cards_Push(this, card); }
+    void emplace_back(Card card) { Cards_Push(this, card); }
+    void pop_back()
+    {
+        if (count > 0) {
+            --count;
+        }
+    }
+    Card &operator[](int index) { return items[index]; }
+    const Card &operator[](int index) const { return items[index]; }
+    Card &front() { return items[0]; }
+    const Card &front() const { return items[0]; }
+    Card &back() { return items[count - 1]; }
+    const Card &back() const { return items[count - 1]; }
+    Card *begin() { return items; }
+    const Card *begin() const { return items; }
+    Card *end() { return items + count; }
+    const Card *end() const { return items + count; }
+    Card *erase(Card *position)
+    {
+        const int index = static_cast<int>(position - items);
+        Cards_RemoveAt(this, index);
+        return items + index;
+    }
+    Card *erase(Card *first, Card *last)
+    {
+        const int from = static_cast<int>(first - items);
+        const int to = static_cast<int>(last - items);
+        for (int i = to; i < count; ++i) {
+            items[from + (i - to)] = items[i];
+        }
+        count -= to - from;
+        return items + from;
+    }
+    Card *insert(Card *position, Card card)
+    {
+        const int index = static_cast<int>(position - items);
+        if (count < CARDS_MAX) {
+            for (int i = count; i > index; --i) {
+                items[i] = items[i - 1];
+            }
+            items[index] = card;
+            ++count;
+        }
+        return items + index;
+    }
+    Card *insert(Card *position, const Card *first, const Card *last)
+    {
+        const int index = static_cast<int>(position - items);
+        const int added = static_cast<int>(last - first);
+        if (added > 0 && count + added <= CARDS_MAX) {
+            for (int i = count + added - 1; i >= index + added; --i) {
+                items[i] = items[i - added];
+            }
+            for (int i = 0; i < added; ++i) {
+                items[index + i] = first[i];
+            }
+            count += added;
+        }
+        return items + index;
+    }
+#endif
+};
 
 int RankValue(Rank rank);
 int SortValue(Card card);

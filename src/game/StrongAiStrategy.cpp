@@ -642,7 +642,7 @@ AiMoveChoice ChooseRolloutMove(const rules::Cards& hand, const AiContext& contex
 
     std::vector<Candidate> candidates = GenerateCandidates(hand, context);
     if (candidates.empty()) {
-        return AiMoveChoice{true, {}, {}, context.leading ? "rollout strong no lead" : "rollout strong pass"};
+        return AiMoveChoice{true, MakeCards({}), {}, context.leading ? "rollout strong no lead" : "rollout strong pass"};
     }
     for (Candidate& candidate : candidates) {
         candidate.score += StrongAdjustment(candidate, context);
@@ -1219,7 +1219,7 @@ namespace {
 AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context) {
     std::vector<Candidate> candidates = GenerateCandidates(hand, context);
     if (candidates.empty()) {
-        return AiMoveChoice{true, {}, {}, context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败"};
+        return AiMoveChoice{true, MakeCards({}), {}, context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败"};
     }
 
     for (Candidate& candidate : candidates) {
@@ -1233,7 +1233,7 @@ AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context
     FilterStrongBombSplits(candidates, hand, context);
     FilterStrongMidgameSingleSplits(candidates, hand, context);
     if (candidates.empty()) {
-        return AiMoveChoice{true, {}, {}, context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败"};
+        return AiMoveChoice{true, MakeCards({}), {}, context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败"};
     }
 
     std::optional<rules::Cards> unknown;

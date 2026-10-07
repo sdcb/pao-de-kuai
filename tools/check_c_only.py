@@ -56,12 +56,16 @@ RE_BANNED_INCLUDE = re.compile(
     r"cstring|cmath|cstdlib|climits|cassert|functional|wrl/|string>)\s*[>\"]"
 )
 
-# Compiler branches are only allowed in the shim outlet.
+# Compiler branches are only allowed in the shim outlet, plus two documented
+# temporary exceptions: cjson is vendored third-party C, and rules/Card.h carries a
+# `#ifdef __cplusplus` member shim that gives the not-yet-ported C++ translation
+# units the std::vector-shaped Cards API.  Both are deleted when the port finishes.
 ALLOWED_IFDEF_FILES = {
     os.path.join("graphics", "win_compat.h"),
     os.path.join("graphics", "Com.h"),
     os.path.join("audio", "MfCompat.h"),
     os.path.join("graphics", "iids.c"),
+    os.path.join("rules", "Card.h"),
 }
 RE_COMPILER_BRANCH = re.compile(r"#\s*if(?:def|ndef)?\s+.*(_MSC_VER|__MINGW32__|__GNUC__)")
 

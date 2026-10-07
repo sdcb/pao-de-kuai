@@ -559,7 +559,7 @@ using namespace ai_internal;
 std::vector<AiMoveChoice> BasicAiStrategy::RecommendMoves(const rules::Cards& hand, const AiContext& context, int limit) const {
     std::vector<Candidate> candidates = GenerateCandidates(hand, context);
     if (candidates.empty()) {
-        return {AiMoveChoice{true, {}, {}, context.leading ? "没有可出的牌型" : "压不过，选择不要"}};
+        return {AiMoveChoice{true, MakeCards({}), {}, context.leading ? "没有可出的牌型" : "压不过，选择不要"}};
     }
 
     std::sort(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
@@ -597,7 +597,7 @@ std::vector<AiMoveChoice> BasicAiStrategy::RecommendMoves(const rules::Cards& ha
 AiMoveChoice BasicAiStrategy::ChooseMove(const rules::Cards& hand, const AiContext& context) {
     const std::vector<AiMoveChoice> recommendations = RecommendMoves(hand, context, 1);
     return recommendations.empty()
-        ? AiMoveChoice{true, {}, {}, context.leading ? "没有可出的牌型" : "压不过，选择不要"}
+        ? AiMoveChoice{true, MakeCards({}), {}, context.leading ? "没有可出的牌型" : "压不过，选择不要"}
         : recommendations.front();
 }
 

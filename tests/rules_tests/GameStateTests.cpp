@@ -680,9 +680,9 @@ TEST_CASE("round trace writes json with human move state when enabled") {
     state.SetRoundTraceRoot(root.string());
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE, SUIT_SPADES)},
-            rules::Cards{C(RANK_FOUR, SUIT_SPADES)},
-            rules::Cards{C(RANK_FIVE, SUIT_SPADES)}
+            rules::MakeCards({C(RANK_THREE, SUIT_SPADES)}),
+            rules::MakeCards({C(RANK_FOUR, SUIT_SPADES)}),
+            rules::MakeCards({C(RANK_FIVE, SUIT_SPADES)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -853,9 +853,9 @@ TEST_CASE("next round starts from previous winner and later winner overrides it"
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_FOUR)},
-            rules::Cards{C(RANK_FIVE)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_FOUR)}),
+            rules::MakeCards({C(RANK_FIVE)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -874,9 +874,9 @@ TEST_CASE("next round starts from previous winner and later winner overrides it"
 
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_FOUR)},
-            rules::Cards{C(RANK_FIVE)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_FOUR)}),
+            rules::MakeCards({C(RANK_FIVE)})
         },
         PLAYER_AI1,
         std::nullopt,
@@ -921,7 +921,7 @@ TEST_CASE("turn order is counterclockwise so the left-hand player is upstream") 
 }
 
 TEST_CASE("AI1 can use local async strong controller and records a local decision") {
-    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
+    const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
     auto controller = std::make_shared<game::LocalAiController>();
     controller->SetStrategy(PLAYER_AI1, game::LocalAiKind::Strong);
     const game::StrategyMetadata metadata = controller->MetadataFor(PLAYER_AI1);
@@ -932,9 +932,9 @@ TEST_CASE("AI1 can use local async strong controller and records a local decisio
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_FIVE), C(RANK_SIX)},
-            rules::Cards{C(RANK_SEVEN)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_FIVE), C(RANK_SIX)}),
+            rules::MakeCards({C(RANK_SEVEN)})
         },
         PLAYER_AI1,
         fourLead,
@@ -958,16 +958,16 @@ TEST_CASE("AI1 can use local async strong controller and records a local decisio
 }
 
 TEST_CASE("AI1 only legal move is recorded without calling the async controller") {
-    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
+    const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
     auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
 
     game::GameState state;
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_FIVE)},
-            rules::Cards{C(RANK_SEVEN)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_FIVE)}),
+            rules::MakeCards({C(RANK_SEVEN)})
         },
         PLAYER_AI1,
         fourLead,
@@ -981,16 +981,16 @@ TEST_CASE("AI1 only legal move is recorded without calling the async controller"
 }
 
 TEST_CASE("local AI2 actions are recorded but not external controlled") {
-    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
+    const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
     auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
 
     game::GameState state;
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_SIX)},
-            rules::Cards{C(RANK_FIVE)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_SIX)}),
+            rules::MakeCards({C(RANK_FIVE)})
         },
         PLAYER_AI2,
         fourLead,
@@ -1004,7 +1004,7 @@ TEST_CASE("local AI2 actions are recorded but not external controlled") {
 }
 
 TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
-    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
+    const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
     auto controller = std::make_shared<MockExternalAiController>(
         game::ExternalAiResult{},
         PLAYER_AI2);
@@ -1013,9 +1013,9 @@ TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_SIX)},
-            rules::Cards{C(RANK_FIVE)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_SIX)}),
+            rules::MakeCards({C(RANK_FIVE)})
         },
         PLAYER_AI2,
         fourLead,
@@ -1031,7 +1031,7 @@ TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
 }
 
 TEST_CASE("AI2 can use local async basic controller through multi controller routing") {
-    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
+    const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
     auto otherController = std::make_shared<MockExternalAiController>(
         game::ExternalAiResult{},
         PLAYER_AI1);
@@ -1045,9 +1045,9 @@ TEST_CASE("AI2 can use local async basic controller through multi controller rou
     });
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_SEVEN)},
-            rules::Cards{C(RANK_FIVE), C(RANK_SIX)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_SEVEN)}),
+            rules::MakeCards({C(RANK_FIVE), C(RANK_SIX)})
         },
         PLAYER_AI2,
         fourLead,
@@ -1069,16 +1069,16 @@ TEST_CASE("AI2 can use local async basic controller through multi controller rou
 }
 
 TEST_CASE("failed async AI result falls back to the built-in local strategy") {
-    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
+    const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
     auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
 
     game::GameState state;
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_FIVE), C(RANK_SIX)},
-            rules::Cards{C(RANK_SEVEN)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_FIVE), C(RANK_SIX)}),
+            rules::MakeCards({C(RANK_SEVEN)})
         },
         PLAYER_AI1,
         fourLead,
@@ -1096,13 +1096,13 @@ TEST_CASE("failed async AI result falls back to the built-in local strategy") {
 }
 
 TEST_CASE("hint passes directly when player cannot beat and pass is blocked when player can beat") {
-    const auto aceLead = rules::IdentifyPattern({C(RANK_ACE)}).pattern;
+    const auto aceLead = rules::IdentifyPattern(MakeCards({C(RANK_ACE)})).pattern;
     game::GameState cannotBeat;
     cannotBeat.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_KING)},
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_FOUR)}
+            rules::MakeCards({C(RANK_KING)}),
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_FOUR)})
         },
         PLAYER_HUMAN,
         aceLead,
@@ -1114,13 +1114,13 @@ TEST_CASE("hint passes directly when player cannot beat and pass is blocked when
     CHECK(cannotBeat.Events().back().type == game::GameEventType::Passed);
     CHECK(cannotBeat.CurrentPlayer() == PLAYER_AI2);
 
-    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
+    const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
     game::GameState canBeat;
     canBeat.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_FIVE)},
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_SIX)}
+            rules::MakeCards({C(RANK_FIVE)}),
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_SIX)})
         },
         PLAYER_HUMAN,
         fourLead,
@@ -1133,13 +1133,13 @@ TEST_CASE("hint passes directly when player cannot beat and pass is blocked when
 }
 
 TEST_CASE("hint switches to recommendation or toggles it off when already selected") {
-    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
+    const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE), C(RANK_FIVE)},
-            rules::Cards{C(RANK_SIX)},
-            rules::Cards{C(RANK_SEVEN)}
+            rules::MakeCards({C(RANK_THREE), C(RANK_FIVE)}),
+            rules::MakeCards({C(RANK_SIX)}),
+            rules::MakeCards({C(RANK_SEVEN)})
         },
         PLAYER_HUMAN,
         fourLead,
@@ -1160,25 +1160,25 @@ TEST_CASE("hint switches to recommendation or toggles it off when already select
 }
 
 TEST_CASE("hint follows triple with two using five cards") {
-    const auto previous = rules::IdentifyPattern({
+    const auto previous = rules::IdentifyPattern(MakeCards({
         C(RANK_THREE),
         C(RANK_THREE, SUIT_HEARTS),
         C(RANK_THREE, SUIT_DIAMONDS),
         C(RANK_SEVEN),
         C(RANK_EIGHT)
-    }).pattern;
+    })).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_FOUR),
                 C(RANK_FOUR, SUIT_HEARTS),
                 C(RANK_FOUR, SUIT_DIAMONDS),
                 C(RANK_FIVE),
                 C(RANK_SIX)
-            },
-            rules::Cards{C(RANK_EIGHT)},
-            rules::Cards{C(RANK_NINE)}
+            }),
+            rules::MakeCards({C(RANK_EIGHT)}),
+            rules::MakeCards({C(RANK_NINE)})
         },
         PLAYER_HUMAN,
         previous,
@@ -1194,13 +1194,13 @@ TEST_CASE("hint follows triple with two using five cards") {
 }
 
 TEST_CASE("upstream AI follows with high singleton when player has reported single") {
-    const auto previous = rules::IdentifyPattern({C(RANK_SEVEN)}).pattern;
+    const auto previous = rules::IdentifyPattern(MakeCards({C(RANK_SEVEN)})).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_EIGHT), C(RANK_KING)},
-            rules::Cards{C(RANK_FOUR)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_EIGHT), C(RANK_KING)}),
+            rules::MakeCards({C(RANK_FOUR)})
         },
         PLAYER_AI1,
         previous,
@@ -1217,9 +1217,9 @@ TEST_CASE("game state tracks played cards and clears observations for a fresh te
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE), C(RANK_FOUR)},
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            rules::MakeCards({C(RANK_THREE), C(RANK_FOUR)}),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -1232,9 +1232,9 @@ TEST_CASE("game state tracks played cards and clears observations for a fresh te
 
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -1247,13 +1247,13 @@ TEST_CASE("game state tracks played cards and clears observations for a fresh te
 }
 
 TEST_CASE("game state records pass observations from mandatory-play rule") {
-    const auto queenLead = rules::IdentifyPattern({C(RANK_QUEEN)}).pattern;
+    const auto queenLead = rules::IdentifyPattern(MakeCards({C(RANK_QUEEN)})).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_JACK)},
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_FOUR)}
+            rules::MakeCards({C(RANK_JACK)}),
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_FOUR)})
         },
         PLAYER_HUMAN,
         queenLead,
@@ -1268,13 +1268,13 @@ TEST_CASE("game state records pass observations from mandatory-play rule") {
 }
 
 TEST_CASE("ai pass observations survive the relaunch lead") {
-    const auto queenLead = rules::IdentifyPattern({C(RANK_QUEEN)}).pattern;
+    const auto queenLead = rules::IdentifyPattern(MakeCards({C(RANK_QUEEN)})).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_JACK)},
-            rules::Cards{C(RANK_TEN)}
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_JACK)}),
+            rules::MakeCards({C(RANK_TEN)})
         },
         PLAYER_AI2,
         queenLead,
@@ -1297,9 +1297,9 @@ TEST_CASE("ai bomb talk ignores existing normal talk cooldown") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_THREE), C(RANK_FOUR), C(RANK_FIVE), C(RANK_SEVEN), C(RANK_NINE)},
-            rules::Cards{C(RANK_KING)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_THREE), C(RANK_FOUR), C(RANK_FIVE), C(RANK_SEVEN), C(RANK_NINE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_AI1,
         std::nullopt,
@@ -1309,14 +1309,14 @@ TEST_CASE("ai bomb talk ignores existing normal talk cooldown") {
 
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({
                 C(RANK_THREE),
                 C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS),
                 C(RANK_THREE, SUIT_CLUBS)
-            },
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_AI1,
         std::nullopt,
@@ -1327,13 +1327,13 @@ TEST_CASE("ai bomb talk ignores existing normal talk cooldown") {
 }
 
 TEST_CASE("ai talks when forced to break a good group") {
-    const auto previous = rules::IdentifyPattern({C(RANK_ACE)}).pattern;
+    const auto previous = rules::IdentifyPattern(MakeCards({C(RANK_ACE)})).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_TWO), C(RANK_TWO, SUIT_HEARTS)},
-            rules::Cards{C(RANK_KING)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_TWO), C(RANK_TWO, SUIT_HEARTS)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_AI1,
         previous,
@@ -1345,16 +1345,16 @@ TEST_CASE("ai talks when forced to break a good group") {
 }
 
 TEST_CASE("ai reacts when it cannot beat a seven card move") {
-    const auto previous = rules::IdentifyPattern({
+    const auto previous = rules::IdentifyPattern(MakeCards({
         C(RANK_THREE), C(RANK_FOUR), C(RANK_FIVE), C(RANK_SIX),
         C(RANK_SEVEN), C(RANK_EIGHT), C(RANK_NINE)
-    }).pattern;
+    })).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{C(RANK_KING)},
-            rules::Cards{C(RANK_ACE)}
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({C(RANK_KING)}),
+            rules::MakeCards({C(RANK_ACE)})
         },
         PLAYER_AI1,
         previous,
@@ -1369,12 +1369,12 @@ TEST_CASE("ai taunts when it plays seven or more cards") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_TWO)},
-            rules::Cards{
+            rules::MakeCards({C(RANK_TWO)}),
+            rules::MakeCards({
                 C(RANK_THREE), C(RANK_FOUR), C(RANK_FIVE), C(RANK_SIX),
                 C(RANK_SEVEN), C(RANK_EIGHT), C(RANK_NINE)
-            },
-            rules::Cards{C(RANK_ACE)}
+            }),
+            rules::MakeCards({C(RANK_ACE)})
         },
         PLAYER_AI1,
         std::nullopt,
@@ -1390,12 +1390,12 @@ TEST_CASE("ai comments on human good moves and avoids immediate repeated wording
     auto dealHumanStraight = [&]() {
         state.TestSetRound(
             std::array<rules::Cards, 3>{
-                rules::Cards{
+                rules::MakeCards({
                     C(RANK_THREE), C(RANK_FOUR), C(RANK_FIVE), C(RANK_SIX),
                     C(RANK_SEVEN), C(RANK_EIGHT), C(RANK_NINE)
-                },
-                rules::Cards{C(RANK_ACE)},
-                rules::Cards{C(RANK_KING)}
+                }),
+                rules::MakeCards({C(RANK_ACE)}),
+                rules::MakeCards({C(RANK_KING)})
             },
             PLAYER_HUMAN,
             std::nullopt,
@@ -1421,12 +1421,12 @@ TEST_CASE("round end talk prefers leftover plane") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(RANK_THREE)},
-            rules::Cards{
+            rules::MakeCards({C(RANK_THREE)}),
+            rules::MakeCards({
                 C(RANK_FOUR), C(RANK_FOUR, SUIT_HEARTS), C(RANK_FOUR, SUIT_DIAMONDS),
                 C(RANK_FIVE), C(RANK_FIVE, SUIT_HEARTS), C(RANK_FIVE, SUIT_DIAMONDS)
-            },
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -1441,17 +1441,17 @@ TEST_CASE("a bomb beaten by a bigger bomb scores nothing in game state") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE), C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS), C(RANK_THREE, SUIT_CLUBS),
                 C(RANK_FOUR)
-            },
-            rules::Cards{C(RANK_SEVEN), C(RANK_EIGHT)},
-            rules::Cards{
+            }),
+            rules::MakeCards({C(RANK_SEVEN), C(RANK_EIGHT)}),
+            rules::MakeCards({
                 C(RANK_FOUR, SUIT_HEARTS), C(RANK_FOUR, SUIT_DIAMONDS),
                 C(RANK_FOUR, SUIT_CLUBS), C(RANK_FOUR, SUIT_SPADES),
                 C(RANK_FIVE), C(RANK_SIX)
-            }
+            })
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -1492,14 +1492,14 @@ TEST_CASE("a bomb led in a separate trick still scores after another bomb was be
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE), C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS), C(RANK_THREE, SUIT_CLUBS),
                 C(RANK_FIVE), C(RANK_FIVE, SUIT_HEARTS),
                 C(RANK_FIVE, SUIT_DIAMONDS), C(RANK_FIVE, SUIT_CLUBS)
-            },
-            rules::Cards{C(RANK_EIGHT), C(RANK_NINE)},
-            rules::Cards{C(RANK_SIX), C(RANK_SEVEN)}
+            }),
+            rules::MakeCards({C(RANK_EIGHT), C(RANK_NINE)}),
+            rules::MakeCards({C(RANK_SIX), C(RANK_SEVEN)})
         },
         PLAYER_HUMAN,
         std::nullopt,

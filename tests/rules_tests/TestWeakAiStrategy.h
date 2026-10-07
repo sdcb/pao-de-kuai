@@ -84,7 +84,7 @@ private:
     }
 
     static game::AiMoveChoice PassChoice(const game::AiContext& context) {
-        return game::AiMoveChoice{true, {}, {}, context.leading ? "测试弱 AI 没有可出的牌型" : "测试弱 AI 压牌失败"};
+        return game::AiMoveChoice{true, MakeCards({}), {}, context.leading ? "测试弱 AI 没有可出的牌型" : "测试弱 AI 压牌失败"};
     }
 };
 

@@ -8,16 +8,16 @@ using tests::C;
 
 TEST_CASE("drag selection picks best lead pattern from dragged cards and ignores previous move") {
     game::GameState state;
-    const auto previousStraight = rules::IdentifyPattern({
+    const auto previousStraight = rules::IdentifyPattern(MakeCards({
         C(RANK_TEN),
         C(RANK_JACK),
         C(RANK_QUEEN),
         C(RANK_KING),
         C(RANK_ACE)
-    }).pattern;
+    })).pattern;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE),
                 C(RANK_FOUR),
                 C(RANK_FIVE),
@@ -25,9 +25,9 @@ TEST_CASE("drag selection picks best lead pattern from dragged cards and ignores
                 C(RANK_SEVEN),
                 C(RANK_NINE),
                 C(RANK_NINE, SUIT_HEARTS)
-            },
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         previousStraight,
@@ -43,16 +43,16 @@ TEST_CASE("drag selection chooses four dragged bomb cards before a smaller pair"
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE),
                 C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS),
                 C(RANK_THREE, SUIT_CLUBS),
                 C(RANK_NINE),
                 C(RANK_NINE, SUIT_HEARTS)
-            },
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -72,7 +72,7 @@ TEST_CASE("drag selection can choose the longest plane from dragged cards") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE),
                 C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS),
@@ -85,9 +85,9 @@ TEST_CASE("drag selection can choose the longest plane from dragged cards") {
                 C(RANK_EIGHT),
                 C(RANK_NINE),
                 C(RANK_NINE, SUIT_HEARTS)
-            },
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -106,14 +106,14 @@ TEST_CASE("drag selection can choose triple and plane cores without kickers") {
     game::GameState tripleState;
     tripleState.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE),
                 C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS),
                 C(RANK_NINE)
-            },
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -128,7 +128,7 @@ TEST_CASE("drag selection can choose triple and plane cores without kickers") {
     game::GameState planeState;
     planeState.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE),
                 C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS),
@@ -136,9 +136,9 @@ TEST_CASE("drag selection can choose triple and plane cores without kickers") {
                 C(RANK_FOUR, SUIT_HEARTS),
                 C(RANK_FOUR, SUIT_DIAMONDS),
                 C(RANK_NINE)
-            },
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -156,14 +156,14 @@ TEST_CASE("drag selection toggles off when the chosen group is already selected"
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE),
                 C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS),
                 C(RANK_NINE)
-            },
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -181,15 +181,15 @@ TEST_CASE("drag selection completes triple core as triple with two") {
     game::GameState tripleTwoFromSinglesState;
     tripleTwoFromSinglesState.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE),
                 C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS),
                 C(RANK_SEVEN),
                 C(RANK_NINE)
-            },
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -210,16 +210,16 @@ TEST_CASE("drag selection completes triple core as triple with two") {
     game::GameState tripleTwoState;
     tripleTwoState.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_FOUR),
                 C(RANK_FOUR, SUIT_HEARTS),
                 C(RANK_FOUR, SUIT_DIAMONDS),
                 C(RANK_SEVEN),
                 C(RANK_NINE),
                 C(RANK_JACK)
-            },
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,
@@ -239,7 +239,7 @@ TEST_CASE("drag selection adds wings to an existing plane core") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{
+            rules::MakeCards({
                 C(RANK_THREE),
                 C(RANK_THREE, SUIT_HEARTS),
                 C(RANK_THREE, SUIT_DIAMONDS),
@@ -249,9 +249,9 @@ TEST_CASE("drag selection adds wings to an existing plane core") {
                 C(RANK_SEVEN),
                 C(RANK_NINE),
                 C(RANK_JACK)
-            },
-            rules::Cards{C(RANK_ACE)},
-            rules::Cards{C(RANK_KING)}
+            }),
+            rules::MakeCards({C(RANK_ACE)}),
+            rules::MakeCards({C(RANK_KING)})
         },
         PLAYER_HUMAN,
         std::nullopt,

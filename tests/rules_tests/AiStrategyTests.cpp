@@ -12,7 +12,7 @@ using tests::LeadContext;
 
 TEST_CASE("ai triple with two keeps an existing pair as a pair") {
     game::BasicAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_THREE),
         C(RANK_THREE, SUIT_HEARTS),
         C(RANK_THREE, SUIT_DIAMONDS),
@@ -20,7 +20,7 @@ TEST_CASE("ai triple with two keeps an existing pair as a pair") {
         C(RANK_FOUR, SUIT_HEARTS),
         C(RANK_FIVE),
         C(RANK_SIX)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
 
@@ -34,7 +34,7 @@ TEST_CASE("ai triple with two keeps an existing pair as a pair") {
 
 TEST_CASE("ai lead prefers triple with two loose kickers over triple with one") {
     game::BasicAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_SIX),
         C(RANK_SIX, SUIT_HEARTS),
         C(RANK_SIX, SUIT_DIAMONDS),
@@ -42,7 +42,7 @@ TEST_CASE("ai lead prefers triple with two loose kickers over triple with one") 
         C(RANK_NINE),
         C(RANK_KING),
         C(RANK_ACE)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
 
@@ -58,7 +58,7 @@ TEST_CASE("ai lead prefers triple with two loose kickers over triple with one") 
 
 TEST_CASE("strong ai triple with two preserves high control kickers") {
     game::StrongAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_SIX),
         C(RANK_SIX, SUIT_HEARTS),
         C(RANK_SIX, SUIT_DIAMONDS),
@@ -67,7 +67,7 @@ TEST_CASE("strong ai triple with two preserves high control kickers") {
         C(RANK_KING),
         C(RANK_ACE),
         C(RANK_TWO)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
 
@@ -83,14 +83,14 @@ TEST_CASE("strong ai triple with two preserves high control kickers") {
 
 TEST_CASE("ai lead uses the full consecutive pairs run") {
     game::BasicAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_THREE),
         C(RANK_THREE, SUIT_HEARTS),
         C(RANK_FOUR),
         C(RANK_FOUR, SUIT_HEARTS),
         C(RANK_FIVE),
         C(RANK_FIVE, SUIT_HEARTS)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
 
@@ -102,7 +102,7 @@ TEST_CASE("ai lead uses the full consecutive pairs run") {
 
 TEST_CASE("ai lead keeps extending consecutive pairs before leaving loose singles") {
     game::BasicAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_THREE),
         C(RANK_THREE, SUIT_HEARTS),
         C(RANK_FOUR),
@@ -111,7 +111,7 @@ TEST_CASE("ai lead keeps extending consecutive pairs before leaving loose single
         C(RANK_FIVE, SUIT_HEARTS),
         C(RANK_SEVEN),
         C(RANK_NINE)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
 
@@ -123,7 +123,7 @@ TEST_CASE("ai lead keeps extending consecutive pairs before leaving loose single
 
 TEST_CASE("ai plane uses singleton kickers before breaking pairs or triples") {
     game::BasicAiStrategy ai;
-    const auto previous = rules::IdentifyPattern({
+    const auto previous = rules::IdentifyPattern(MakeCards({
         C(RANK_THREE),
         C(RANK_THREE, SUIT_HEARTS),
         C(RANK_THREE, SUIT_DIAMONDS),
@@ -132,8 +132,8 @@ TEST_CASE("ai plane uses singleton kickers before breaking pairs or triples") {
         C(RANK_FOUR, SUIT_DIAMONDS),
         C(RANK_SIX),
         C(RANK_SEVEN)
-    }).pattern;
-    const rules::Cards hand{
+    })).pattern;
+    const rules::Cards hand = MakeCards({
         C(RANK_FOUR),
         C(RANK_FOUR, SUIT_HEARTS),
         C(RANK_FOUR, SUIT_DIAMONDS),
@@ -147,7 +147,7 @@ TEST_CASE("ai plane uses singleton kickers before breaking pairs or triples") {
         C(RANK_NINE),
         C(RANK_NINE, SUIT_HEARTS),
         C(RANK_NINE, SUIT_DIAMONDS)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, FollowContext(previous, static_cast<int>(hand.size())));
 
@@ -163,12 +163,12 @@ TEST_CASE("ai plane uses singleton kickers before breaking pairs or triples") {
 
 TEST_CASE("ai follow chooses a higher singleton when it preserves a pair") {
     game::BasicAiStrategy ai;
-    const auto previous = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
-    const rules::Cards hand{
+    const auto previous = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
+    const rules::Cards hand = MakeCards({
         C(RANK_FIVE),
         C(RANK_FIVE, SUIT_HEARTS),
         C(RANK_SIX)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, FollowContext(previous, static_cast<int>(hand.size())));
 
@@ -181,11 +181,11 @@ TEST_CASE("ai follow chooses a higher singleton when it preserves a pair") {
 
 TEST_CASE("ai lead avoids a small singleton when next player has one card") {
     game::BasicAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_THREE),
         C(RANK_EIGHT),
         C(RANK_ACE)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size()), 1, 1));
 
@@ -198,10 +198,10 @@ TEST_CASE("ai lead avoids a small singleton when next player has one card") {
 
 TEST_CASE("ai lead uses king instead of eight when next player has one card") {
     game::BasicAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_EIGHT),
         C(RANK_KING)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size()), 1, 1));
 
@@ -212,11 +212,11 @@ TEST_CASE("ai lead uses king instead of eight when next player has one card") {
 
 TEST_CASE("ai follow uses high singleton when next player has one card") {
     game::BasicAiStrategy ai;
-    const auto previous = rules::IdentifyPattern({C(RANK_SEVEN)}).pattern;
-    rules::Cards hand{
+    const auto previous = rules::IdentifyPattern(MakeCards({C(RANK_SEVEN)})).pattern;
+    rules::Cards hand = MakeCards({
         C(RANK_EIGHT),
         C(RANK_KING)
-    };
+    });
     game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
     context.nextPlayerRemainingCards = 1;
     context.minOpponentRemainingCards = 1;
@@ -230,7 +230,7 @@ TEST_CASE("ai follow uses high singleton when next player has one card") {
 
 TEST_CASE("ai normal lead does not throw high control singleton first") {
     game::BasicAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_THREE),
         C(RANK_THREE, SUIT_HEARTS),
         C(RANK_SIX),
@@ -241,7 +241,7 @@ TEST_CASE("ai normal lead does not throw high control singleton first") {
         C(RANK_NINE),
         C(RANK_TEN),
         C(RANK_ACE)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size()), 10, 10));
 
@@ -254,12 +254,12 @@ TEST_CASE("ai normal lead does not throw high control singleton first") {
 
 TEST_CASE("ai lead uses proven safe singleton and keeps higher control cards") {
     game::BasicAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_QUEEN),
         C(RANK_KING),
         C(RANK_ACE),
         C(RANK_TWO)
-    };
+    });
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 10, 10);
     context.currentPlayerIndex = 1;
     context.remainingCards = {10, static_cast<int>(hand.size()), 10};
@@ -279,11 +279,11 @@ TEST_CASE("ai lead uses proven safe singleton and keeps higher control cards") {
 
 TEST_CASE("ai urgent lead can still use high singleton despite safe singleton observation") {
     game::BasicAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_QUEEN),
         C(RANK_KING),
         C(RANK_ACE)
-    };
+    });
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 1, 1);
     context.currentPlayerIndex = 1;
     context.remainingCards = {1, static_cast<int>(hand.size()), 8};
@@ -301,11 +301,11 @@ TEST_CASE("ai urgent lead can still use high singleton despite safe singleton ob
 
 TEST_CASE("test weak ai lead ignores one-card defense and plays the lowest singleton") {
     tests::TestWeakAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_THREE),
         C(RANK_EIGHT),
         C(RANK_ACE)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size()), 1, 1));
 
@@ -316,12 +316,12 @@ TEST_CASE("test weak ai lead ignores one-card defense and plays the lowest singl
 
 TEST_CASE("test weak ai follow breaks a pair to use the lowest beating singleton") {
     tests::TestWeakAiStrategy ai;
-    const auto previous = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
-    const rules::Cards hand{
+    const auto previous = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
+    const rules::Cards hand = MakeCards({
         C(RANK_FIVE),
         C(RANK_FIVE, SUIT_HEARTS),
         C(RANK_SIX)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, FollowContext(previous, static_cast<int>(hand.size())));
 
@@ -334,12 +334,12 @@ TEST_CASE("test weak ai follow breaks a pair to use the lowest beating singleton
 
 TEST_CASE("strong ai uses proven pass information for a safe singleton lead") {
     game::StrongAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_QUEEN),
         C(RANK_KING),
         C(RANK_ACE),
         C(RANK_TWO)
-    };
+    });
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 8, 8);
     context.currentPlayerIndex = 1;
     context.remainingCards = {8, static_cast<int>(hand.size()), 8};
@@ -361,11 +361,11 @@ TEST_CASE("strong ai uses proven pass information for a safe singleton lead") {
 
 TEST_CASE("strong ai urgent follow uses a high singleton blocker") {
     game::StrongAiStrategy ai;
-    const auto previous = rules::IdentifyPattern({C(RANK_SEVEN)}).pattern;
-    rules::Cards hand{
+    const auto previous = rules::IdentifyPattern(MakeCards({C(RANK_SEVEN)})).pattern;
+    rules::Cards hand = MakeCards({
         C(RANK_EIGHT),
         C(RANK_KING)
-    };
+    });
     game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
     context.nextPlayerRemainingCards = 1;
     context.minOpponentRemainingCards = 1;
@@ -379,11 +379,11 @@ TEST_CASE("strong ai urgent follow uses a high singleton blocker") {
 
 TEST_CASE("strong ai lead blocks a one-card opponent even when not next player") {
     game::StrongAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_THREE),
         C(RANK_EIGHT),
         C(RANK_ACE)
-    };
+    });
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 6, 1);
     context.remainingCards = {static_cast<int>(hand.size()), 6, 1};
 
@@ -396,11 +396,11 @@ TEST_CASE("strong ai lead blocks a one-card opponent even when not next player")
 
 TEST_CASE("strong ai follow blocks a one-card opponent even when not next player") {
     game::StrongAiStrategy ai;
-    const auto previous = rules::IdentifyPattern({C(RANK_SEVEN)}).pattern;
-    rules::Cards hand{
+    const auto previous = rules::IdentifyPattern(MakeCards({C(RANK_SEVEN)})).pattern;
+    rules::Cards hand = MakeCards({
         C(RANK_EIGHT),
         C(RANK_KING)
-    };
+    });
     game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
     context.nextPlayerRemainingCards = 6;
     context.minOpponentRemainingCards = 1;
@@ -415,13 +415,13 @@ TEST_CASE("strong ai follow blocks a one-card opponent even when not next player
 
 TEST_CASE("strong ai early lead prefers a multi-card plan") {
     game::StrongAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_THREE), C(RANK_THREE, SUIT_HEARTS),
         C(RANK_FOUR), C(RANK_FOUR, SUIT_HEARTS),
         C(RANK_SEVEN), C(RANK_SEVEN, SUIT_HEARTS),
         C(RANK_FIVE), C(RANK_NINE), C(RANK_JACK),
         C(RANK_QUEEN), C(RANK_KING), C(RANK_ACE), C(RANK_TWO)
-    };
+    });
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 13, 13);
     context.currentPlayerIndex = 1;
     context.roundLeaderIndex = 1;
@@ -436,11 +436,11 @@ TEST_CASE("strong ai early lead prefers a multi-card plan") {
 
 TEST_CASE("strong ai does not use three cards from a bomb as a triple") {
     game::StrongAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_SEVEN), C(RANK_SEVEN, SUIT_HEARTS),
         C(RANK_SEVEN, SUIT_DIAMONDS), C(RANK_SEVEN, SUIT_CLUBS),
         C(RANK_THREE), C(RANK_FOUR), C(RANK_ACE)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
 
@@ -451,10 +451,10 @@ TEST_CASE("strong ai does not use three cards from a bomb as a triple") {
 
 TEST_CASE("strong ai ordinary singleton follow uses the lower beater") {
     game::StrongAiStrategy ai;
-    const auto previous = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
-    const rules::Cards hand{
+    const auto previous = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
+    const rules::Cards hand = MakeCards({
         C(RANK_FIVE), C(RANK_SIX), C(RANK_KING), C(RANK_ACE)
-    };
+    });
     game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
     context.minOpponentRemainingCards = 6;
     context.nextPlayerRemainingCards = 6;
@@ -468,8 +468,8 @@ TEST_CASE("strong ai ordinary singleton follow uses the lower beater") {
 
 TEST_CASE("strong ai urgent singleton follow keeps the high blocker") {
     game::StrongAiStrategy ai;
-    const auto previous = rules::IdentifyPattern({C(RANK_SEVEN)}).pattern;
-    const rules::Cards hand{C(RANK_EIGHT), C(RANK_KING)};
+    const auto previous = rules::IdentifyPattern(MakeCards({C(RANK_SEVEN)})).pattern;
+    const rules::Cards hand = MakeCards({C(RANK_EIGHT), C(RANK_KING)});
     game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
     context.minOpponentRemainingCards = 1;
     context.nextPlayerRemainingCards = 1;
@@ -482,11 +482,11 @@ TEST_CASE("strong ai urgent singleton follow keeps the high blocker") {
 
 TEST_CASE("strong ai midgame lead does not split a pair when a singleton is available") {
     game::StrongAiStrategy ai;
-    const rules::Cards hand{
+    const rules::Cards hand = MakeCards({
         C(RANK_FOUR), C(RANK_FOUR, SUIT_HEARTS),
         C(RANK_EIGHT), C(RANK_NINE),
         C(RANK_KING), C(RANK_ACE)
-    };
+    });
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, LeadContext(static_cast<int>(hand.size())));
 

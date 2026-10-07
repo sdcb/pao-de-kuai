@@ -376,9 +376,9 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     const std::optional<rules::PlayerId> requestedLeader = nextRoundLeader_;
     nextRoundLeader_.reset();
     playerName_ = playerName.empty() ? "\xE6\x9D\x8E\xE5\xA7\x90" : playerName;
-    players_[0] = PlayerState{playerName_, {}, false};
-    players_[1] = PlayerState{"AI1", {}, false};
-    players_[2] = PlayerState{"AI2", {}, false};
+    players_[0] = PlayerState{playerName_, MakeCards({}), false};
+    players_[1] = PlayerState{"AI1", MakeCards({}), false};
+    players_[2] = PlayerState{"AI2", MakeCards({}), false};
     selectedIndices_.clear();
     hintIndices_.clear();
     bombs_.clear();
@@ -430,7 +430,7 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
         GameEventType::RoundStarted,
         currentPlayer_,
         requestedLeader ? "上局赢家先出" : "黑桃 3 玩家先出",
-        {}
+        MakeCards({})
     });
 }
 
@@ -553,9 +553,9 @@ bool GameState::PassHuman() {
         PLAYER_HUMAN,
         TurnDecisionSource::Human,
         TurnDecisionReason::CannotBeat,
-        ActionFromCards({}, true),
-        ActionFromCards({}, true),
-        {},
+        ActionFromCards(MakeCards({}), true),
+        ActionFromCards(MakeCards({}), true),
+        MakeCards({}),
         std::nullopt,
         true,
         "玩家不要",
@@ -580,9 +580,9 @@ bool GameState::ApplyHint() {
                 PLAYER_HUMAN,
                 TurnDecisionSource::Human,
                 TurnDecisionReason::CannotBeat,
-                ActionFromCards({}, true),
-                ActionFromCards({}, true),
-                {},
+                ActionFromCards(MakeCards({}), true),
+                ActionFromCards(MakeCards({}), true),
+                MakeCards({}),
                 std::nullopt,
                 true,
                 "提示直接不要",
@@ -591,7 +591,7 @@ bool GameState::ApplyHint() {
             return true;
         }
         toast_ = choice.reason;
-        AddEvent(GameEvent{GameEventType::Hint, PLAYER_HUMAN, choice.reason, {}});
+        AddEvent(GameEvent{GameEventType::Hint, PLAYER_HUMAN, choice.reason, MakeCards({})});
         return false;
     }
 
@@ -1084,9 +1084,9 @@ void GameState::PlayLocalAiTurn(rules::PlayerId player) {
             player,
             source,
             reason,
-            ActionFromCards({}, true),
-            ActionFromCards({}, true),
-            {},
+            ActionFromCards(MakeCards({}), true),
+            ActionFromCards(MakeCards({}), true),
+            MakeCards({}),
             std::nullopt,
             true,
             "本地 AI 不要",
@@ -1176,9 +1176,9 @@ bool GameState::ApplyLocalAiResult(const AiMoveChoice& choice, TurnDecisionSourc
             actor,
             source,
             TurnDecisionReason::CannotBeat,
-            ActionFromCards({}, true),
-            ActionFromCards({}, true),
-            {},
+            ActionFromCards(MakeCards({}), true),
+            ActionFromCards(MakeCards({}), true),
+            MakeCards({}),
             std::nullopt,
             true,
             "本地异步 AI 不要合法",
@@ -1224,7 +1224,7 @@ float GameState::NextThinkDelay() {
 void GameState::AdvanceTurn() {
     currentPlayer_ = NextPlayer(currentPlayer_);
     if (currentPlayer_ == PLAYER_HUMAN) {
-        AddEvent(GameEvent{GameEventType::Talk, PLAYER_HUMAN, "轮到你", {}});
+        AddEvent(GameEvent{GameEventType::Talk, PLAYER_HUMAN, "轮到你", MakeCards({})});
     }
 }
 
@@ -1304,12 +1304,12 @@ void GameState::PlayCards(rules::PlayerId player, const rules::Cards& cards, con
 bool GameState::Pass(rules::PlayerId player) {
     if (roundOver_ || CurrentPlayerLeads()) {
         toast_ = "当前需要主动出牌，不能不要";
-        AddEvent(GameEvent{GameEventType::InvalidMove, player, toast_, {}});
+        AddEvent(GameEvent{GameEventType::InvalidMove, player, toast_, MakeCards({})});
         return false;
     }
     if (HasPlayableFollow(player)) {
         toast_ = "要得起必须出";
-        AddEvent(GameEvent{GameEventType::InvalidMove, player, toast_, {}});
+        AddEvent(GameEvent{GameEventType::InvalidMove, player, toast_, MakeCards({})});
         return false;
     }
 
@@ -1317,7 +1317,7 @@ bool GameState::Pass(rules::PlayerId player) {
     RecordPassObservation(player, *lastPattern_);
     const std::string message = PlayerDisplayName(players_, player) + " 不要";
     toast_ = message;
-    AddEvent(GameEvent{GameEventType::Passed, player, message, {}});
+    AddEvent(GameEvent{GameEventType::Passed, player, message, MakeCards({})});
     if (IsAi(player)) {
         if (lastPattern_ && lastPattern_->cardCount >= 7) {
             MaybeTalk(player, TalkKind::CannotBeatBigMove, true);
@@ -1381,7 +1381,7 @@ void GameState::FinishRound(rules::PlayerId winner) {
     core::AppendNumber(toast_, score.scores[1]);
     toast_ += " AI2 ";
     core::AppendNumber(toast_, score.scores[2]);
-    AddEvent(GameEvent{GameEventType::RoundEnded, winner, toast_, {}});
+    AddEvent(GameEvent{GameEventType::RoundEnded, winner, toast_, MakeCards({})});
     MaybeTalkAboutRoundEndGoodHands(winner);
 }
 
@@ -1409,7 +1409,7 @@ void GameState::MaybeTalk(rules::PlayerId player, TalkKind kind, bool force) {
     talkPlayer_ = player;
     talkText_ = ChooseTalkText(kind);
     talkCooldown_ = 5.0f;
-    AddEvent(GameEvent{GameEventType::Talk, player, talkText_, {}});
+    AddEvent(GameEvent{GameEventType::Talk, player, talkText_, MakeCards({})});
 }
 
 void GameState::MaybeTalkAboutHumanMove(const rules::HandPattern& pattern) {
