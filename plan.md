@@ -567,6 +567,23 @@
 >
 > **顺序**：先把 4 个小场景（本轮子代理）落地，再 `GameState`，再 `GameScene`（它依赖 GameState），
 >
+> **`StrongAiStrategy` 勘察（`GameState` 之后的下一块，1321 行）**
+> - 好消息：`LocalAiController` **已经是 C**（`game/LocalAiController.h/.c`，显式引用计数 `LocalAiShared`，
+>   线程与生命周期都已解决）。要转的只是**策略本体**。
+> - `class StrongAiStrategy final : public AiStrategyClass` 定义在 `game/CppCompat.h`（门面头里），
+>   实现放在 `StrongAiStrategy.cpp`。所以转换 = 让它直接实现 C 的 `AiStrategyVtbl`
+>   （和 8 个覆盖层同一手法），并把那个类声明从门面里删掉。
+> - 需要替换的非 C 设施：
+>   | C++ | C |
+>   |---|---|
+>   | 4× `static std::mutex` + `std::lock_guard`（缓存互斥） | `SRWLOCK`/`CRITICAL_SECTION` + 静态初始化 |
+>   | `std::atomic<int>`（`nextMask`/`parallelTotal`/`parallelCount`/`nextTask`） | `volatile LONG` + `InterlockedIncrement`/`InterlockedCompareExchange` |
+>   | **2 处 `std::array<std::thread, 8>` 工作线程池**（并行候选评估，`join` 后回收） | `_beginthreadex`/`CreateThread` + `WaitForMultipleObjects` |
+> - 线程池是最需要小心的部分（8 线程并行评估 + 原子任务分配 + 结果归约）。可参考
+>   `LocalAiController.c` 里已有的 Win32 线程写法。
+> - 顺带收益：`<thread>`/`<mutex>` 是全项目拖住 `libstdc++` 的主要来源之一，转完后 S8 摘
+>   `-static-libstdc++` 的收益会更干净。
+>
 > **修订 25（S7d 完成记录，commit `4b70c6f`）——4 个小场景全部纯 C**：
 > - `LoadingScene` / `StartScene` / `StatsScene` / `HelpScene` → `.c`，直接实现 `SceneVtbl`
 >   （与 8 个覆盖层同一套形状：私有状态结构、`<Name>_New(void *app)` 返回拥有句柄、
