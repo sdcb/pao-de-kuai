@@ -11,6 +11,7 @@
 #   pwsh -File tools/verify_all.ps1              # build + test
 #   pwsh -File tools/verify_all.ps1 -TestOnly    # skip the builds
 #   pwsh -File tools/verify_all.ps1 -SkipMsVC    # MinGW only (much faster while iterating)
+#   pwsh -File tools/verify_all.ps1 -CompareScreenshots   # also diff the five screenshots
 #
 # Exits 0 only when every requested toolchain built and reported 100% tests passed.
 
@@ -18,6 +19,10 @@
 param(
     [switch]$TestOnly,
     [switch]$SkipMsVC,
+
+    # Also compare the five screenshots against build-baseline/.  Off by default because it needs
+    # the bundled Python; on for a release check.
+    [switch]$CompareScreenshots,
 
     # Override when the toolchains live elsewhere.  The defaults match AGENTS.md.
     [string]$MinGW64Root = "D:\_\3rd\mingw64-ucrt",
@@ -130,6 +135,20 @@ if (-not $SkipMsVC) {
         }
     } else {
         Invoke-Tests "MSVC x64" "build-vs2026" "vs2026-release"
+    }
+}
+
+# ---- screenshot comparison (optional) --------------------------------------
+if ($CompareScreenshots) {
+    Write-Head "screenshots vs build-baseline"
+    $python = Join-Path $env:USERPROFILE ".dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe"
+    if (-not (Test-Path $python)) { $python = "python" }
+    & $python (Join-Path $root "tools/compare_screenshots.py") "build-mingw-ucrt-x64" "build-baseline" --floor
+    if ($LASTEXITCODE -ne 0) {
+        # A difference is not automatically a failure: the baseline is compared against each scene's
+        # own run-to-run noise floor, and this script cannot make that judgement.  It is reported so
+        # a human reads the numbers rather than trusting a green tick.
+        Write-Host "  screenshot differences reported above -- read them against the per-scene floor" -ForegroundColor Yellow
     }
 }
 
