@@ -876,7 +876,8 @@ void GameScene::ShowRoundResultOverlay() {
 
     const stats::RoundRecord record = game_.LastRoundRecord();
     if (!app_.ViewerMode()) {
-        app_.Recorder().AppendToday(record);
+        const ::RoundRecord stored = ToCRound(record);
+        RoundRecorder_AppendToday(&app_.Recorder(), &stored);
     }
     for (int i = 0; i < 3; ++i) {
         todayScores_[i] += record.scores[i];

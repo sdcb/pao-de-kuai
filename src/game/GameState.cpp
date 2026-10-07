@@ -988,18 +988,24 @@ void GameState::MaybeWriteRoundTrace() {
         return;
     }
 
+    const ::RoundRecord result = ToCRound(lastRoundRecord_);
     RoundTrace trace;
-    trace.seed = roundSeed_;
-    trace.playerName = playerName_;
-    trace.startedAt = startedAt_;
-    trace.roundLeader = roundLeader_;
-    trace.initialPlayers = initialPlayers_;
-    trace.strategies = initialStrategies_;
-    trace.turns = turnRecords_;
-    trace.result = lastRoundRecord_;
+    char writtenPath[PDK_STAT_PATH_CAP];
 
-    RoundTraceRecorder recorder(roundTraceRoot_);
-    if (recorder.WriteRound(trace, &lastRoundTracePath_)) {
+    trace.seed = roundSeed_;
+    trace.playerName = playerName_.c_str();
+    trace.startedAt = startedAt_.c_str();
+    trace.roundLeader = roundLeader_;
+    trace.initialPlayers = initialPlayers_.data();
+    trace.strategies = initialStrategies_.data();
+    trace.turns = turnRecords_.data();
+    trace.turnCount = static_cast<int>(turnRecords_.size());
+    trace.result = &result;
+
+    writtenPath[0] = '\0';
+    if (RoundTraceRecorder_WriteRound(roundTraceRoot_.c_str(), &trace, writtenPath,
+                                      PDK_STAT_PATH_CAP)) {
+        lastRoundTracePath_ = writtenPath;
         roundTraceWritten_ = true;
     }
 }

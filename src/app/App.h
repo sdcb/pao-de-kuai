@@ -58,7 +58,7 @@ public:
     graphics::SpriteAtlas& CardAtlas() { return cardAtlas_; }
     stats::AppSettings& Settings() { return settings_; }
     const stats::AppSettings& Settings() const { return settings_; }
-    game::RoundRecorder& Recorder() { return recorder_; }
+    ::RoundRecorder& Recorder() { return recorder_; }
     bool ViewerMode() const { return viewerMode_; }
     HWND Hwnd() const { return hwnd_; }
 
@@ -82,7 +82,7 @@ private:
     std::vector<std::unique_ptr<core::Overlay>> overlays_;
     ImeInput ime_;
     stats::AppSettings settings_;
-    game::RoundRecorder recorder_;
+    ::RoundRecorder recorder_;
 };
 
 } // namespace pdk::app
