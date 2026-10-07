@@ -213,10 +213,23 @@ cleanup:
 
 ## 8. 每个阶段的验收
 
-1. `cmake --build`（MSVC x64、MinGW x64、MinGW x86）全过。
-2. `ctest --output-on-failure` 全绿（MSVC x64 与 MinGW x64 各一次；x86 由 CI 覆盖）。
-3. 如果改了渲染路径，人工比对 5 张 UI 截图与 `build-baseline/`。
-4. 更新 `plan.md` / 本文档里已经变化的部分。
+每个阶段的提交都必须同时满足下面全部条件（本地就按这个跑，别只跑一个工具链）：
+
+1. **三套工具链都编过**：MSVC x64、MinGW UCRT x64、MinGW UCRT x86。
+   - MinGW 记得把 `<root>\bin` 加到 `PATH`（见第 7 节第 1 条），否则 gcc 静默失败。
+   - MSVC 先 `cmd /c "call ...\vcvars64.bat" && cmake --build --preset vs2026-release"`。
+2. **三套工具链的 ctest 全绿**，当前是 **8 个目标**：`shim_layout`、`audio_decode`、
+   `unit_tests`、5 个 `ui_*`。
+   - 本地跑之前把 `TEMP`/`TMP` 指到构建目录（见第 7 节第 7 条），否则 `unit_tests` 会因
+     沙箱 EACCES 假失败。
+3. 改了 `src/graphics/{d2d_c.h,dwrite_c.h,iids_gen.h}`、`tools/gen_com_shim.py` 或
+   `tools/shimparse.py` 时，必须重新生成并让 `shim_layout` 保持绿；
+   CI 另有 `python tools/gen_com_shim.py --check` 漂移检查。
+4. 如果改了渲染路径，**人工**比对 5 张 UI 截图与 `build-baseline/`。
+   注意截图**逐次运行并不可复现**（场景里有计时与洗牌，同一个 binary 两次的 JPEG 都不同），
+   所以判据是"肉眼无差异"，**字节数漂移不能当作回归证据**。
+5. 更新 `plan.md`（追加一条"修订 N 完成记录"）与本文档里已经变化的部分。
+6. 提交前清掉一次性改写脚本（`tools/_*.py`），并确认 `git status` 干净。
 
 ## 9. 体积纪律（延续 `AGENTS.md`）
 
@@ -235,8 +248,13 @@ cleanup:
   不是普通 `enum`（普通 enum 在 C 里是 `int`，会让 `Card` 8 字节、`Cards` 388 字节）。
 - `reason` 用 `char[PATTERN_REASON_CAP]`，`RankName`/`SuitName`/`PatternName`/`PlayerKey`
   返回字符串字面量（`const char*`）。
-- `src/rules/CppCompat.h` 是**临时** C++ 门面（路线 B）：`Cards` 在 C++ 侧仍是
-  `std::vector<Card>`，内联重载把它打包成 C 定长数组再调 C API。删门面的时机 =
+- **`Cards` 自 S4b 起在整个仓库都是 C 定长结构**（`Card items[48]` + `count`），
+  不再是 `std::vector<Card>`。C++ 侧靠 `rules/Card.h` 里一段**带 `#ifdef __cplusplus` 的
+  成员垫片**（`size/empty/push_back/operator[]/begin/end/...`）暂时沿用 vector 形状；
+  那个头在 `tools/check_c_only.py` 的白名单里，S8 收尾时连同门面一起删。
+  聚合初始化一律走 `MakeCards({...})`——直接写 `Cards a{C(...)}` 只会填 `items`、
+  `count` 仍是 0，**静默变成空手牌**。
+- `src/rules/CppCompat.h` 是**临时** C++ 门面（路线 B）。删门面的时机 =
   `src/` 最后一个 C++ 文件消失的同一刻。
 
 ```c
