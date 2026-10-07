@@ -399,7 +399,15 @@
 > **S8 清单（已勘察到具体位置）**：
 > 1. CI **已经是 8 组合**（6 MSVC + 2 MinGW），并且已经跑 `gen_com_shim.py --check` ✓ 无需改动。
 > 2. `tools/check_c_only.py` **本来就在不合格时 `exit 1`** → CI 接入只需加一个 step，**不用改代码**。
-> 3. 摘掉 `-static-libstdc++ -static-libgcc`：`CMakeLists.txt` **第 268 行**（app 目标的 foreach）
+> 3. 摘掉 `-static-libstdc++ -static-libgcc`——**按目标区分，不是全局删**（勘察结论）：
+>    - `CMakeLists.txt` 第 266-270 行的 `foreach(target pao_de_kuai scene_viewer)` 里，
+>      **只把 `pao_de_kuai` 去掉**（WinMain 变 C 后整条链 `pdk_app`+`pdk_core` 都是纯 C）。
+>    - `scene_viewer` = `tests/scene_viewer/SceneViewer.cpp`，**是 C++**，必须保留。
+>    - `unit_tests` = `tests/rules_tests/*.cpp`（doctest），第 315 行**必须保留**。
+>    - `audio_decode` = `tests/audio_decode/AudioDecodeTest.c`（纯 C），本来就没加，不用动。
+>    - `shim_layout` 同理（`shim_main.c`/`shim_vendored_types.c`）。
+>    - 所以 S8 这一项就是：`foreach(target scene_viewer)`（把 `pao_de_kuai` 从列表里拿掉），
+>      其余两处 `target_link_options` 原样不动。
 >    与 **第 315 行**（`unit_tests`）。注意 `unit_tests` 仍是 C++/doctest，**这两行删掉后
 >    `unit_tests` 仍需要它们**——只有 `pao_de_kuai`/`scene_viewer` 该摘。
 > 4. 删掉 9 个临时门面：`src/{app,audio,core,game,graphics,resources,rules,stats,ui}/CppCompat.h`。
