@@ -15,6 +15,9 @@ enum class PlayerId {
 struct BombScoreEvent {
     PlayerId by{PlayerId::Player};
     int score{20};
+    // True when a bigger bomb was played on top of this one before the trick
+    // ended: a beaten bomb scores nothing.
+    bool beaten{false};
 };
 
 struct SpringInfo {

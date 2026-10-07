@@ -1436,3 +1436,96 @@ TEST_CASE("round end talk prefers leftover plane") {
 
     CHECK(HasTalkContaining(state, "飞机"));
 }
+
+TEST_CASE("a bomb beaten by a bigger bomb scores nothing in game state") {
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{
+                C(rules::Rank::Three), C(rules::Rank::Three, rules::Suit::Hearts),
+                C(rules::Rank::Three, rules::Suit::Diamonds), C(rules::Rank::Three, rules::Suit::Clubs),
+                C(rules::Rank::Four)
+            },
+            rules::Cards{C(rules::Rank::Seven), C(rules::Rank::Eight)},
+            rules::Cards{
+                C(rules::Rank::Four, rules::Suit::Hearts), C(rules::Rank::Four, rules::Suit::Diamonds),
+                C(rules::Rank::Four, rules::Suit::Clubs), C(rules::Rank::Four, rules::Suit::Spades),
+                C(rules::Rank::Five), C(rules::Rank::Six)
+            }
+        },
+        rules::PlayerId::Player,
+        std::nullopt,
+        rules::PlayerId::Player);
+
+    for (int i = 0; i < 4; ++i) {
+        state.TogglePlayerCard(i);
+    }
+    REQUIRE(state.PlaySelected());
+    REQUIRE(state.CurrentPlayer() == rules::PlayerId::Ai2);
+
+    // AI2 must beat the bomb with its bigger bomb, which suppresses the first one.
+    state.Update(1.0f);
+    REQUIRE(state.BombEvents().size() == 2);
+    CHECK(state.BombEvents()[0].by == rules::PlayerId::Player);
+    CHECK(state.BombEvents()[0].beaten);
+    CHECK(state.BombEvents()[1].by == rules::PlayerId::Ai2);
+    CHECK_FALSE(state.BombEvents()[1].beaten);
+
+    for (int i = 0; i < 40 && !state.IsRoundOver(); ++i) {
+        if (state.IsHumanTurn()) {
+            state.PassHuman();
+        }
+        state.Update(1.0f);
+    }
+    REQUIRE(state.IsRoundOver());
+
+    const stats::RoundRecord& record = state.LastRoundRecord();
+    CHECK(record.winner == rules::PlayerId::Ai1);
+    CHECK(record.bombs.size() == 2);
+    CHECK(record.bombs[0].beaten);
+    CHECK_FALSE(record.bombs[1].beaten);
+    // Only AI2's bomb scored: the beaten bomb gives its owner nothing.
+    CHECK(record.scores == std::array<int, 3>{-10, -10, 20});
+}
+
+TEST_CASE("a bomb led in a separate trick still scores after another bomb was beaten") {
+    game::GameState state;
+    state.TestSetRound(
+        std::array<rules::Cards, 3>{
+            rules::Cards{
+                C(rules::Rank::Three), C(rules::Rank::Three, rules::Suit::Hearts),
+                C(rules::Rank::Three, rules::Suit::Diamonds), C(rules::Rank::Three, rules::Suit::Clubs),
+                C(rules::Rank::Five), C(rules::Rank::Five, rules::Suit::Hearts),
+                C(rules::Rank::Five, rules::Suit::Diamonds), C(rules::Rank::Five, rules::Suit::Clubs)
+            },
+            rules::Cards{C(rules::Rank::Eight), C(rules::Rank::Nine)},
+            rules::Cards{C(rules::Rank::Six), C(rules::Rank::Seven)}
+        },
+        rules::PlayerId::Player,
+        std::nullopt,
+        rules::PlayerId::Player);
+
+    for (int i = 0; i < 4; ++i) {
+        state.TogglePlayerCard(i);
+    }
+    REQUIRE(state.PlaySelected());
+
+    state.Update(1.0f);
+    state.Update(1.0f);
+    REQUIRE(state.CurrentPlayer() == rules::PlayerId::Player);
+
+    // Second bomb is led in a fresh trick, so the first trick ending must not mark it beaten.
+    for (int i = 0; i < 4; ++i) {
+        state.TogglePlayerCard(i);
+    }
+    REQUIRE(state.PlaySelected());
+    REQUIRE(state.IsRoundOver());
+
+    const stats::RoundRecord& record = state.LastRoundRecord();
+    CHECK(record.winner == rules::PlayerId::Player);
+    REQUIRE(record.bombs.size() == 2);
+    CHECK_FALSE(record.bombs[0].beaten);
+    CHECK_FALSE(record.bombs[1].beaten);
+    CHECK(record.scores == std::array<int, 3>{44, -22, -22});
+    CHECK(record.scores[0] + record.scores[1] + record.scores[2] == 0);
+}

@@ -78,6 +78,7 @@ public:
     rules::PlayerId TalkPlayer() const { return talkPlayer_; }
     bool Autoplay() const { return autoplay_; }
     const stats::RoundRecord& LastRoundRecord() const { return lastRoundRecord_; }
+    const std::vector<rules::BombScoreEvent>& BombEvents() const { return bombs_; }
     const std::vector<TurnRecord>& TurnRecords() const { return turnRecords_; }
     bool ExternalAiPending() const { return externalAiPending_; }
     bool CanCurrentPlayerPass() const;
@@ -172,6 +173,7 @@ private:
     std::set<int> selectedIndices_;
     std::vector<int> hintIndices_;
     std::vector<rules::BombScoreEvent> bombs_;
+    std::optional<std::size_t> standingBombIndex_;
     std::string startedAt_;
     std::string playerName_;
     std::vector<GameEvent> events_;

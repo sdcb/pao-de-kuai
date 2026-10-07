@@ -78,6 +78,7 @@ cJSON* RoundToJson(const RoundRecord& round) {
         cJSON* item = cJSON_CreateObject();
         cJSON_AddStringToObject(item, "by", rules::PlayerKey(bomb.by).c_str());
         cJSON_AddNumberToObject(item, "score", bomb.score);
+        cJSON_AddBoolToObject(item, "beaten", bomb.beaten);
         cJSON_AddItemToArray(bombs, item);
     }
     cJSON_AddItemToObject(object, "bombs", bombs);
@@ -123,6 +124,9 @@ RoundRecord RoundFromJson(const cJSON* object) {
             }
             if (const cJSON* score = cJSON_GetObjectItemCaseSensitive(item, "score"); cJSON_IsNumber(score)) {
                 bomb.score = score->valueint;
+            }
+            if (const cJSON* beaten = cJSON_GetObjectItemCaseSensitive(item, "beaten"); cJSON_IsBool(beaten)) {
+                bomb.beaten = cJSON_IsTrue(beaten);
             }
             round.bombs.push_back(bomb);
         }

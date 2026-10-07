@@ -382,6 +382,7 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     selectedIndices_.clear();
     hintIndices_.clear();
     bombs_.clear();
+    standingBombIndex_.reset();
     lastCards_.clear();
     playedCards_.clear();
     passObservations_.fill(std::nullopt);
@@ -805,6 +806,7 @@ void GameState::TestSetRound(
     selectedIndices_.clear();
     hintIndices_.clear();
     bombs_.clear();
+    standingBombIndex_.reset();
     events_.clear();
     toast_.clear();
     turnRecords_.clear();
@@ -1251,6 +1253,8 @@ void GameState::RecordPassObservation(rules::PlayerId player, const rules::HandP
 
 void GameState::PlayCards(rules::PlayerId player, const rules::Cards& cards, const rules::HandPattern& pattern, int disruptionPenalty) {
     const bool wasFollowing = !CurrentPlayerLeads();
+    // A bomb played on top of a standing bomb beats it: the beaten bomb no longer scores.
+    const bool beatsBomb = wasFollowing && lastPattern_ && lastPattern_->type == rules::PatternType::Bomb;
     RemoveCardsFromHand(player, cards);
     players_[Index(player)].hasPlayedCards = true;
     playedCards_.insert(playedCards_.end(), cards.begin(), cards.end());
@@ -1267,7 +1271,11 @@ void GameState::PlayCards(rules::PlayerId player, const rules::Cards& cards, con
     AddEvent(GameEvent{GameEventType::CardsPlayed, player, message, cards});
 
     if (pattern.type == rules::PatternType::Bomb) {
+        if (beatsBomb && standingBombIndex_ && *standingBombIndex_ < bombs_.size()) {
+            bombs_[*standingBombIndex_].beaten = true;
+        }
         bombs_.push_back(rules::BombScoreEvent{player, 20});
+        standingBombIndex_ = bombs_.size() - 1;
         AddEvent(GameEvent{GameEventType::Bomb, player, "炸弹 +20", cards});
     }
 
@@ -1324,6 +1332,7 @@ bool GameState::Pass(rules::PlayerId player) {
         lastCards_.clear();
         trickLeader_ = currentPlayer_;
         passCount_ = 0;
+        standingBombIndex_.reset();
         toast_ = PlayerDisplayName(players_, currentPlayer_) + " 重新领出";
         return true;
     }

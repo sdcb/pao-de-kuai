@@ -151,6 +151,7 @@ cJSON* ResultToJson(const stats::RoundRecord& result) {
         cJSON* item = cJSON_CreateObject();
         cJSON_AddStringToObject(item, "by", rules::PlayerKey(bomb.by).c_str());
         cJSON_AddNumberToObject(item, "score", bomb.score);
+        cJSON_AddBoolToObject(item, "beaten", bomb.beaten);
         cJSON_AddItemToArray(bombs, item);
     }
     cJSON_AddItemToObject(object, "bombs", bombs);

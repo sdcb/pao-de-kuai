@@ -63,10 +63,25 @@ void RoundResultOverlay::Render(graphics::RenderContext& context) {
 
     // Special-event badges.
     std::vector<std::string> badges;
-    if (!record_.bombs.empty()) {
+    int scoredBombs = 0;
+    int beatenBombs = 0;
+    for (const rules::BombScoreEvent& bomb : record_.bombs) {
+        if (bomb.beaten) {
+            ++beatenBombs;
+        } else {
+            ++scoredBombs;
+        }
+    }
+    if (scoredBombs > 0) {
         std::string text = "炸弹 × ";
-        core::AppendNumber(text, record_.bombs.size());
+        core::AppendNumber(text, scoredBombs);
         text += "  (不参与翻倍)";
+        badges.push_back(text);
+    }
+    if (beatenBombs > 0) {
+        std::string text = "炸弹被压 × ";
+        core::AppendNumber(text, beatenBombs);
+        text += "  (不计分)";
         badges.push_back(text);
     }
     if (record_.spring.enabled) {

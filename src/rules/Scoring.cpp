@@ -29,6 +29,9 @@ RoundScoreResult CalculateRoundScore(const RoundScoreInput& input) {
     RoundScoreResult result;
 
     for (const BombScoreEvent& bomb : input.bombs) {
+        if (bomb.beaten) {
+            continue;
+        }
         const int bombPlayer = PlayerIndex(bomb.by);
         result.scores[bombPlayer] += bomb.score;
         for (int i = 0; i < 3; ++i) {
