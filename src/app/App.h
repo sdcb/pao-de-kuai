@@ -6,7 +6,7 @@
 #include "core/SceneManager.h"
 #include "game/RoundRecorder.h"
 #include "graphics/CppCompat.h"
-#include "graphics/SpriteAtlas.h"
+#include "graphics/CppCompat.h"
 #include "stats/CppCompat.h"
 
 #include <memory>

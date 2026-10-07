@@ -20,6 +20,8 @@
  */
 
 #include "graphics/CppCompat.h"
+#include "rules/CppCompat.h"
+#include "ui/CardView.h"
 #include "ui/Icons.h"
 #include "ui/Theme.h"
 
@@ -39,6 +41,20 @@ inline void DrawIcon(graphics::RenderContext& context, Icon icon, const Rect& re
                      D2D1_COLOR_F color)
 {
     Icons_Draw(context.Native(), static_cast<::Icon>(icon), &rect, color);
+}
+
+using ::CardLook;
+
+inline void DrawCardFace(graphics::RenderContext& context, graphics::SpriteAtlas& atlas,
+                         const rules::Card& card, const Rect& rect, const CardLook& look)
+{
+    CardView_DrawFace(context.Native(), atlas.Native(), card, &rect, &look);
+}
+
+inline void DrawCardBack(graphics::RenderContext& context, graphics::SpriteAtlas& atlas,
+                         const Rect& rect, const CardLook& look)
+{
+    CardView_DrawBack(context.Native(), atlas.Native(), &rect, &look);
 }
 
 /* C has no default arguments, so the runtime colour helper takes alpha explicitly there. */

@@ -26,6 +26,7 @@
 #include "graphics/ComPtr.h"
 #include "graphics/D2DContext.h"
 #include "graphics/ProceduralTextures.h"
+#include "graphics/SpriteAtlas.h"
 #include "graphics/WicImageLoader.h"
 
 #include <cstdint>
@@ -70,6 +71,49 @@ inline ComPtr<ID2D1Bitmap> LoadBitmapFromMemory(ID2D1RenderTarget* target,
         scale)));
     return bitmap;
 }
+
+/* ---- sprite atlas ---------------------------------------------------- */
+
+/*
+ * The old header-only class.  SetBitmap/AddLevel took a ComPtr by value and moved it into the
+ * level, which is exactly ComPtr::Detach here: the reference moves to the C struct, and the
+ * caller's ComPtr is left empty.
+ */
+class SpriteAtlas {
+public:
+    SpriteAtlas() { data_.count = 0; }
+    ~SpriteAtlas() { ::SpriteAtlas_Reset(&data_); }
+
+    SpriteAtlas(const SpriteAtlas&) = delete;
+    SpriteAtlas& operator=(const SpriteAtlas&) = delete;
+
+    void SetBitmap(ComPtr<ID2D1Bitmap> bitmap)
+    {
+        ::SpriteAtlas_SetBitmap(&data_, reinterpret_cast<PDK_ID2D1Bitmap*>(bitmap.Detach()));
+    }
+    // Pre-downsampled copies; scale is relative to the full-size atlas.
+    void AddLevel(ComPtr<ID2D1Bitmap> bitmap, float scale)
+    {
+        ::SpriteAtlas_AddLevel(&data_, reinterpret_cast<PDK_ID2D1Bitmap*>(bitmap.Detach()), scale);
+    }
+    ID2D1Bitmap* Bitmap() const
+    {
+        return reinterpret_cast<ID2D1Bitmap*>(::SpriteAtlas_Bitmap(&data_));
+    }
+    // Smallest level that still has at least the requested pixel density.
+    ID2D1Bitmap* BitmapFor(float requestedScale, float& levelScale) const
+    {
+        return reinterpret_cast<ID2D1Bitmap*>(
+            ::SpriteAtlas_BitmapFor(&data_, requestedScale, &levelScale));
+    }
+    bool Loaded() const { return ::SpriteAtlas_Loaded(&data_); }
+    void Reset() { ::SpriteAtlas_Reset(&data_); }
+
+    ::SpriteAtlas* Native() { return &data_; }
+
+private:
+    ::SpriteAtlas data_;
+};
 
 /* ---- text styles ----------------------------------------------------- */
 

@@ -223,7 +223,7 @@ set(PDK_APP_SOURCES
     src/overlays/SettingsOverlay.cpp
     src/overlays/TalkBubbleOverlay.cpp
     src/overlays/TipOverlay.cpp
-    src/ui/CardView.cpp
+    src/ui/CardView.c
     src/ui/Icons.c
     src/ui/Inputs.cpp
     src/ui/Widgets.cpp
