@@ -324,6 +324,20 @@
 >   （Icons/Theme 没有引入新的 C++ 运行库依赖被移除，libstdc++ 仍被其它 TU 链着，
 >   所以这一步没有体积收益——体积要等 `-static-libstdc++` 摘掉才会跳）。
 >
+> **修订 19（S5e 完成记录，commit `ab0eaf0`）——卡牌渲染已纯 C**：
+> - `SpriteAtlas.h` → C 头且**仍是 header-only**：原来是一个最多三级的 `std::vector` 加几个
+>   小访问器，现在是定长数组 + `static inline`，顺带把图集路径上最后一次堆分配也去掉了。
+>   `ComPtr` 成员 → 结构自己持有的裸接口指针（`SetBitmap`/`AddLevel` 接管引用，`Reset` 释放
+>   被替换的；**"层数已满"时释放传入引用而不是泄漏它**）。门面用 `ComPtr::Detach()` 完成移交，
+>   正好等价于原来按值 `ComPtr` 参数的移动语义。
+> - `CardView` → `.c`：模板 + lambda 的 `DrawCardCommon` 改成函数指针 + 用户指针，共享的
+>   抬升/旋转/发光/悬停/选中处理只留一份，不必为牌面与牌背复制。
+> - `CardLook` 用上惯例的 `#ifdef __cplusplus` 默认构造，且 **`CardLook_Init` 是默认值的唯一
+>   来源**（构造函数调用它），C 侧与 C++ 侧不会漂移；C 用 `CardLook_Default()` 取默认值。
+> - 图集查找、半纹素内缩、图集层级选择、fallback 牌面的 DWRITE 样式都没有改动。
+> - 进度：`src/` 剩 **20 个 `.cpp`**，`check_c_only.py` 残留 194 处；
+>   MinGW x64 exe **686,080 → 683,520 B**（距 679,424 只差 **4.1 KB**）。
+>
 >
 
 >
