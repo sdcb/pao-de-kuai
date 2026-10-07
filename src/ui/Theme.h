@@ -1,89 +1,97 @@
 #pragma once
 
-#include "graphics/CppCompat.h"
+/*
+ * The palette, and the handful of colour helpers the UI shares.
+ *
+ * Pure C.  The C++ version used `constexpr D2D1_COLOR_F` in a namespace; here the values are
+ * `static const` structs initialised by PDK_RGBA, which is still a compile-time constant
+ * expression, and the names carry a THEME_ prefix so they are legal at file scope.
+ *
+ * ui/CppCompat.h re-exports them as `theme::Gold` and friends, so the 230 call sites that spell
+ * them that way did not have to change.  `Text`/`Centered`/`Kai` moved there too: they return a
+ * TextStyle, which in C++ is the DWRITE-typed facade struct rather than the C one.
+ */
 
-#include <cstdint>
+#include "graphics/D2DContext.h"
 
-namespace pdk::ui {
+#include <stdint.h>
 
-constexpr D2D1_COLOR_F Rgb(std::uint32_t hex, float alpha = 1.0f) {
-    return D2D1_COLOR_F{
-        static_cast<float>((hex >> 16) & 0xFFu) / 255.0f,
-        static_cast<float>((hex >> 8) & 0xFFu) / 255.0f,
-        static_cast<float>(hex & 0xFFu) / 255.0f,
-        alpha};
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Fills a D2D1_COLOR_F from 0xRRGGBB at compile time. */
+#define PDK_RGBA(hex, alpha)                                                             \
+    {                                                                                    \
+        (float)(((hex) >> 16) & 0xFFu) / 255.0f, (float)(((hex) >> 8) & 0xFFu) / 255.0f, \
+            (float)((hex) & 0xFFu) / 255.0f, (alpha)                                     \
+    }
+
+/* Runtime form, for colours computed from data rather than written as literals.  C has no
+ * default arguments, so callers wanting alpha = 1 pass it explicitly; ui/CppCompat.h restores
+ * the one-argument form for the C++ callers. */
+static inline D2D1_COLOR_F Rgb(uint32_t hex, float alpha)
+{
+    const D2D1_COLOR_F color = PDK_RGBA(hex, alpha);
+
+    return color;
 }
 
-constexpr D2D1_COLOR_F WithAlpha(D2D1_COLOR_F color, float alpha) {
-    return D2D1_COLOR_F{color.r, color.g, color.b, color.a * alpha};
+static inline D2D1_COLOR_F WithAlpha(D2D1_COLOR_F color, float alpha)
+{
+    D2D1_COLOR_F out;
+
+    out.r = color.r;
+    out.g = color.g;
+    out.b = color.b;
+    out.a = color.a * alpha;
+    return out;
 }
 
-namespace theme {
+/* Velvet table greens, from the lit centre of the felt out to the dark room. */
+static const D2D1_COLOR_F THEME_FELT_LIGHT = PDK_RGBA(0x1A5A42, 1.0f);
+static const D2D1_COLOR_F THEME_FELT = PDK_RGBA(0x114231, 1.0f);
+static const D2D1_COLOR_F THEME_FELT_DEEP = PDK_RGBA(0x0A2B20, 1.0f);
+static const D2D1_COLOR_F THEME_ROOM = PDK_RGBA(0x061712, 1.0f);
+static const D2D1_COLOR_F THEME_ROOM_DEEP = PDK_RGBA(0x030C09, 1.0f);
 
-// Velvet table greens, from the lit centre of the felt out to the dark room.
-constexpr D2D1_COLOR_F FeltLight = Rgb(0x1A5A42);
-constexpr D2D1_COLOR_F Felt = Rgb(0x114231);
-constexpr D2D1_COLOR_F FeltDeep = Rgb(0x0A2B20);
-constexpr D2D1_COLOR_F Room = Rgb(0x061712);
-constexpr D2D1_COLOR_F RoomDeep = Rgb(0x030C09);
+/* Ink panels. */
+static const D2D1_COLOR_F THEME_INK = PDK_RGBA(0x0B1714, 1.0f);
+static const D2D1_COLOR_F THEME_INK_RAISED = PDK_RGBA(0x13241F, 1.0f);
+static const D2D1_COLOR_F THEME_INK_HOVER = PDK_RGBA(0x1B332B, 1.0f);
 
-// Ink panels.
-constexpr D2D1_COLOR_F Ink = Rgb(0x0B1714);
-constexpr D2D1_COLOR_F InkRaised = Rgb(0x13241F);
-constexpr D2D1_COLOR_F InkHover = Rgb(0x1B332B);
+/* Champagne gold. */
+static const D2D1_COLOR_F THEME_GOLD = PDK_RGBA(0xD8B878, 1.0f);
+static const D2D1_COLOR_F THEME_GOLD_LIGHT = PDK_RGBA(0xF1DDA6, 1.0f);
+static const D2D1_COLOR_F THEME_GOLD_DEEP = PDK_RGBA(0x9C7A3C, 1.0f);
+static const D2D1_COLOR_F THEME_GOLD_INK = PDK_RGBA(0x2A1F0C, 1.0f);
 
-// Champagne gold.
-constexpr D2D1_COLOR_F Gold = Rgb(0xD8B878);
-constexpr D2D1_COLOR_F GoldLight = Rgb(0xF1DDA6);
-constexpr D2D1_COLOR_F GoldDeep = Rgb(0x9C7A3C);
-constexpr D2D1_COLOR_F GoldInk = Rgb(0x2A1F0C);
+/* Cinnabar, reserved for seals, bombs and destructive actions. */
+static const D2D1_COLOR_F THEME_CINNABAR = PDK_RGBA(0xC23B2E, 1.0f);
+static const D2D1_COLOR_F THEME_CINNABAR_LIGHT = PDK_RGBA(0xE0604C, 1.0f);
+static const D2D1_COLOR_F THEME_CINNABAR_DEEP = PDK_RGBA(0x8E2A22, 1.0f);
 
-// Cinnabar, reserved for seals, bombs and destructive actions.
-constexpr D2D1_COLOR_F Cinnabar = Rgb(0xC23B2E);
-constexpr D2D1_COLOR_F CinnabarLight = Rgb(0xE0604C);
-constexpr D2D1_COLOR_F CinnabarDeep = Rgb(0x8E2A22);
+static const D2D1_COLOR_F THEME_IVORY = PDK_RGBA(0xF3EBD8, 1.0f);
+static const D2D1_COLOR_F THEME_MUTED = PDK_RGBA(0xA9B8A8, 1.0f);
+static const D2D1_COLOR_F THEME_FAINT = PDK_RGBA(0x6F8479, 1.0f);
 
-constexpr D2D1_COLOR_F Ivory = Rgb(0xF3EBD8);
-constexpr D2D1_COLOR_F Muted = Rgb(0xA9B8A8);
-constexpr D2D1_COLOR_F Faint = Rgb(0x6F8479);
+static const D2D1_COLOR_F THEME_JADE = PDK_RGBA(0x7FD1A0, 1.0f);
+static const D2D1_COLOR_F THEME_RUST = PDK_RGBA(0xE08A7A, 1.0f);
 
-constexpr D2D1_COLOR_F Jade = Rgb(0x7FD1A0);
-constexpr D2D1_COLOR_F Rust = Rgb(0xE08A7A);
+#define THEME_PANEL_RADIUS 16.0f
+#define THEME_CARD_RADIUS_RATIO 0.055f
 
-constexpr float PanelRadius = 16.0f;
-constexpr float CardRadiusRatio = 0.055f;
-
-} // namespace theme
-
-inline graphics::TextStyle Text(float size, DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_NORMAL) {
-    graphics::TextStyle style;
-    style.size = size;
-    style.weight = weight;
-    return style;
-}
-
-inline graphics::TextStyle Centered(graphics::TextStyle style) {
-    style.align = DWRITE_TEXT_ALIGNMENT_CENTER;
-    style.valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
-    return style;
-}
-
-inline graphics::TextStyle Kai(float size) {
-    graphics::TextStyle style;
-    style.size = size;
-    style.family = graphics::FontFamily::Kai;
-    style.weight = DWRITE_FONT_WEIGHT_BOLD;
-    return style;
-}
-
-inline D2D1_COLOR_F ScoreColor(int score) {
+static inline D2D1_COLOR_F ScoreColor(int score)
+{
     if (score > 0) {
-        return theme::Jade;
+        return THEME_JADE;
     }
     if (score < 0) {
-        return theme::Rust;
+        return THEME_RUST;
     }
-    return theme::Muted;
+    return THEME_MUTED;
 }
 
-} // namespace pdk::ui
+#ifdef __cplusplus
+}
+#endif

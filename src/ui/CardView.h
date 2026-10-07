@@ -4,7 +4,7 @@
 #include "graphics/CppCompat.h"
 #include "graphics/SpriteAtlas.h"
 #include "rules/CppCompat.h"
-#include "ui/Theme.h"
+#include "ui/CppCompat.h"
 
 namespace pdk::ui {
 

@@ -7,7 +7,7 @@
 #include "rules/CppCompat.h"
 #include "ui/Anim.h"
 #include "ui/CardView.h"
-#include "ui/Theme.h"
+#include "ui/CppCompat.h"
 #include "ui/Widgets.h"
 
 #include <string>
