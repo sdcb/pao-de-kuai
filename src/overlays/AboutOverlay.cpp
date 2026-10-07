@@ -14,7 +14,7 @@ constexpr Rect Panel{300.0f, 96.0f, 680.0f, 528.0f};
 
 AboutOverlay::AboutOverlay(app::App& app) : app_(app) {
     buttons_ = {
-        {{565.0f, 548.0f, 150.0f, 46.0f}, "知道了", ButtonStyle::Primary}
+        ui::MakeButton({565.0f, 548.0f, 150.0f, 46.0f}, "知道了", ui::ButtonStyle::Primary)
     };
 }
 

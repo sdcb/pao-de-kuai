@@ -226,7 +226,7 @@ set(PDK_APP_SOURCES
     src/ui/CardView.c
     src/ui/Icons.c
     src/ui/Inputs.cpp
-    src/ui/Widgets.cpp
+    src/ui/Widgets.c
 )
 
 add_library(pdk_app STATIC ${PDK_APP_SOURCES})

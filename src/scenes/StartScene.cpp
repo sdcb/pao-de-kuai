@@ -36,9 +36,11 @@ StartScene::StartScene(app::App& app) : app_(app) {
     for (std::size_t i = 0; i < labels.size(); ++i) {
         Button button;
         button.rect = {MenuX, MenuTop + static_cast<float>(i) * (MenuHeight + MenuGap), MenuWidth, MenuHeight};
-        button.text = labels[i];
+        Str_CopyTo(button.text, PDK_BUTTON_TEXT_CAP, labels[i]);
         button.fontSize = 20.0f;
-        button.style = i == 0 ? ButtonStyle::Primary : (i == labels.size() - 1 ? ButtonStyle::Ghost : ButtonStyle::Secondary);
+        button.style = static_cast<::ButtonStyle>(
+            i == 0 ? ButtonStyle::Primary
+                   : (i == labels.size() - 1 ? ButtonStyle::Ghost : ButtonStyle::Secondary));
         buttons_.push_back(button);
     }
     buttons_[0].fontSize = 22.0f;
@@ -90,7 +92,7 @@ void StartScene::Render(graphics::RenderContext& context) {
         const float t = EaseOutCubic(Progress(elapsed_, 0.15f + static_cast<float>(i) * 0.06f, 0.5f));
         context.PushOpacity(t);
         context.PushTranslation((1.0f - t) * 40.0f, 0.0f);
-        buttons_[i].Draw(context);
+        Button_Draw(&buttons_[i], context.Native());
         context.PopTransform();
         context.PopOpacity();
     }

@@ -12,8 +12,8 @@ constexpr Rect Panel{400.0f, 226.0f, 480.0f, 256.0f};
 
 ConfirmExitDialog::ConfirmExitDialog(app::App& app) : app_(app) {
     buttons_ = {
-        {{Panel.x + 60.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "退出游戏", ui::ButtonStyle::Danger},
-        {{Panel.x + 250.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "再玩一会", ui::ButtonStyle::Secondary}
+        ui::MakeButton({Panel.x + 60.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "退出游戏", ui::ButtonStyle::Danger),
+        ui::MakeButton({Panel.x + 250.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "再玩一会", ui::ButtonStyle::Secondary)
     };
 }
 

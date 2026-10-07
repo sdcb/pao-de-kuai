@@ -85,12 +85,13 @@ std::string SignedScore(int score) {
 } // namespace
 
 GameScene::GameScene(app::App& app, bool mock, bool midgame) : app_(app), mock_(mock), midgameMock_(midgame) {
-    backButton_ = {{20.0f, 20.0f, 46.0f, 46.0f}, "", ButtonStyle::Icon, Icon::Back};
+    backButton_ = ui::MakeButton({20.0f, 20.0f, 46.0f, 46.0f}, "", ButtonStyle::Icon);
+    backButton_.icon = static_cast<::Icon>(Icon::Back);
     buttons_ = {
-        {{0.0f, 0.0f, 110.0f, 44.0f}, "托管", ButtonStyle::Ghost},
-        {{0.0f, 0.0f, 104.0f, 44.0f}, "不要", ButtonStyle::Secondary},
-        {{0.0f, 0.0f, 104.0f, 44.0f}, "提示", ButtonStyle::Secondary},
-        {{0.0f, 0.0f, 128.0f, 44.0f}, "出牌", ButtonStyle::Primary}
+        ui::MakeButton({0.0f, 0.0f, 110.0f, 44.0f}, "托管", ui::ButtonStyle::Ghost),
+        ui::MakeButton({0.0f, 0.0f, 104.0f, 44.0f}, "不要", ui::ButtonStyle::Secondary),
+        ui::MakeButton({0.0f, 0.0f, 104.0f, 44.0f}, "提示", ui::ButtonStyle::Secondary),
+        ui::MakeButton({0.0f, 0.0f, 128.0f, 44.0f}, "出牌", ui::ButtonStyle::Primary)
     };
     for (Button& button : buttons_) {
         button.fontSize = 18.0f;
@@ -161,7 +162,7 @@ void GameScene::InitializeExternalAi() {
 
 void GameScene::Update(float dt) {
     time_ += dt;
-    backButton_.Update(dt);
+    Button_Update(&backButton_, dt);
     ButtonGroup::UpdateAll(buttons_, dt);
     for (float& timer : passTimers_) {
         timer = std::max(0.0f, timer - dt);
@@ -279,7 +280,7 @@ void GameScene::Render(graphics::RenderContext& context) {
     context.PopTransform();
 
     DrawBombEffect(context);
-    backButton_.Draw(context);
+    Button_Draw(&backButton_, context.Native());
 }
 
 void GameScene::DrawTable(graphics::RenderContext& context) {
@@ -644,7 +645,8 @@ void GameScene::UpdateActionButtons() {
             button.hover = false;
         }
     }
-    buttons_[0].text = game_.Autoplay() ? "取消托管" : "托管";
+    Str_CopyTo(buttons_[0].text, PDK_BUTTON_TEXT_CAP,
+               game_.Autoplay() ? "取消托管" : "托管");
     buttons_[0].enabled = ready;
     buttons_[1].enabled = ready && game_.CanCurrentPlayerPass();
     buttons_[2].enabled = ready && game_.IsHumanTurn();
@@ -668,7 +670,7 @@ void GameScene::LayoutActionButtons() {
 }
 
 bool GameScene::OnMouseMove(float x, float y) {
-    backButton_.UpdateHover(x, y);
+    Button_UpdateHover(&backButton_, x, y);
     ButtonGroup::UpdateHover(buttons_, x, y);
     const int card = HitPlayerCard(x, y);
     if (dragSelecting_ && card >= 0 && InteractionReady()) {
@@ -684,7 +686,7 @@ bool GameScene::OnMouseMove(float x, float y) {
 }
 
 bool GameScene::OnMouseDown(float x, float y) {
-    if (backButton_.HitTest(x, y)) {
+    if (Button_HitTest(&backButton_, x, y)) {
         backButton_.pressT = 1.0f;
         app_.Audio().Play(SOUND_BUTTON_CLICK);
         app_.PushOverlay(std::make_unique<overlays::ReturnToMenuOverlay>(app_));

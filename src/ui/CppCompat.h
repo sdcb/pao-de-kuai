@@ -22,6 +22,7 @@
 #include "graphics/CppCompat.h"
 #include "rules/CppCompat.h"
 #include "ui/CardView.h"
+#include "ui/Widgets.h"
 #include "ui/Icons.h"
 #include "ui/Theme.h"
 
@@ -121,6 +122,172 @@ inline graphics::TextStyle Kai(float size)
     style.family = graphics::FontFamily::Kai;
     style.weight = DWRITE_FONT_WEIGHT_BOLD;
     return style;
+}
+
+/* ---- widgets --------------------------------------------------------- */
+
+enum class ButtonStyle {
+    Primary = UI_BUTTON_PRIMARY,
+    Secondary = UI_BUTTON_SECONDARY,
+    Ghost = UI_BUTTON_GHOST,
+    Danger = UI_BUTTON_DANGER,
+    Icon = UI_BUTTON_ICON
+};
+
+enum class Anchor {
+    Left = UI_ANCHOR_LEFT,
+    Center = UI_ANCHOR_CENTER,
+    Right = UI_ANCHOR_RIGHT
+};
+
+using ::Button;
+using ::ChipStyle;
+using ::PanelStyle;
+
+/*
+ * Buttons are still aggregate-initialised positionally at the overlays
+ * (`{{rect}, "退出游戏", ui::ButtonStyle::Danger}`), which a user-provided constructor would
+ * break, so the C struct has none and the defaults come from here instead.
+ */
+inline Button MakeButton(const Rect& rect, const char* text, ButtonStyle style)
+{
+    Button button;
+
+    Button_Init(&button);
+    button.rect = rect;
+    Str_CopyTo(button.text, PDK_BUTTON_TEXT_CAP, text);
+    button.style = static_cast<::ButtonStyle>(style);
+    return button;
+}
+
+struct ButtonGroup {
+    static void DrawAll(graphics::RenderContext& context, const std::vector<Button>& buttons)
+    {
+        ButtonGroup_DrawAll(context.Native(), buttons.data(), static_cast<int>(buttons.size()));
+    }
+    static void UpdateAll(std::vector<Button>& buttons, float dt)
+    {
+        ButtonGroup_UpdateAll(buttons.data(), static_cast<int>(buttons.size()), dt);
+    }
+    // Returns the hit index and starts that button's press animation.
+    static int Hit(std::vector<Button>& buttons, float x, float y)
+    {
+        return ButtonGroup_Hit(buttons.data(), static_cast<int>(buttons.size()), x, y);
+    }
+    static void UpdateHover(std::vector<Button>& buttons, float x, float y)
+    {
+        ButtonGroup_UpdateHover(buttons.data(), static_cast<int>(buttons.size()), x, y);
+    }
+};
+
+/* The C API has no default arguments, so they live here. */
+inline void DrawPanel(graphics::RenderContext& context, const Rect& rect,
+                      const PanelStyle& style = PanelStyle())
+{
+    Widgets_DrawPanel(context.Native(), &rect, &style);
+}
+
+inline void DrawOrnamentCorners(graphics::RenderContext& context, const Rect& rect,
+                                D2D1_COLOR_F color, float size = 16.0f, float inset = 9.0f)
+{
+    Widgets_DrawOrnamentCorners(context.Native(), &rect, color, size, inset);
+}
+
+// Horizontal gold line that fades out at both ends.
+inline void DrawHairline(graphics::RenderContext& context, float x0, float x1, float y,
+                         float alpha = 0.55f)
+{
+    Widgets_DrawHairline(context.Native(), x0, x1, y, alpha);
+}
+
+inline Rect ChipRect(graphics::RenderContext& context, Point anchor, Anchor align,
+                     const std::string& text, const ChipStyle& style)
+{
+    return Widgets_ChipRect(context.Native(), anchor, static_cast<::Anchor>(align), text.c_str(),
+                            &style);
+}
+
+inline void DrawChip(graphics::RenderContext& context, const Rect& rect, const std::string& text,
+                     const ChipStyle& style)
+{
+    Widgets_DrawChipInRect(context.Native(), &rect, text.c_str(), &style);
+}
+
+inline Rect DrawChip(graphics::RenderContext& context, Point anchor, Anchor align,
+                     const std::string& text, const ChipStyle& style = ChipStyle())
+{
+    return Widgets_DrawChip(context.Native(), anchor, static_cast<::Anchor>(align), text.c_str(),
+                            &style);
+}
+
+// First visible character for avatars: one CJK glyph, or up to three ASCII characters.
+inline std::string AvatarLabel(const std::string& name)
+{
+    char out[PDK_BUTTON_TEXT_CAP];
+
+    Widgets_AvatarLabel(name.c_str(), out, PDK_BUTTON_TEXT_CAP);
+    return std::string(out);
+}
+
+inline void DrawAvatar(graphics::RenderContext& context, const Rect& rect,
+                       const std::string& label, bool active, float time)
+{
+    Widgets_DrawAvatar(context.Native(), &rect, label.c_str(), active, time);
+}
+
+// Soft circular glow; ring > 0 turns it into a halo that peaks at that fraction of the radius.
+inline void DrawRadialGlow(graphics::RenderContext& context, Point center, float radius,
+                           D2D1_COLOR_F color, float ring = 0.0f)
+{
+    Widgets_DrawRadialGlow(context.Native(), center, radius, color, ring);
+}
+
+inline void DrawSeal(graphics::RenderContext& context, Point center, float size,
+                     const std::string& text, D2D1_COLOR_F color, float rotation, float fontSize)
+{
+    Widgets_DrawSeal(context.Native(), center, size, text.c_str(), color, rotation, fontSize);
+}
+
+inline void DrawProgressBar(graphics::RenderContext& context, const Rect& rect, float value,
+                            float time)
+{
+    Widgets_DrawProgressBar(context.Native(), &rect, value, time);
+}
+
+// Full-screen velvet backdrop used by the menu scenes.
+inline void DrawRoomBackground(graphics::RenderContext& context, Point focus)
+{
+    Widgets_DrawRoomBackground(context.Native(), focus);
+}
+
+inline void DrawVignette(graphics::RenderContext& context, float strength)
+{
+    Widgets_DrawVignette(context.Native(), strength);
+}
+
+inline void DrawBackdrop(graphics::RenderContext& context, float alpha)
+{
+    Widgets_DrawBackdrop(context.Native(), alpha);
+}
+
+// Compact confirm dialog: panel, round icon badge, title and one line of explanation.
+inline void DrawDialogBody(graphics::RenderContext& context, const Rect& panel, Icon icon,
+                           D2D1_COLOR_F accent, const std::string& title,
+                           const std::string& subtitle)
+{
+    Widgets_DrawDialogBody(context.Native(), &panel, static_cast<::Icon>(icon), accent,
+                           title.c_str(), subtitle.c_str());
+}
+
+// Modal enter animation: dims the scene, then fades and springs the panel in.
+inline void BeginModal(graphics::RenderContext& context, const Rect& panel, float elapsed)
+{
+    Widgets_BeginModal(context.Native(), &panel, elapsed);
+}
+
+inline void EndModal(graphics::RenderContext& context)
+{
+    Widgets_EndModal(context.Native());
 }
 
 } // namespace pdk::ui

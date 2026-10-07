@@ -12,8 +12,8 @@ constexpr Rect Panel{400.0f, 226.0f, 480.0f, 256.0f};
 
 ReturnToMenuOverlay::ReturnToMenuOverlay(app::App& app) : app_(app) {
     buttons_ = {
-        {{Panel.x + 60.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "回主菜单", ui::ButtonStyle::Secondary},
-        {{Panel.x + 250.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "继续游戏", ui::ButtonStyle::Primary}
+        ui::MakeButton({Panel.x + 60.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "回主菜单", ui::ButtonStyle::Secondary),
+        ui::MakeButton({Panel.x + 250.0f, Panel.y + 176.0f, 170.0f, 46.0f}, "继续游戏", ui::ButtonStyle::Primary)
     };
 }
 

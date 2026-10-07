@@ -8,7 +8,7 @@
 #include "ui/Anim.h"
 #include "ui/CppCompat.h"
 #include "ui/CppCompat.h"
-#include "ui/Widgets.h"
+#include "ui/CppCompat.h"
 
 #include <string>
 #include <vector>
@@ -20,7 +20,10 @@ using ui::ButtonGroup;
 using ui::ButtonStyle;
 
 inline Button MakeBackButton() {
-    Button button{{28.0f, 28.0f, 112.0f, 44.0f}, "返回", ButtonStyle::Secondary, ui::Icon::Back, 18.0f};
+    Button button = ui::MakeButton({28.0f, 28.0f, 112.0f, 44.0f}, "返回", ButtonStyle::Secondary);
+
+    button.icon = static_cast<::Icon>(ui::Icon::Back);
+    button.fontSize = 18.0f;
     return button;
 }
 

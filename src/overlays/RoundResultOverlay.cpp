@@ -30,8 +30,8 @@ std::string Signed(int value) {
 RoundResultOverlay::RoundResultOverlay(app::App& app, stats::RoundRecord record)
     : app_(app), record_(std::move(record)) {
     buttons_ = {
-        {{466.0f, 524.0f, 168.0f, 48.0f}, "再来一局", ButtonStyle::Primary},
-        {{646.0f, 524.0f, 168.0f, 48.0f}, "主菜单", ButtonStyle::Secondary}
+        ui::MakeButton({466.0f, 524.0f, 168.0f, 48.0f}, "再来一局", ui::ButtonStyle::Primary),
+        ui::MakeButton({646.0f, 524.0f, 168.0f, 48.0f}, "主菜单", ui::ButtonStyle::Secondary)
     };
 }
 

@@ -76,8 +76,8 @@ SettingsOverlay::SettingsOverlay(app::App& app) : app_(app), draft_(app.Settings
 
     const float buttonY = Panel.y + Panel.height - 72.0f;
     buttons_ = {
-        {{ControlRight - 296.0f, buttonY, 140.0f, 46.0f}, "取消", ButtonStyle::Secondary},
-        {{ControlRight - 140.0f, buttonY, 140.0f, 46.0f}, "保存", ButtonStyle::Primary}
+        ui::MakeButton({ControlRight - 296.0f, buttonY, 140.0f, 46.0f}, "取消", ui::ButtonStyle::Secondary),
+        ui::MakeButton({ControlRight - 140.0f, buttonY, 140.0f, 46.0f}, "保存", ui::ButtonStyle::Primary)
     };
 }
 
