@@ -1,6 +1,6 @@
 #pragma once
 
-#include "app/ImeInput.h"
+#include "app/CppCompat.h"
 #include "audio/CppCompat.h"
 #include "core/Overlay.h"
 #include "core/SceneManager.h"

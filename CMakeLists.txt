@@ -197,7 +197,7 @@ target_compile_definitions(pdk_core PRIVATE
 set(PDK_APP_SOURCES
     src/app/App.cpp
     src/app/Dpi.c
-    src/app/ImeInput.cpp
+    src/app/ImeInput.c
     src/app/Window.cpp
     src/app/WindowChrome.c
     src/audio/AudioDecoder.c
