@@ -566,6 +566,28 @@
 > | `std::sort` / `std::optional` / `std::pair` | 手写插入排序 / `bool` 标志 / 具名结构 |
 >
 > **顺序**：先把 4 个小场景（本轮子代理）落地，再 `GameState`，再 `GameScene`（它依赖 GameState），
+>
+> **修订 25（S7d 完成记录，commit `4b70c6f`）——4 个小场景全部纯 C**：
+> - `LoadingScene` / `StartScene` / `StatsScene` / `HelpScene` → `.c`，直接实现 `SceneVtbl`
+>   （与 8 个覆盖层同一套形状：私有状态结构、`<Name>_New(void *app)` 返回拥有句柄、
+>   C99 指定初始化器 vtable、`Destroy` 释放）。App 的 `ChangeScene` 本就收 C 句柄，所以
+>   `ChangeScene(core::Transfer(new scenes::StartScene(*this)))` 变成 `ChangeScene(StartScene_New(this))`。
+> - **`LoadingScene` 是最有意思的一个**：它原本自己构造后继场景
+>   （`ChangeScene(std::make_unique<GameScene>(app_))`），而 C 文件做不到——场景类型还是 C++。
+>   于是 ABI 里有了 `App_EnterGame`/`App_EnterStats`，在 App.cpp 里实现（那里还看得见这两个类型）。
+>   **这是最后一处这种地方。**
+> - `AppApi.h` 补齐场景要驱动的东西：`App_PushOverlay`（接管场景构造出的覆盖层）、
+>   `ShowHelp`/`ShowSettings`/`ShowStats`/`StartGame`/`RequestClose`、`LoadGameResources`、
+>   `App_CardAtlas`/`App_LoadCardAtlas`。图集访问器返回 C 的 `SpriteAtlas *`（门面内层结构），
+>   因为 `CardView_DrawFace` 要的就是它。
+> - `scenes/SceneCommon.h` 也变 C 了：它装着共享的行/标题/返回按钮助手（含 `MakeBackButton`）。
+> - 进度：`src/` 剩 **6 个 `.cpp`**（`GameState` 1388、`StrongAiStrategy` 1321、`GameScene` 828、
+>   `App` 399、`Window` 158、`WinMain` 19）；`check_c_only.py` 残留 110 处；
+>   MinGW x64 exe 665,600 → **658,432 B（余量 20,992 B）**。
+> - 三链路 15/15 全绿；`ui-start`/`ui-stats`/`ui-help`/`ui-loading`/`ui-settings` 肉眼一致。
+>   `ui-start` 是这批最好的单张验证：同时覆盖共享助手、按钮组、牌图集（扇形手牌）以及它推起的
+>   About 覆盖层，全部来自 C。`ui-stats` 顺带证明设置 ABI 端到端可用——它打印的玩家名来自
+>   `App_GetSettings`。
 > 再 `App`/`Window`/`WinMain`（转完 App 即可删 `AppApi.h` 整条边界），最后 `StrongAiStrategy`。
 >   是验证新分派最好的单张图）。
 >
