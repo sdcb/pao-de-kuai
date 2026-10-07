@@ -15,6 +15,7 @@
 
 #include "audio/SoundIds.h"
 #include "core/Overlay.h"
+#include "game/RoundRecorder.h"
 #include "graphics/SpriteAtlas.h"
 #include "stats/AppSettings.h"
 
@@ -50,6 +51,15 @@ void App_EnterStats(void *app);
 /* App::CardAtlas() returns the C++ SpriteAtlas facade; hand C its inner ::SpriteAtlas. */
 SpriteAtlas *App_CardAtlas(void *app);
 bool App_LoadCardAtlas(void *app);
+
+/*
+ * The three things only the game scene asks App for: whether the heavy resources (audio and card
+ * atlas) are already loaded, the round recorder it appends a finished round to, and the viewer
+ * flag that turns off both the AI controllers and record writing.
+ */
+bool App_GameResourcesReady(void *app);
+RoundRecorder *App_Recorder(void *app);
+bool App_ViewerMode(void *app);
 
 /*
  * The "欢迎回来" chip on the start screen.  It needs the player name (which the C side could read

@@ -210,7 +210,7 @@ set(PDK_APP_SOURCES
     src/resources/CardAtlasData.c
 
     src/resources/ResourceLoader.c
-    src/scenes/GameScene.cpp
+    src/scenes/GameScene.c
     src/scenes/HelpScene.c
     src/scenes/LoadingScene.c
     src/scenes/StartScene.c

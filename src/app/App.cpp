@@ -242,13 +242,13 @@ extern "C" void App_LoadGameResources(void *app)
     static_cast<App *>(app)->LoadGameResources();
 }
 
-/* The loading screen's two exits.  The game scene is still C++, so the construction has to happen
- * here; a C translation unit cannot name it. */
+/* The loading screen's two exits.  The game scene is C now, so this just constructs the handle;
+ * a C translation unit (LoadingScene.c) still cannot name the type, which is what keeps the shim. */
 extern "C" void App_EnterGame(void *app)
 {
     App *self = static_cast<App *>(app);
 
-    self->ChangeScene(core::Transfer(new scenes::GameScene(*self)));
+    self->ChangeScene(GameScene_New(self, false, false));
 }
 
 extern "C" void App_EnterStats(void *app) { static_cast<App *>(app)->ShowStats(); }
@@ -261,6 +261,23 @@ extern "C" SpriteAtlas *App_CardAtlas(void *app)
 extern "C" bool App_LoadCardAtlas(void *app)
 {
     return static_cast<App *>(app)->LoadCardAtlas();
+}
+
+/* ---- the game scene's three extra needs (S7f) ------------------------ */
+
+extern "C" bool App_GameResourcesReady(void *app)
+{
+    return static_cast<App *>(app)->GameResourcesReady();
+}
+
+extern "C" RoundRecorder *App_Recorder(void *app)
+{
+    return &static_cast<App *>(app)->Recorder();
+}
+
+extern "C" bool App_ViewerMode(void *app)
+{
+    return static_cast<App *>(app)->ViewerMode();
 }
 
 extern "C" void App_BuildWelcomeText(void *app, char *out, int cap)
@@ -292,7 +309,7 @@ void App::ShowStart() {
 
 void App::StartGame(bool mock) {
     if (mock || GameResourcesReady()) {
-        ChangeScene(core::Transfer(new scenes::GameScene(*this, mock)));
+        ChangeScene(GameScene_New(this, mock, false));
     } else {
         ChangeScene(LoadingScene_New(this, LOADING_TARGET_GAME));
     }
@@ -324,7 +341,7 @@ void App::ShowHelp() {
 
 void App::ShowViewerScene(const std::string& scene, const std::string& overlay, const std::string& mock) {
     if (scene == "game" && mock == "midgame") {
-        ChangeScene(core::Transfer(new scenes::GameScene(*this, true, true)));
+        ChangeScene(GameScene_New(this, true, true));
     } else if (scene == "game") {
         StartGame(true);
     } else if (scene == "stats") {
