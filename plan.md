@@ -648,6 +648,21 @@
 > 已用 `git reset -q <parent>` 回退这两个提交重新组织：`720830b` 是自包含且可构建的转换提交，
 > 文档另成一个提交。**规则**：有子代理在跑时，提交前先 `git status` 看清索引里有什么，
 > 不要用 `git add -A`，也不要在别人暂存过东西之后直接 `git commit`。
+>
+>
+> **S8 收尾清单已量化（`check_c_only.py --report` 的 97 条逐条归类）**
+>
+> | 位置 | 条数 | 处理 |
+> |---|---|---|
+> | 9 个 `*/CppCompat.h` 门面 | **74** | 直接删除（转完 `src/` 就没人 include 它们了） |
+> | `app/App.h`(6) + `app/Window.h`(3) | 9 | 本轮正在转 |
+> | `graphics/ComPtr.h` | 8 | **不能删**：`tests/scene_viewer/SceneViewer.cpp`（永久 C++）还在用。正确做法是把它**移到 `tests/`**（它现在是纯测试设施），或让 SceneViewer 不再用它 |
+> | `graphics/TextRenderer.h` | 3 | **无人 include → 死文件，直接删** |
+> | `scenes/GameLayout.h` | 2 | `namespace pdk::scenes::layout` 那座桥——**现在已无 C++ 使用者**（GameScene 本轮已转 C），删除并同时删掉 `rules/Card.h` 的成员垫片（1 条），再从 `tools/check_c_only.py` 的白名单里移除 `rules/Card.h` |
+>
+> 于是 S8 的代码清理就是：删 9 个门面 + `TextRenderer.h` + 两处 `#ifdef __cplusplus` 垫片，
+> 把 `ComPtr.h` 挪进 `tests/`，然后按目标摘 `-static-libstdc++`（见上一条），
+> 接入 CI 门禁，量体积、比截图。
 > 7. S8 收尾
 >
 > **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**
