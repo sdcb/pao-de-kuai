@@ -1,11 +1,9 @@
 #include "audio/AudioDecoder.h"
 
+#include "audio/MfCompat.h"
+
 #include <limits>
 
-#include <mfapi.h>
-#include <mfidl.h>
-#include <mfreadwrite.h>
-#include <shlwapi.h>
 #include <wrl/client.h>
 
 namespace pdk::audio {

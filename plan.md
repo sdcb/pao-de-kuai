@@ -1,0 +1,453 @@
+# 把 pao-de-kuai 改造为纯 C，双工具链：MSVC（保留）+ MinGW-w64 GCC (UCRT)（主发布）
+
+> 说明：本文件由已批准的改造计划落盘而成，供人工批注修改。
+> 初版批准时间：2026-10-07，分支 `pure-c-port`，起点 commit `7f7c15d`。
+>
+> **修订 2**：工具链与 CRT 策略最终定为——
+> 1. `src/` 纯 C 化后**删除 VC-LTL**（`external/vc-ltl/` 整个 vendor 目录，以及 CMake/CI/文档/About 中全部引用）；
+> 2. **MinGW-w64 GCC (UCRT) x64 成为主要发布构建**（替换 CI 里的 `build-vs2026-vcltl-x64`，继续发布到 MinIO），exe 链接系统 `ucrtbase.dll`；
+> 3. **MSVC 仍然必须能独立编译整套 `src/`**（CI 里 `/MD`、`/MT` × x64/x86/arm64 六个组合原样保留），只把 `build-vs2026-vcltl-x86` 换成 MinGW x86；
+> 4. **放弃 Win8 兼容基线**，最低系统改为 Win10（`WINVER`/`_WIN32_WINNT` = `0x0A00`）。
+>
+> 原目标不变：`src/` 全部 `.c`/`.h`，`tests/` 与 `scene_viewer` 保留 C++/doctest。
+>
+> **修订 3（本次）**：把本地两条 MinGW 工具链与 CI 的下载方式钉死——
+> 1. 本地：x64 = `D:\_\3rd\mingw64-ucrt`（gcc **16.1.0**），x86 = `D:\_\3rd\mingw32-ucrt`（gcc **16.2.0**，已核对可用）；环境变量定为 `PDK_MINGW_ROOT` / `PDK_MINGW32_ROOT`。
+> 2. CI：从 **niXman/mingw-builds-binaries** 的 release tag `16.2.0-rt_v14-rev1` 下载 `x86_64-16.2.0-release-win32-seh-ucrt-...7z` 与 `i686-16.2.0-release-win32-dwarf-ucrt-...7z`（**win32 线程 + ucrt**，与本地构建参数一致），带 SHA256 校验并缓存。**（修订 5 已改为"解析 latest、不 pin"；本条的资产命名规则与 win32+ucrt 约束仍然有效。）**
+> 3. 由此产生一个待你拍板的版本差：**建议本地 x64 也升到 16.2.0**，与 x86 和 CI 对齐（§8 开放项 1）。
+>
+> **修订 4（本次）**：启用完全权限后重跑了之前被卡住的实测，原"环境限制"取消，并据此收紧计划——
+> 1. **`as.exe` 之谜解开**：不是沙箱，是 PATH 里缺 `<root>\bin`（`as.exe` 依赖 `libwinpthread-1.dll`）→ `0xC0000135` 且 gcc **不报错**。CI/本地都必须前置 `bin`。
+> 2. **CRT 底噪实测**：x64/x86 空程序 `-Os -s` 均 **15,872 B**，`+--gc-sections` 15,360 B，依赖只有 `KERNEL32` + `api-ms-win-crt-*`（无 msvcrt/vcruntime/libgcc）。**679,424 B 基线里 CRT 只占约 15 KB**，体积风险主要看应用代码。
+> 3. **shim 布局假设已用编译器验证**：7 个接口的"平铺 PDK 结构 == SDK vtable"静态断言全部通过；并抓到两处真实错误（`ID2D1Factory` 其实直接继承 `IUnknown`、`IDWriteFactory` 必须按全量顺序占位）。§3.1/§3.3 已改为可照抄的规则。
+> 4. **IID 来源定死**：`#define INITGUID` + 单一 TU，`-luuid` 补不齐（实测缺 3 个符号）。
+> 5. **`windres` 实测可用**（真实 ico + RCDATA + UTF-8 中文注释）；**`-flto` 在最小程序上零收益**。
+>
+> **修订 5（本次）**：工具链版本策略按你的决定改为——**本地不追平（x64=16.1.0、x86=16.2.0），CI 每次解析 niXman 的 latest release，不 pin 版本**。为了不因此丢掉可复现性，§5 补了三件事：正则选资产（不靠版本号）、用 API 的 asset `digest` 校验完整性（不写死哈希）、CI 打印解析到的 tag/asset/`gcc --version` 并提供 `PDK_MINGW_TAG` 逃生舱。§8 开放项 1 关闭。
+>
+> **修订 2 的直接后果（务必先读）**：既然 MSVC 要继续编译同一个 `src/`，那么 **MSVC C 模式缺 D2D vtable、且完全不能 include `dwrite.h`** 这个问题就重新生效。因此 §3 的两个 ABI shim **必须保留**——但改写成"**双工具链共用一份可移植 shim**"，而不是修订 1 里只服务于 MinGW 的那套宏。MinGW 侧的价值随之改变：它的 C 模式 vtable **成了 shim 布局的机器可核对来源**（§3.3），这是本次修订最实质的技术收益。
+
+## 0. 可行性结论：两套编译器都要过，难点回到 shim，但有机器核对
+
+**实测环境**
+- MinGW x64（主发布）：`D:\_\3rd\mingw64-ucrt`，MinGW-W64-builds 5.0.0 / **gcc 16.1.0**（`x86_64-win32-seh-rev1`）/ binutils / `--with-default-msvcrt=ucrt` / `--threads=win32` / `--exceptions=seh` / `--arch=x86_64`。探测命令 `gcc -std=c17 -c`。
+- MinGW x86：`D:\_\3rd\mingw32-ucrt`，MinGW-W64-builds 5.0.0 / **gcc 16.2.0**（`i686-win32-dwarf-rev1`）/ `--with-default-msvcrt=ucrt` / `--threads=win32` / `--exceptions=dwarf` / `--arch=i686`。已核对 `windres.exe`/`ar.exe`/`strip.exe`/`objdump.exe`，以及 `i686-w64-mingw32\lib` 下 §2 链接列表用到的全部 import lib（`libd2d1`、`libdwrite`、`libwindowscodecs`、`libole32`、`libuuid`、`libshlwapi`、`libimm32`、`libavrt`、`libmfplat`、`libmfreadwrite`、`libmfuuid`、`libgdi32`、`libuser32`、`libdwmapi`、`libucrt*`）均在位。
+- MSVC（六个 CI 组合）：VS2026 Enterprise + SDK 10.0.26100，`cl /TC`（初版已实测，结论见下表）。
+
+> **x86 的 `dwarf` 例外模型**：i686 没有 SEH，只有 dwarf/sjlj。纯 C 的 `src/` 不受影响（不用异常），但 **C++ 的 `tests`/`scene_viewer` 会用 dwarf 展开**——功能正常，只是异常路径慢一些；**不允许**因此产生 `libgcc_s_dw2-1.dll` 依赖，测试目标继续 `-static-libgcc -static-libstdc++`。
+
+| SDK API | MinGW C 模式 | MSVC C 模式 | 双工具链处理 |
+|---|---|---|---|
+| Direct2D | ✅ 头文件自带 C vtable（`d2d1.h` L500 起 `typedef struct ID2D1ResourceVtbl`，全文 568 处 `lpVtbl`，另有 `ID2D1Factory_CreateHwndRenderTarget` 一类宏） | ⚠️ 只给前向声明 `typedef interface ID2D1Factory ID2D1Factory;`（L3571-3764），但**已提供**全部 `D2D1_*` 结构体/枚举、`D2D1CreateFactory`、`EXTERN_C CONST IID IID_ID2D1*` | **不用任何一方的 vtable**，自建一份平铺 vtable 头（§3.1），两边都 include `<d2d1.h>` 取 `D2D1_*` 类型 |
+| DirectWrite | ✅ 头文件自带 C vtable（95 处 `__cplusplus` 分支、619 处 `lpVtbl`、27 处 `COBJMACROS`） | ❌ **完全不能 include**（`dwrite.h:4704` 的 `interface X : public IUnknown` → C2059） | 靠 `#ifdef` 分流：MSVC 用我们自建的枚举/结构体/原型；MinGW 直接 include `<dwrite.h>`（§3.2） |
+| WIC | ✅ | ✅（`#define COBJMACROS` + `wincodec.h`） | 两边都用 SDK 自己的 C 宏 |
+| WASAPI | ✅（`ac->lpVtbl->GetService(...)` 通过） | ✅（`e->lpVtbl->Release(e)` 可用） | 同上 |
+| Media Foundation | ✅（`mfapi.h`→`mfidl.h`→`mfreadwrite.h` 顺序） | ✅（同顺序；顺序错了会假失败） | 同上 |
+| IMM32 / avrt / dwmapi / ole2 | ✅ | ✅（`imm.h` 需在 `windows.h` 之后） | 同上 |
+| shlwapi | ⚠️ **C 模式头部缺陷**：`shlwapi.h:981` 起 `IQueryAssociations` 未声明 | ✅ | 两边都**不 include `<shlwapi.h>`**，只手写所需 Path 函数声明（S0 统计使用点后决定数量），统一放在 `win_compat.h` |
+
+**两套 vtable 布局的差异（关键，已实测）**：MinGW 的 C vtable 是**基类嵌套**（d2d1.h）或**平铺**（dwrite.h 用 `BEGIN_INTERFACE` 把 `IUnknown` 三槽内联），MSVC 的 C++ vtable 是平铺——
+
+```c
+/* d2d1.h 真实形态：ID2D1SolidColorBrush : ID2D1Brush : ID2D1Resource : IUnknown */
+typedef struct ID2D1ResourceVtbl { IUnknownVtbl Base; /* GetFactory */ } ID2D1ResourceVtbl;
+typedef struct ID2D1BrushVtbl    { ID2D1ResourceVtbl Base; /* SetOpacity/SetTransform/GetOpacity/GetTransform */ } ID2D1BrushVtbl;
+typedef struct ID2D1SolidColorBrushVtbl { ID2D1BrushVtbl Base; /* SetColor/GetColor */ } ID2D1SolidColorBrushVtbl;
+#define ID2D1SolidColorBrush_GetFactory(this,A) (this)->lpVtbl->Base.Base.GetFactory((ID2D1Resource*)(this),A)
+
+/* dwrite.h 真实形态：IDWriteFactory : IUnknown，三槽内联（平铺） */
+typedef struct IDWriteFactoryVtbl { BEGIN_INTERFACE /* = QueryInterface/AddRef/Release */ ... } IDWriteFactoryVtbl;
+```
+
+`Base` 是首成员，所以**内存布局与平铺（IUnknown 三槽 + 基类方法 + 派生方法）完全一致**——这就是能用"一份平铺 shim 同时服务两套编译器"的依据。**已用编译器验证**：为 7 个接口手写平铺/嵌套 PDK 结构后，`_Static_assert(sizeof(PDK_X) == sizeof(XVtbl))` 与逐方法 `offsetof` 断言全部通过（见 §3.3、附录 C）。
+
+> **继承链不是想当然的**：`ID2D1Factory : public IUnknown`（**没有** `GetFactory`！），直接继承 `IUnknown` 的还有 `ID2D1GdiInteropRenderTarget`、`ID2D1SimplifiedGeometrySink`、`ID2D1TessellationSink`。我一开始按"Factory 继承 Resource"写过一版 shim，静态断言立刻把 `CreateTextFormat`/方法偏移查了出来——**这正是该机制的价值**。
+
+**原"环境限制"已解除（本次实测）**：之前 `as.exe` 静默失败与文件沙箱无关。根因是 **gcc 默认调用的 `x86_64-w64-mingw32\bin\as.exe` 依赖 `libwinpthread-1.dll`，而该 DLL 只在工具链的 `bin\` 下**；PATH 不含 `bin` 时 `as.exe` 以 `0xC0000135`（STATUS_DLL_NOT_FOUND）退出，**gcc 不打印任何诊断**。把 `<root>\bin` 前置进 PATH 后 x64/x86 都正常链接。**这是必须在 CI 里显式保证的前置条件**（§5）。
+
+**已完成的最小实测（x64 + x86 双架构）**
+
+| 项目 | 结果 |
+|---|---|
+| 空 `WinMain` 程序 | `-Os -s -mwindows` → x64 **15,872 B**、x86 **15,872 B**；加 `-ffunction-sections -fdata-sections -Wl,--gc-sections` → x64 **15,360 B**；再加 `-flto` **无进一步收益**；不加 `-s` 为 55,612 / 52,510 B |
+| 依赖 DLL（MinGW 产物） | 只有 `KERNEL32.dll` + `api-ms-win-crt-{environment,heap,locale,math,private,runtime,stdio,string}-l1-1-0.dll`（UCRT API set，Win10 内置）。**无 `msvcrt.dll`、无 `vcruntime140.dll`、无 `libgcc_s_*`/`libwinpthread-1`** |
+| 全 SDK 面链接 | D2D + DWrite + WIC + WASAPI + MF + IMM32 + AVRT + dwmapi 一次性链接通过（37,888 B 的最小程序）；**`#define INITGUID` 必需，`-luuid` 不够** |
+| `windres` | 真实 `pao-de-kuai.ico`（ICON）+ `poker-cards.png`（RCDATA）+ UTF-8 中文注释 → `.res.o` 85,858 B，链接出 101,888 B 的 exe |
+| 布局静态断言 | 7 个接口（ID2D1SolidColorBrush / HwndRenderTarget / PathGeometry / GeometrySink / IDWriteFactory / TextFormat / TextLayout）sizeof 与逐方法 offset 全部一致 |
+
+**结论**：CRT 底噪只有约 15 KB，679,424 字节的基线**绝大部分是应用代码**，所以"UCRT 路线能不能更小"主要取决于 `src/` 的编译产物与 shim 代码量，而不是 CRT 选择——这降低了 §9 的体积风险等级。难点仍集中在 §3 的 shim（13 个 D2D vtable + 4 个 DWrite vtable + DWrite 类型回落），但**核对手段已从"手抄 learn.microsoft.com"升级为"与 MinGW 的 C vtable 做编译期机器断言"**；剩下的工作量是 `src/` 11,671 行的 C++ 惯用法（`std::string`×330、`std::vector`×176、`std::array`×58、`std::wstring`×40、`std::optional`×37、`map/set`×20+、`unique_ptr/shared_ptr`×29、`D2D1::` 辅助类型×50、`virtual/override`×116、`ComPtr` 模板、`std::span`、`std::function`、`charconv`）以及"删 VC-LTL + 双工具链构建"这套工程改动。
+
+## 1. 目标与验收标准
+
+**完成定义（Definition of Done）**
+1. `src/**` 全部为 `.c`/`.h`；`grep` 确认无 `class`、`namespace`、`template<`、`std::`、`virtual`、`#include <string|vector|array|optional|map|set|memory|span|function|charconv|chrono|mutex|thread|atomic|algorithm>`。
+2. **同一份 `src/` 同时满足 `cl /std:c17` 与 `gcc -std=c17`**；不得使用任一方的专属扩展（GCC 的 `__attribute__`、MSVC 的 `__declspec` 之外的东西都算），所有工具链分歧集中在 `src/graphics/win_compat.h` / `src/core/win_compat.h`。
+3. `pao_de_kuai.exe` 的所有 TU 均为 C → 链接产物不含 C++ 运行时（无 `libcpmt`、无 `/EHsc`、无 C++ EH 表；MinGW 侧无 `libstdc++-6.dll`、无 `libgcc_s_*.dll` 动态依赖）。
+4. **VC-LTL 完全消失**：`external/vc-ltl/` 删除；`PDK_USE_VC_LTL`、`pdk_vc_ltl_build`、`vc-ltl-build/` 全部移除；`README.md`、`AGENTS.md`、CI、`src/overlays/AboutOverlay.cpp`、`src/scenes/StartScene.cpp` 中的 VC-LTL 署名/许可文案同步删除。（**`PDK_MSVC_RUNTIME=MD|MT` 保留**，它服务于 MSVC 组合。）
+5. CI **8 个组合全绿**：MSVC `x64/x86/arm64 × /MD` + `x64/x86/arm64 × /MT`（6 个，行为不变）**保持绿**，两个原 VC-LTL 组合换成 **MinGW UCRT x64**（主发布）与 **MinGW UCRT x86**。
+6. **主发布 = MinGW UCRT x64**，`pao_de_kuai.exe` 依赖表只含系统 DLL：`ucrtbase.dll`/`api-ms-win-crt-*`、`KERNEL32`、`USER32`、`GDI32`、`d2d1`、`DWrite`、`windowscodecs`、`ole32`、`SHLWAPI`、`IMM32`、`AVRT`、`MFPlat`、`MFReadWrite`、`dwmapi`；**不得出现 `msvcrt.dll`、`vcruntime140.dll`、任何随包 DLL**。
+7. 6 个 ctest 目标在 **MSVC x64 与 MinGW x64 两边**全绿：`unit_tests`、`ui_scene_start`、`ui_overlay_settings`、`ui_scene_game_deal`、`ui_scene_game_play`、`ui_overlay_result`。
+8. 体积：MinGW UCRT x64 的 `pao_de_kuai.exe` **目标 ≤ 679,424 字节**（原 MSVC+VC-LTL 基线，见附录 A）。修订 4 实测 CRT 底噪仅约 15 KB，因此该目标主要取决于 `src/` 的编译产物与 shim 代码量；若达不到，底线是"明显小于同配置 MSVC `/MT`"，并把实测数字报你定夺。
+9. 5 张 UI 截图与基线**逐张肉眼比对无可见差异**（UI 测试不做像素比对，人工比对是唯一有效回归信号）；**MSVC x64 与 MinGW x64 各出 5 张交叉比对**（MinGW x86 由 CI 的 ctest 覆盖，不做人工图像比对）。
+10. 最低系统为 **Win10**（`WINVER=0x0A00`、`_WIN32_WINNT=0x0A00`）；`IAudioClient3` 低延迟路径可改为无条件使用。
+11. `AGENTS.md` / `README.md` / `CHANGELOG.md` 同步更新（双工具链、最低 Win10、C 约束、shim 说明）。
+
+**行为不变式（绝对不许变）**：固定游戏规则、计分规则（含春天/炸弹）、AI 策略强度、UI 视觉与交互、`appsettings.json` schema、`stat/yyyyMMdd.json` 格式、`.rc` 资源嵌入方式、`D2DERR_RECREATE_TARGET` 恢复语义。
+
+**显式变更（经你确认）**：Win8 支持取消 → 最低 Win10；主发布 CRT 由 `msvcrt.dll`(VC-LTL) 改为 `ucrtbase.dll`；MSVC 组合不再使用 VC-LTL。
+
+## 2. 关键设计决策（C 运行时层，Stage 0 定稿后全局冻结）
+
+| C++ 惯用法 | C 替代方案 |
+|---|---|
+| `std::vector<Card>` / `rules::Cards` | `typedef struct { Card items[48]; int count; } Cards;` 定长值类型。全项目最大集合是牌堆 48、手牌 ≤16、飞机带牌≪48。**零堆分配、天然可拷贝**，规则层与 AI 搜索因此更快 |
+| 传参 `const Cards&` | 传 `const Cards*`（避免 96 字节按值拷贝）；返回用值类型 |
+| `std::string`（UI 文本、日志名、提示词） | `src/core/Str.h`：`Str { char* data; int len; int cap; }` + `Str_Append`/`Str_AppendNumber`/`Str_Reset`，malloc 支撑、可增长。JSON 与文件名共用。继续遵守"不用流式格式化"的既有约束 |
+| 固定短文本（如 `AiMoveChoice.reason`、toast） | `char buf[128]` 固定缓冲（走现有 `core::AppendNumber` 的 C 版），避免小字符串堆分配 |
+| `std::map<Rank,int>`（AiStrategy 计数） | 定长数组按点数索引（3..15 → 13 项）；`CoreUsage` 同 |
+| `std::set<int>`（选中/推荐索引） | 手牌 ≤16 → `uint64_t` 位掩码，天然去重（GameState.cpp:598/643/706/734 直接改位运算） |
+| `std::set<std::string>`（AiStrategy.cpp:549/578） | 小数组 + 线性查找（元素数 < 10） |
+| `std::map<uint64_t, TextFormatEntry>` + `std::list` LRU（D2DContext 字体缓存） | 定长 64 项开放寻址表 + 环形淘汰序号（去掉 `std::list` 迭代器） |
+| `std::array<T,N>` | 原生 `T x[N]` |
+| `std::optional<T>` | `struct { T value; bool has; }` + `X_Set`/`X_Clear`（`lastPattern`、`nextRoundLeader`、`PassObservation`） |
+| `std::unique_ptr` / `shared_ptr` | `malloc`/`free` + 显式 `Init`/`Destroy`；需要共享的（`ExternalAiController`、`LocalAiController` 状态）用手写引用计数 `long refs` + `Retain`/`Release` |
+| `ComPtr<T>` 模板 | `src/graphics/Com.h`：`PDK_RELEASE(p)` 统一走 §3.1 的 shim 宏（**两套工具链同一份实现**，绝不出现 `Base.Base` 或 `__uuidof`） |
+| `class Scene`/`Overlay`/`AiStrategy` + `virtual` | 手写 vtable 模式：`typedef struct SceneVtbl { ... } SceneVtbl; struct Scene { const SceneVtbl* vtbl; void* user; };` 每个实现填一张 `static const SceneVtbl`。**这是 COM 的同一个套路**，全项目统一用，别发明第二套 |
+| `std::function`（Tween.h:24/25/37/38） | 函数指针 + `void* user` |
+| `std::span<const Point>`（D2DContext/AudioDecoder） | `(const Point* p, int n)` |
+| `std::initializer_list<GradientStop>`（D2DContext:255/297/323） | `(const GradientStop* stops, int n)` |
+| `auto operator<=>(Card)` | `int Card_Compare(Card, Card)` |
+| `enum class` | 普通 `enum` + 类型前缀命名（`PDK_SUIT_SPADES`） |
+| `std::thread`/`mutex`/`atomic` | `CreateThread`/`WaitForSingleObject`/`CloseHandle`；`CRITICAL_SECTION`；`volatile LONG` + `InterlockedIncrement/Exchange/CompareExchange`。`std::atomic<float> masterVolume` → `LONG` 存 bit pattern + `InterlockedExchange`。MinGW 侧是 **win32 线程模型**，不要引入 winpthreads |
+| `<chrono>` | `QueryPerformanceCounter` 封装（`pdk_core` 的 `Timer`/`Tween`） |
+| `<charconv>`（StringUtil） | 手写 `int`→ASCII |
+| `Utf8ToWide`/`WideToUtf8` | `MultiByteToWideChar`/`WideCharToMultiByte`（原有实现本身就是这个，只是包在 `std::wstring` 里） |
+| `__uuidof(X)` / `IID_PPV_ARGS` | 两套 C 模式下都不可用 → 统一用 `IID_X` 常量 + 显式 `void**`；IID 符号来源在 `win_compat.h` 里定死（§3.4） |
+| `std::lround` 类函数 | 继续只用 `ui::RoundToInt` 的 C 版。**理由已变**：UCRT 里 `lround` 是存在的（原"msvcrt.dll 不导出"的强制理由消失），但"统一取整实现、避免额外依赖"仍作为风格与体积规则保留 |
+| 异常/RAII 清理 | 无异常；统一 `goto cleanup` 单出口或 `Retain/Release`；每个分配都有对应释放点 |
+
+**C 语言子集约定（新增，因为要同时过两套编译器）**
+- 语言级：C17 的**公共子集**——不用 VLA、不用嵌套函数、不用 `__attribute__`、不用 MSVC 的 `__declspec` 以外的扩展、不用 `_Generic` 里的编译器特例；`_Static_assert` 可用（两边都支持）。
+- **GCC 16 把隐式函数声明当错误**（实测：漏原型直接 `error:`，即使没加 `-Werror`）。这是近年 GCC 的趋势，但**CI 走 latest，所以每次上游更新后都要以实际行为为准**；好处是"忘写原型"会在编译期暴露，代价是每个被调用的 SDK/自有函数都必须有可见原型。
+- 字符集：源文件 UTF-8；MSVC 加 `/utf-8`，GCC 加 `-finput-charset=UTF-8`。
+- 资源：`.rc` 由 `rc.exe`（MSVC）或 `windres`（MinGW）编译，`CMakeLists.txt` 里显式设置 `CMAKE_RC_COMPILER`（Ninja + MinGW 时 CMake 默认找不到 `windres`）。**已实测**：`windres` 能吃真实 `pao-de-kuai.ico`(ICON) + `poker-cards.png`(RCDATA) + UTF-8 中文注释。
+- 窗口程序：`add_executable(... WIN32)` → MSVC `/SUBSYSTEM:WINDOWS`、MinGW `-mwindows`；若改用 `wWinMain`，MinGW 需 `-municode`。
+- **PATH 前置条件（实测踩过）**：MinGW 构建时 `<root>\bin` **必须**在 PATH 里，否则 gcc 默认调用的 `<root>\<triple>\bin\as.exe` 找不到 `libwinpthread-1.dll`，以 `0xC0000135` 退出而 **gcc 不报任何错**。CMake 配置前加一条 gcc 链接冒烟检查。
+- 链库名两套一致：`d2d1 dwrite windowscodecs ole32 uuid shlwapi imm32 avrt mfplat mfreadwrite mfuuid gdi32 user32 dwmapi`。**注意**：这些库里没有 `IID_*`/`CLSID_*` 定义（实测 `-luuid` 也补不齐），GUID 一律走 §3.4 的 `INITGUID` 方案；`uuid` 只是保持与 MSVC 侧一致，若实测无用可在 S8 去掉。
+- 体积（MinGW 主发布）：`-Os -ffunction-sections -fdata-sections -Wl,--gc-sections -s`。**实测 `-flto` 在最小程序上没有任何收益**（15,360 B 不变），因此默认不开，只在 S8 用真实 exe 复测一次；MSVC 侧保留 `/O2 /Ob2 /Os`。
+- 资源清理约定：不引入 GC，不引入 `setjmp`。
+
+## 3. 双工具链可移植 shim（本项目唯一的技术难点）
+
+**设计原则**：业务代码（`D2DContext`/`AudioEngine`/…）里**不出现任何 `#ifdef _MSC_VER`/`__MINGW32__`**，也不出现 `Base.Base`、`__uuidof`、`IID_PPV_ARGS`。所有分歧只在这三个文件里：`src/graphics/win_compat.h`、`src/graphics/d2d_c.h`、`src/graphics/dwrite_c.h`。
+
+### 3.1 `src/graphics/d2d_c.h`：一份平铺 vtable，两套编译器共用
+- 13 个 vtable 结构体：`ID2D1Factory`、`ID2D1RenderTarget`、`ID2D1HwndRenderTarget`、`ID2D1SolidColorBrush`、`ID2D1LinearGradientBrush`、`ID2D1RadialGradientBrush`、`ID2D1BitmapBrush`、`ID2D1Bitmap`、`ID2D1GradientStopCollection`、`ID2D1StrokeStyle`、`ID2D1PathGeometry`、`ID2D1GeometrySink`、`ID2D1Brush`。
+- **不用 SDK 的 vtable 名字**（MinGW 已经用掉了这些名字）：统一加前缀 `PDK_ID2D1FactoryVtbl` / `PDK_ID2D1Factory`。业务代码用 `PDK_AS(Factory, p)` 一类宏做一次指针转换。
+- **结构体构造规则（已实测可行，按这个写）**：
+  1. 按**真实继承链**嵌套 PDK 基类结构：`PDK_ID2D1ResourceVtbl{ PDK_IUnknownVtbl Base; GetFactory; }` → `PDK_ID2D1BrushVtbl{ PDK_ID2D1ResourceVtbl Base; SetOpacity; SetTransform; GetOpacity; GetTransform; }` → …
+  2. 每个接口的方法**按 SDK 声明顺序全部占位**（用 `void* p_Method;`），**只给实际调用的方法定型**。**绝不能只写用到的方法**——漏一个前面的方法，后面全部错位（我实测时漏了 `IDWriteFactory` 开头的 `GetSystemFontCollection` 等 8 个方法，静态断言立刻抓到）。
+  3. 继承链（`ID2D1Factory` 实测是 `: public IUnknown`，**没有** `GetFactory`）：`IUnknown` 直接派生 = Factory、GdiInteropRenderTarget、SimplifiedGeometrySink、TessellationSink；`ID2D1Resource` 派生 = Brush、Image、RenderTarget、Geometry、DrawingStateBlock、GradientStopCollection、Layer、Mesh、StrokeStyle。
+- 实测 vtable 大小（用于 S0 写死断言）：`ID2D1FactoryVtbl`=136 B(17 槽)、`ID2D1SolidColorBrushVtbl`=80(10)、`ID2D1HwndRenderTargetVtbl`=480(60)、`ID2D1PathGeometryVtbl`=168(21)、`ID2D1GeometrySinkVtbl`=120(15)。
+- `D2D1_*` **结构体与枚举直接复用 SDK**（MSVC C 模式提供了全部），只把 `const D2D1_X&` → `const D2D1_X*`。
+- `D2D1::` 辅助类型 50 处 → 聚合初始化：`D2D1::Point2F(x,y)` → `(D2D1_POINT_2F){x,y}`；`Matrix3x2F::Identity()` → 手写常量；`SizeU`/`RectF`/`RectU`/`ColorF`/`PixelFormat`/`RoundedRect`/`Ellipse`/`GradientStop`/`*BrushProperties`/`RenderTargetProperties`/`HwndRenderTargetProperties`/`StrokeStyleProperties`/`BitmapProperties` 同理。
+- 调用一律走 `PDK_*_CALL`/`PDK_RELEASE` 宏，例如 `PDK_CALL(rt, Release)`，宏内部展开为 `((PDK_ID2D1RenderTarget*)(rt))->lpVtbl->Release(...)`——**两套工具链同一份实现**。
+
+### 3.2 `src/graphics/dwrite_c.h`：类型回落 + 4 个 vtable
+- **MinGW 分支**：直接 `#include <dwrite.h>`，再按 3.1 的规则定义 `PDK_` 前缀 vtable。
+- **MSVC 分支**：`dwrite.h` 不可用，因此逐字抄出所需内容（枚举/结构体/常量），并要求与 MinGW 的 `dwrite.h` **逐项静态断言一致**（§3.3）：
+  - 枚举/结构体：`DWRITE_FACTORY_TYPE`、`DWRITE_TEXT_ALIGNMENT`、`DWRITE_PARAGRAPH_ALIGNMENT`、`DWRITE_WORD_WRAPPING`、`DWRITE_LINE_SPACING_METHOD`、`DWRITE_TRIMMING_GRANULARITY`、`DWRITE_TRIMMING`、`DWRITE_TEXT_METRICS`、`DWRITE_TEXT_RANGE`、字体 `WEIGHT/STYLE/STRETCH` 常量。
+  - 4 个 vtable：`IDWriteFactory`、`IDWriteTextFormat`、`IDWriteTextLayout`、`IDWriteInlineObject`——**按 SDK 全量方法顺序占位**，只给定型用到的那几个（`IDWriteFactory` 有 **24 槽**：`GetSystemFontCollection`…`CreateGlyphRunAnalysis`，我们要的 `CreateTextFormat`/`CreateTextLayout`/`CreateEllipsisTrimmingSign` 在很后面；`IDWriteTextFormat`=**28 槽**；`IDWriteTextLayout`=**67 槽**；`IDWriteInlineObject`=**7 槽**）。
+  - `DWriteCreateFactory` 原型 + 所需 GUID（factory = `b859ee5a-d838-4b5b-a2e8-1adc7d93db48` 等，逐字抄自 `dwrite.h`）。
+  - **建议（S5 做）**：写一个 `tools/gen_shim_from_mingw_headers.ps1`，从 MinGW 头提取方法顺序生成占位成员，并让 MinGW 侧 ctest 断言"生成结果与当前头一致"。**我本次的验证脚本就是它的原型**（见附录 C）。
+
+### 3.3 正确性门槛：把 MinGW 的 C vtable 当核对基准（本次已跑通）
+- **布局静态断言（已验证可行，必做）**：新增 `tests/shim_layout/`（只在 MinGW 下编译的 dev-only ctest），对每个接口断言：
+  ```c
+  _Static_assert(sizeof(PDK_ID2D1HwndRenderTargetVtbl) == sizeof(ID2D1HwndRenderTargetVtbl), "size");
+  typedef char chk[offsetof(PDK_ID2D1HwndRenderTargetVtbl, GetHwnd)
+                 == offsetof(ID2D1HwndRenderTargetVtbl, GetHwnd) ? 1 : -1];
+  ```
+  `sizeof` 相等是最强断言（任何方法缺失/顺序错都会破坏它），逐方法 `offsetof` 用来定位具体哪一项错了。**本次实测已对 7 个接口（D2D 4 个 + DWrite 3 个）全部通过**，并顺带抓出了我自己写错的两处（`IDWriteFactory` 漏前导方法、`ID2D1Factory` 的继承链假设）。DWrite 侧的枚举值/结构体 `sizeof`/字段偏移同样对照 `<dwrite.h>` 断言。
+- MSVC 侧无法 self-check（没有可比对的头），因此以"MinGW 已验证通过的同一份 `PDK_` 定义 + 5 个渲染 ctest 端到端跑到"为门槛；`cl` 与 `gcc` 对 `STDMETHODCALLTYPE` 的处理在 x86 上要**单独复核一次**（见 §7）。
+- **兜底（已预留，非默认）**：若出现无法定位的 ABI 崩溃，临时加一个 `dwrite_bridge.cpp`（约 200 行，`extern "C"` 句柄 API），其余仍纯 C；修好后不留。
+- 应用侧唯一需要自己实现的 COM 回调：`IMMNotificationClient`（`AudioEngine.cpp` 的 `DeviceNotifier`）→ 手写 vtable（`IUnknown` 3 槽 + 5 个通知方法）+ `IID_IMMNotificationClient`。`IDWriteInlineObject` 只由 `CreateEllipsisTrimmingSign` 产出并回传，无需实现。
+
+### 3.4 `src/graphics/win_compat.h`：工具链分歧的唯一出口
+1. **IID 符号来源（已实测定死）**：用 **`#define INITGUID` + 单一 TU 里的 `DEFINE_GUID`**，即新增 `src/graphics/iids.c`（只做一件事：`#define INITGUID` 后 include 相关头 + 我们的 GUID 定义）。实测结果：
+   - 带 `-luuid` 链接 → **仍缺** `CLSID_MMDeviceEnumerator`、`IID_IMMDeviceEnumerator`、`IID_IDWriteFactory`；
+   - 去掉 `-luuid` → 连 `IID_ID2D1Factory` 也缺；
+   - **`#define INITGUID`（不带 `-luuid`）→ 全部解析，链接成功（37,888 B）**。
+   因此两套工具链都走同一方案，不依赖 `uuid.lib`/`-luuid` 的符号。
+2. **`shlwapi.h` 规避**：两套都不 include `<shlwapi.h>`（MinGW C 模式已实测缺陷），只手写实际用到的 `Path*` 函数声明（S0 先统计使用点，预期 1–3 个）。
+3. **include 顺序**：`imm.h` 必须在 `windows.h` 之后；`mfreadwrite.h` 必须在 `mfapi.h`+`mfidl.h` 之后；`INITGUID` 必须在相关头之前。
+4. 任何后续发现的工具链差异都加在这里，并写清"为什么"和"何时可以删"。
+
+## 4. 分阶段实施（每阶段独立可构建、可测试、可停）
+
+**前置：建立基线（改任何代码之前）**
+在**正常 shell**里跑通现有 MSVC+VC-LTL 基线：`cmake --preset vs2026-release` → build → `ctest`；保存 5 张 JPEG、`pao_de_kuai.exe` 体积、`unit_tests` 耗时到 `docs/c-to-baseline/`（或本地不入库）。开分支，master 保持绿。
+**MinGW 侧底噪已测完（本次，无需重做）**：x64/x86 空程序体积与依赖 DLL 见 §0；剩余待测的只有"真实项目在 MinGW 下的最终体积"，那要等 S5–S7 之后（§1.8 判定点）。
+
+| 阶段 | 内容 | 验收 |
+|---|---|---|
+| **S0** 双工具链骨架 | 新增 `mingw-ucrt-x64-release`（`PDK_MINGW_ROOT`）/`mingw-ucrt-x86-release`（`PDK_MINGW32_ROOT`）preset（`CMAKE_C_COMPILER`/`CMAKE_CXX_COMPILER`/`CMAKE_RC_COMPILER=windres`，**不签入 `D:\` 本机路径**）；`C_STANDARD 17` + MSVC `/std:c17`；**删除 VC-LTL 全套逻辑与 `external/vc-ltl/`（保留 `PDK_MSVC_RUNTIME`）**；`WINVER`/`_WIN32_WINNT` → `0x0A00`；建 `src/core/Str.h`、`src/graphics/Com.h`、`d2d_c.h` 骨架、`win_compat.h`、vtable 约定、`RoundToInt`；定死 IID 来源与 `shlwapi` 规避；转 1 个最小 TU（`src/app/Dpi.c`、`WindowChrome.c`）**三条链路各编译链接一遍（MSVC x64、MinGW x64、MinGW x86）** | 三条链路 `ctest` 全绿；exe 能跑；`objdump -p` 依赖表符合 §1.6（x86 额外确认无 `libgcc_s_dw2-1.dll`）；无 C++ 运行时符号 |
+| **S1** core | `StringUtil`、`WinFile`、`Tween`、`Timer`、`Geometry`（纯头）、`Scene`/`SceneManager`/`Overlay` 的 vtable 化 | 两套工具链下 `unit_tests` 的 Stats/设置用例路径仍通 |
+| **S2** rules | `Card`、`Deck`、`HandPattern`、`MoveValidator`、`PaodeKuaiRules`、`RuleText`、`Scoring` → `Cards` 定长值类型；不动任何规则逻辑 | 两套工具链下 `RulesPatternTests`、`ScoringTests` 通过 |
+| **S3** stats | `AppSettings`、`StatStore`、`DailyStat`（cJSON 已是 C，改动小）；JSON 字段与旧文件完全兼容 | 两套工具链下 `StatsTests` 通过；旧 `appsettings.json`/`stat/*.json` 读取行为不变 |
+| **S4** game | `AiStrategy`→vtable、`BasicAiStrategy`、`StrongAiStrategy`（1260 行，8 线程并行搜索 → `CreateThread` + `Interlocked`）、`GameState`（1339 行，`set<int>`→位掩码、`map`→数组、`optional`→has 标志）、`LocalAiController`（后台线程 + generation 取消）、`TurnRecord`、`RoundTraceRecorder` | 两套工具链下 `GameStateTests`（1361 行）、`AiStrategyTests`、`DragSelectionTests` 通过；**托管整局耗时不得显著劣化**（固定种子冒烟，MSVC 与 GCC 各跑一次） |
+| **S5** 图形（最高风险） | 完成 `d2d_c.h`/`dwrite_c.h`（含 §3.3 布局静态断言测试）、`ComPtr`→`Com.h`、`D2DContext`（589 行）、`ProceduralTextures`、`WicImageLoader`、`SpriteAtlas`、`TextRenderer` | **两套工具链各 5 个 UI ctest 全绿** + 10 张 JPEG 交叉人工比对；`D2DERR_RECREATE_TARGET` 路径手测 |
+| **S6** 音频 | `AudioEngine`（WASAPI、MMCSS、`IMMNotificationClient` vtable、软件混音）、`AudioDecoder`（MF 源读取器）、`SoundCatalog` | 真机跑一遍（两套构建各一次）：能出声、切默认设备后自动重开、`Play()` 仍可从 UI 线程随意调 |
+| **S7** app/UI 上层 | `resources/*`、`scenes/*`（GameScene 822 行）、`overlays/*`、`ui/*`（`Inputs.cpp` 463 行含 IME 组字、`Widgets.cpp` 343 行）、`app/*`（`WinMain.c`、`Window.c`、`App.c`、`ImeInput.c`） | 两套工具链 `ctest` 全绿；手测设置弹窗（Enter 保存/Esc 取消恢复音量）、IME 玩家名输入、关闭确认、提示、托管 |
+| **S8** 收尾 | 清掉 CMake/preset 里的 MSVC-only 与 VC-LTL 残留（`/EHsc`、GNU 分支的 `-std=c++2c` 只留 tests）；删 `external/vc-ltl`；重写 CI 矩阵（见 §5）；更新 `AGENTS.md`（双工具链、C 约束、shim、vtable 约定、禁用语言特性）、`README.md`（构建说明 + 许可去掉 EPL-2.0）、`CHANGELOG.md`；两套工具链体积对比 | **CI 8 组合全绿**；体积达标（§1.8） |
+
+## 5. 构建系统与 CI 变更
+
+**`CMakeLists.txt`**
+- `project(PaoDeKuai VERSION 1.2 LANGUAGES C CXX RC)`（**CXX 必须保留**：tests/scene_viewer 是 C++，MSVC 组合也在用；**RC 保留**）。
+- 新增 `set(CMAKE_C_STANDARD 17)` + `CMAKE_C_STANDARD_REQUIRED ON`。
+- **删除**：`PDK_USE_VC_LTL`（现 L37）、`PDK_VC_LTL_*` 变量与 `pdk_vc_ltl_build` target（L65-159）、`pdk_add_vc_ltl_link_dependency()` 与相关 `add_dependencies`（L253-257、L270-278、L291、L298）。
+- **保留**：`PDK_MSVC_RUNTIME`（L8-15，MSVC 六个组合仍靠它切 MD/MT）。
+- 编译选项按编译器分流：MSVC 保持 `/utf-8 /EHsc(仅 CXX) /O2 /Ob2 /Os /std:c17`；GCC 用 `-std=c17 -Os -ffunction-sections -fdata-sections -Wall -Wextra -Wpedantic -finput-charset=UTF-8` + 链接 `-Wl,--gc-sections`（`-s`/`-flto` 按实测决定）。**去掉 GNU 分支里给 `pao_de_kuai` 用的 `-static-libstdc++ -static-libgcc`**（它现在是纯 C），这两个只留在 tests/scene_viewer 上。
+- `CMake_RC_COMPILER`：MinGW 构建必须显式指向 `windres.exe`。
+- 链接库列表两套通用：`d2d1 dwrite windowscodecs ole32 uuid shlwapi imm32 avrt mfplat mfreadwrite mfuuid gdi32 user32 dwmapi`。
+- `src/resources/resources.rc` 内容不动；`OBJECT_DEPENDS` 注释里"rc.exe 依赖扫描"的旧说明改写为"rc.exe / windres"。
+
+**`CMakePresets.json`**
+- 新增 `mingw-ucrt-x64-release`（**主发布**）与 `mingw-ucrt-x86-release`，generator `Ninja`，显式设置 `CMAKE_C_COMPILER`/`CMAKE_CXX_COMPILER`/`CMAKE_RC_COMPILER`：
+
+| preset | 工具链根 | C/C++ | RC | target triple |
+|---|---|---|---|---|
+| `mingw-ucrt-x64-release` | `$env{PDK_MINGW_ROOT}` | `bin/gcc.exe`、`bin/g++.exe` | `bin/windres.exe` | `x86_64-w64-mingw32` |
+| `mingw-ucrt-x86-release` | `$env{PDK_MINGW32_ROOT}` | 同上（i686 根下） | 同上 | `i686-w64-mingw32` |
+| `mingw-ucrt-x64-debug` | 同 x64 | 同 x64 | 同 x64 | 调试用 |
+
+- **两个环境变量的本地默认值**（个人机器路径，写在 `CMakeUserPresets.json` 或 shell profile，**不入库**）：`PDK_MINGW_ROOT=D:\_\3rd\mingw64-ucrt`、`PDK_MINGW32_ROOT=D:\_\3rd\mingw32-ucrt`。
+- `vs2026-*` preset 保留不变（MSVC 六个组合继续用）。
+
+**`.github/workflows/build.yml`（保持 8 job 结构，只换两个）**
+| job name | 现在 | 改后 |
+|---|---|---|
+| `x64 /MD`、`x86 /MD`、`arm64 /MD`、`x64 /MT`、`x86 /MT`、`arm64 /MT` | MSVC + Ninja | **不动**（去掉 `use_vc_ltl` 参数即可），仍 `run_tests` 按现表 |
+| `x64 VC-LTL` → `x64 MinGW/UCRT`（**主发布**） | MSVC + VC-LTL，`build_dir: build-vs2026-vcltl-x64`，MinIO 上传 | **MinGW UCRT x64**，`build_dir: build-mingw-ucrt-x64`，`run_tests: true`，**MinIO 上传条件改名**（`s3://.../2026/pao-de-kuai.exe` 目标路径不变） |
+| `x86 VC-LTL` → `x86 MinGW/UCRT` | MSVC + VC-LTL | **MinGW UCRT x86**，`build_dir: build-mingw-ucrt-x86`，`run_tests: true` |
+
+**MinGW 工具链在 CI 里的获取（从 niXman 下载，不用 MSYS2）**
+- 来源：`niXman/mingw-builds-binaries`，**每次运行解析 `releases/latest`，不 pin 版本**（你的决定：16.1/16.2 对本项目无实质差别，跟着最新走）。今天解析到的就是 `16.2.0-rt_v14-rev1`。
+- **资产选择靠正则，不靠版本号**（版本会变，命名规则不会）：
+  - x64：`^x86_64-.*-release-win32-seh-ucrt-rt_v\d+-rev\d+\.7z$`
+  - x86：`^i686-.*-release-win32-dwarf-ucrt-rt_v\d+-rev\d+\.7z$`（i686 只有 dwarf，没有 seh）
+  - **必须匹配 `win32` 线程 + `ucrt`**（与本地 `build-info.txt` 的 `--threads=win32 --with-default-msvcrt=ucrt` 一致）；正则改到 0 个或多个匹配都直接失败，别静默选错包。
+- **完整性校验不写死哈希**：用 release API 里每个 asset 自带的 `digest`（`sha256:<hex>`）校验下载结果。这样"不 pin 版本"和"防篡改/防半包"可以同时成立。
+- 做法：解析 latest → 正则选两个 asset → `actions/cache` 按 **解析出的 tag + arch** 做 key（tag 变了自动失效，不会拿到旧工具链）→ 未命中则 `curl` 下载 + 按 API `digest` 校验 → `7z x`（Windows runner 自带 7z）→ **把解压目录的 `bin` 前置进 `PATH`** → 跑链接冒烟检查 → 给 CMake 传 `-DPDK_MINGW_ROOT` / `-DPDK_MINGW32_ROOT`（或设同名环境变量）。
+- **不 pin 版本的补偿措施（必须做，否则"某天 CI 突然挂了"会无从归因）**：
+  1. 把**解析到的 tag、asset 名、`gcc --version` 三行**写进 job summary 和 workflow log 开头；
+  2. 提供逃生舱 `PDK_MINGW_TAG`（workflow_dispatch 输入或 repo variable）：设了就用指定 tag，用于复现历史失败；
+  3. CI 挂了先看这三行，再决定是代码问题还是工具链漂移。
+- 当前参考值（2026-08-16 的 latest，仅作对照；**不要**在 CI 里当断言用）：
+
+| 用途 | 资产文件名 | SHA256 |
+|---|---|---|
+| x64 job | `x86_64-16.2.0-release-win32-seh-ucrt-rt_v14-rev1.7z` | `c9ae8e4a3afa667b3301dd28c567109d174a0fa0856a2eeaa85a91b89569a50b` |
+| x86 job | `i686-16.2.0-release-win32-dwarf-ucrt-rt_v14-rev1.7z` | `24197df9616fc626143b0f91ceda22e0314c0ad7806a1eeace49a5c323f30027` |
+
+- **PATH 是硬性要求（本次实测踩过）**：`bin` 不在 PATH 时，gcc 默认调用的 `<root>\<triple>\bin\as.exe` 找不到 `libwinpthread-1.dll`，以 `0xC0000135` 退出且 **gcc 零输出**，表现为"编译静默失败"。CI 里必须：① 把 `bin` 前置进 PATH；② 在 Configure 之前跑一条链接冒烟检查（例如 `gcc -x c -o nul -` 或编译一个 5 行程序），失败就立即报错，别让它在 CMake 里伪装成别的问题。
+- **不要用 `msys2/setup-msys2`**：MSYS2 没有官方 ucrt32。
+- 其余步骤（Configure/Build/Test/Upload artifact）结构复用；`vcvarsall.bat` 只在 MSVC job 里调用，MinGW job 不调。
+- **本地版本不追平**（你的决定）：本地 x64=16.1.0、x86=16.2.0，CI 走 latest。若某天出现"CI 挂、本地复现不出"，**第一嫌疑就是工具链版本**，用上面的 `PDK_MINGW_TAG` 对齐后再排查代码。
+
+## 6. 测试策略
+
+- `tests/` 保持 C++ + doctest（你已确认），且**必须同时被 MSVC `cl` 与 MinGW `g++` 编译通过**（MinGW 侧加 `-static-libstdc++ -static-libgcc`，避免随包 DLL）。测试体改写成 C API 调用：`rules::Cards cards = {...}` → C 的 `Cards` 构造；`GameStateTests.cpp`（1361 行）改动量最大。
+- `TestHelpers.h` 改成"C++ 夹具包装 C API"：`C(rank,suit)`、`MakeCards({...})`、`LeadContext/FollowContext` 填 C 结构体。
+- `TestWeakAiStrategy.h`：从 `class : public AiStrategy` 改成填一张 `static const AiStrategyVtbl` 函数表 + `void* user`，验证 vtable 注入点（对应 `GameState::SetLocalAiStrategy`）。
+- **新增 `shim_layout` 自检 ctest（仅 MinGW）**：§3.3 的布局静态断言，编译期即验证 17 个 vtable 与 DWrite 类型的布局/枚举值。
+- 每阶段回归：**两套工具链各跑** `ctest --output-on-failure`（MSVC preset + `mingw-ucrt-x64-release`）+ 截图人工比对。
+- 截图交叉比对：MinGW 与 MSVC 各 5 张，接受 DWrite 字体度量带来的 <1px 抗锯齿差异，但布局/颜色/尺寸差异必须为零。
+
+## 7. 边界情况与失败模式
+
+- **定长 `Cards` 溢出**：上限 48；所有写入走 `Cards_Push`（Debug 断言，Release clamp），禁止裸下标写。
+- **字符串截断**：固定缓冲文本（toast、reason、对话）统一走带长度检查的追加函数；`StatStore` 的 JSON 转义逻辑必须原样保留。
+- **线程与取消**：`LocalAiController` 的后台线程 + generation 版本号用 `InterlockedIncrement` 实现，`CreateThread` 句柄必须 `CloseHandle`；`StrongAiStrategy` 的 8 worker 线程同理；`std::atomic<float>` 用位模式 `InterlockedExchange`。MinGW 是 win32 线程模型，**不要混入 winpthreads**。
+- **COM 生命周期**：去掉 `ComPtr` 后最易泄漏/双释放。每个 `ReleaseAndGetAddressOf` 模式都要在 C 里有明确对应；`DeviceNotifier` 的引用计数与 `Release` 时机是重点（`AudioEngine.cpp:200/227`）。
+- **`D2DERR_RECREATE_TARGET`**：`OnD2DResourcesLost/Recreated` 路径需重测，保持"游戏/窗口状态保留、音频与 CPU 数据不受影响"。
+- **双编译器差异（新增，重点）**：
+  - MSVC C 模式：`__uuidof`、`IID_PPV_ARGS` 不可用；`interface`/`STDMETHODCALLTYPE`/`CONST_VTBL` 由 `unknwn.h` 提供；**x86 上 `__thiscall` vs `__stdcall` 需复核**（D2D/DWrite 接口用 `STDMETHODCALLTYPE`，理论上两套一致，但这是 x86 job 必须亲眼确认的一项）。
+  - GCC：严格 `-std=c17` 与 SDK 头的兼容性（必要时回退 `-std=gnu17` 并记录）；`__USE_MINGW_ANSI_STDIO` 影响 `printf` 长整型格式化；不要用 `__attribute__`；**GCC 16 把隐式函数声明当错误**（漏原型直接失败，反而省事）。
+  - MinGW C 模式头缺陷：`shlwapi.h` 的 `IQueryAssociations` 已实测（§3.4）。
+- **`as.exe` / PATH（本次实测的最大坑）**：`bin` 不在 PATH → `as.exe` 缺 `libwinpthread-1.dll` → `0xC0000135`，**gcc 不打印任何诊断**，只在构建系统里表现为莫名的编译失败。凡是在新 shell / CI / 其他机器上跑 MinGW，先做链接冒烟检查。
+- **`windres`**：已实测可用（真实 ico + RCDATA + UTF-8 中文注释 → 85,858 B 的 `.res.o`）。剩余风险只在 `OBJECT_DEPENDS` 依赖扫描与 CMake 的 `CMAKE_RC_COMPILER` 设置。
+- **IID 符号**：已定死为 `#define INITGUID` + 单一 TU（§3.4）；**不要**指望 `-luuid`/`uuid.lib`（实测缺 `CLSID_MMDeviceEnumerator`、`IID_IMMDeviceEnumerator`、`IID_IDWriteFactory`）。忘了 `INITGUID` 会在链接期报未定义 `IID_*`。
+- **MF/头文件顺序**：`mfreadwrite.h` 在 `mfapi.h`+`mfidl.h` 之前 include 会失败（已实测；两套都复核）。
+- **性能回归**：rules 层改定长值类型应更快（少堆分配），但 `StrongAiStrategy` 的 8 线程并行搜索 + AI 托管整局耗时必须在 S4 实测，**MSVC 与 GCC 各记一次**，不得退化。
+- **体积**：MSVC 组合去掉 VC-LTL 后体积会变大（预期，不再作为发布目标，但 CI 里记录数字）；MinGW 主发布按 §1.8 判定。
+
+## 8. 明确不做 / 假设 / 待你批注
+
+**不做**
+- 不改游戏规则、计分、AI 行为强度、UI 视觉与交互、设置与统计的 JSON schema。
+- 不引入新第三方依赖（VC-LTL 是**删除**，不是替换）。若某处最终确需一个单头文件 public-domain C 库，先向你申请。
+- 不再支持 Win8/Win7（本轮显式放弃）。
+- 不放弃 MSVC 编译能力（本轮明确要求保留）。
+- 资源仍走 `.rc` 嵌入（rc.exe / windres 各用各的），不引入运行时 metadata 文件。
+- 不重新引入联网/大模型 AI。
+- 阶段间可在任何一步停下并保持可交付。
+
+**待你批注的开放项（我按默认值先写进计划）**
+1. ~~本地 x64 工具链的版本对齐~~ **已定（你的决定）**：16.1/16.2 对本项目没有实质差别，**本地不追平**（x64=16.1.0、x86=16.2.0），**CI 每次解析 latest**（见 §5）。补偿措施：CI 打印解析到的 tag / asset / `gcc --version`，并提供 `PDK_MINGW_TAG` 逃生舱用于复现历史失败。
+2. **`-flto` 是否进正式 Release**：**基本已有答案**——修订 4 实测在最小程序上零收益（15,360 B 不变），故默认**不开**；仅保留"S8 用真实 exe 复测一次"的机会。`-s` 默认进 Release。（`-s` 会去掉符号，若你希望保留可调试性，可以改成只对发布 tag 开。）
+3. **MSVC 组合是否还上传 artifact**：默认 8 个 job 都上传（现状不变），只有 MinGW x64 额外发 MinIO。
+4. **截图基线归属**：默认以 MinGW x64 的 5 张为"新基线"，MSVC 的 5 张作为交叉比对。
+5. **`dwrite_c.h` 手抄 vs 脚本生成**：默认先手抄 + §3.3 静态断言；若你希望彻底防漂移，我在 S5 加 `tools/gen_shim_from_mingw_headers.ps1`（修订 4 的验证脚本就是它的原型，成本已很低）。
+6. **CI 工具链缓存失效策略**：默认按 `mingw-<tag>-<arch>` 缓存解压目录，tag 变了自然失效；下载的 `.7z` 本身不缓存（约 108 MB，每次重下或走 runner 的临时目录）。
+7. **`rules` 迁移路线（附录 B 的 A/B）**：`rules::Cards` + 4 个 `enum class` 是全仓库中心类型，无法"只改 rules 目录"。**路线 A**＝把 `rules`+`game`+`CardView`/`GameScene`+测试合并成约 6,000 行的一次性大步骤（边界干净、无中间态）；**路线 B**＝先用一个临时 C++ 兼容头（约 200–300 行，最终删除）让上层先编过，把重命名分摊到后续阶段。默认按 A。
+
+## 9. 工作量与风险
+
+规模：`src/` 11,671 行 / 123 文件，`tests/` 2,417 行，`scene_viewer` 145 行。相比修订 1，**shim 工作量回来了**（13 + 4 个 vtable + DWrite 类型回落），但**核对成本大幅下降**（MinGW 头可做机器静态断言）；相比初版，**多了一套工具链的构建/CI/验证成本**。
+
+| 风险 | 等级 | 缓解 |
+|---|---|---|
+| **D2D/DWrite shim 布局或签名写错**（影响面=全部 UI，且要同时满足两套编译器） | ~~高~~ **中**（本次已用 7 个接口的静态断言跑通方法，并抓到 2 处真实错误） | §3.3 用 MinGW 的 C vtable 做编译期 `sizeof`+`offsetof` 断言；两套各 5 个渲染 ctest 兜底；预留 `dwrite_bridge.cpp` 退路 |
+| **体积不达标** | ~~高~~ **中低**（实测 CRT 底噪仅约 15 KB，基线 679 KB 主要是应用代码；风险转移到 `src/` 的编译产物与 shim 代码量） | 已定 `-Os -s +--gc-sections`；若超标再看 `-fno-asynchronous-unwind-tables`、绕开 `libmingwex` 大函数、继续手写格式化；`-flto` 实测无收益，不作为期望手段 |
+| **`as.exe` PATH 陷阱**（gcc 静默失败，极易误判为代码问题） | 中（新环境必踩一次） | `<root>\bin` 前置进 PATH；CI 在 Configure 前加链接冒烟检查；写进 `AGENTS.md` |
+| 双编译器差异漏检（只在一边编过） | 中高 | S0 起每个阶段**两边都跑**；CI 8 组合本身就是这道闸 |
+| MSVC x86 上 vtable 调用约定差异 | 中 | x86 job 保留 `run_tests: true`，配合 CI 的 MSVC x86 组合与 MinGW x86 组合各跑一次 |
+| MinGW x86 工具链 | 中低 | 已解决：本地 `D:\_\3rd\mingw32-ucrt`（gcc 16.2.0，i686-win32-dwarf-ucrt）；CI 从 niXman 解析 latest（正则选 `i686-*-win32-dwarf-ucrt-*`，见 §5）；**不用 MSYS2**（无官方 ucrt32） |
+| 无 RAII 后的 COM 泄漏/双释放 | 中高 | 统一 `PDK_RELEASE`；S5/S6 加 Debug 下 COM 计数核查 |
+| 测试体重写（尤指 GameStateTests 1361 行） | 中 | 夹具集中在 `TestHelpers.h`；按阶段随对应模块一起改 |
+| MinGW C 模式头缺陷（已中 `shlwapi`） | 中低 | 统一进 `win_compat.h`；S0 做一次"SDK 头体检" |
+| **CI 用 latest 带来的工具链漂移**（新增：不 pin 版本，某天 CI 会因为上游更新而变红） | 中 | ① 用 release API 的 asset `digest` 做完整性校验（不必写死哈希）；② cache key 含解析出的 tag，不会误用旧包；③ 打印 tag/asset/`gcc --version` 到 job summary；④ `PDK_MINGW_TAG` 逃生舱复现历史；⑤ §3.3 的 `shim_layout` 静态断言是防"上游头文件变了"的护栏 |
+| 本地与 CI 工具链版本不一致（16.1.0 / 16.2.0 / 未来 latest） | 中低 | 已接受（你的决定）；排查顺序写进 `AGENTS.md`：先对齐工具链，再看代码 |
+| x86 的 dwarf 例外模型影响 C++ 测试 | 低 | 纯 C `src/` 不受影响；测试目标 `-static-libgcc -static-libstdc++`，禁止产生 `libgcc_s_dw2-1.dll` 依赖 |
+| 音频线程/回调 | 中 | S6 真机手测（切设备、静音、暂停），两套构建各一次 |
+
+这是**数周级、需要你逐阶段验收**的工程，不是一次对话能完成的重写。我不会假装它只是"改改语法"。
+
+## 10. 批准后立即执行的第一步（S0）
+
+1. **在正常 shell 补基线**：跑现有 MSVC+VC-LTL 基线（`cmake --preset vs2026-release` + build + `ctest --output-on-failure`），保存 5 张 JPEG、exe 体积、`unit_tests` 耗时。
+2. ~~量 MinGW 底噪~~ **已完成（本次）**：x64/x86 空程序 `-Os -s` 均 15,872 B、`+--gc-sections` 15,360 B、依赖只有 `KERNEL32` + `api-ms-win-crt-*`、`windres` 与全 SDK 面链接均通过、7 个接口的 shim 布局静态断言通过——见 §0 与附录 C。**结论：679,424 B 里 CRT 只占约 15 KB**，"能不能更小"最终取决于应用代码。
+3. 开改造分支；`CMakeLists.txt` 加 `CMAKE_C_STANDARD 17` + MSVC `/std:c17`，新增 `mingw-ucrt-x64-release`/`mingw-ucrt-x86-release` preset（`PDK_MINGW_ROOT`/`PDK_MINGW32_ROOT` 环境变量），**删除 VC-LTL 全套逻辑与 `external/vc-ltl/`（保留 `PDK_MSVC_RUNTIME`）**。
+4. 建 `src/core/Str.h`、`src/graphics/Com.h`、`src/graphics/win_compat.h`、`src/graphics/iids.c`（`INITGUID`）、`d2d_c.h` 骨架、`goto cleanup` 约定文档（写进 `AGENTS.md` 草稿，含 **PATH 必须含 `bin`** 这一条）；做"SDK 头体检"（WIC/WASAPI/MF/IMM32/avrt/dwmapi/D2D/DWrite 全 include 进一个 `.c`，**MSVC、MinGW x64、MinGW x86 各编一次**）；统计 `shlwapi` 使用点。
+5. 转 `src/app/Dpi.*`、`src/app/WindowChrome.*` 两个最小 TU 为 `.c`，**三个工具链各编译链接一遍**，验证 `rc.exe`/`windres` 两条资源路径，以及各构建的 `ctest` 全绿。
+6. 先写一版 CI（两个 MinGW job 的下载+校验+缓存+**PATH**+**链接冒烟检查**），确认 niXman 资产在 runner 上能解压可用——**这一步不含业务改造，可以立刻做完**。
+7. 迁移 §3.3 的验证脚本（本次探测用的那个 PowerShell 原型）到 `tests/shim_layout/`，作为 S5 的前置护栏。
+8. 向你汇报 S0 结果与实测数字，再决定是否进入 S1。
+
+---
+
+## 附录 A：MSVC + VC-LTL 历史基线（初版实测，本轮降级为"体积对照基准"）
+
+commit `7f7c15d`，`pure-c-port` 分支起点，`ctest` 6/6 全绿，total 27.06s。
+
+| 项目 | 基线值 |
+|---|---|
+| `pao_de_kuai.exe` | 679,424 字节 |
+| `scene_viewer.exe` | 691,712 字节 |
+| `unit_tests.exe` | 720,896 字节 |
+| `unit_tests` 耗时 | 0.43s |
+| `.text` / `.rdata` / `.pdata` | 0x5C000 / 0x13000 / 0x4000 |
+| 依赖 DLL | d2d1, DWrite, ole32, SHLWAPI, IMM32, AVRT, MFPlat, MFReadWrite, USER32, dwmapi, KERNEL32, **msvcrt.dll**（无 vcruntime140/ucrtbase → VC-LTL 生效） |
+
+5 张基线 JPEG（SHA256 前 16 位）：
+`ui-start.jpg` 3957C6C2F53AA244 ・ `ui-settings.jpg` F070F87BC6D6C1BF ・ `ui-game-deal.jpg` 6CD22D0439D58FF5 ・ `ui-game-play.jpg` D7BF8DF743A4047B ・ `ui-result.jpg` 42A1685CB8EF1F5C
+
+## 附录 B：S0 期间发现的排期风险（待你决定，尚未写入计划正文）
+
+**`rules` 无法作为独立小步迁移。** `rules::Cards`（`std::vector<Card>`）和四个 `enum class` 是贯穿全仓库的中心类型，实测扇出：
+
+- `rules::Rank::` 734 处、`rules::Suit::` 200 处、`rules::PatternType::` 142 处、`rules::PlayerId::` 200 处（合计约 1,276 处具名枚举限定，遍布 29 个文件）。
+- `Cards` 出现在 29 个文件中，含 `game/*`（7 个）、`scenes/GameScene`、`tests/*`（7 个）。
+- C 无法使用 `enum class`，因此 `Rank::Three` 这类写法必须整体改为 C 常量名；这一步无法"只改 rules 目录"。
+
+**两条可选路线：**
+
+- **路线 A（推荐）**：把 `rules` + `game` + `CardView`/`GameScene` + 对应测试合并为一个较大的垂直步骤（约 6,000 行），一次性跨过类型断层。步骤更大，但边界干净、无中间态。
+- **路线 B**：引入一个一次性 C++ 兼容头（`enum class` 同名 + `Cards` 容器门面包装 C 结构体），让上层 C++ 调用点先编译不变，从而把枚举重命名和调用点改写分摊到后续阶段。代价是多一份临时抽象（约 200–300 行，最终删除）和一处布局兼容假设。
+
+两者都不影响 S0/S1/S3/S5–S8 的划分，只影响 S2/S4 的边界。
+
+## 附录 C：修订记录与实测证据
+
+### 修订 1（已并入修订 2）
+- 删除 VC-LTL、改用 MinGW UCRT、放弃 Win8 基线——这三条保留。
+- 当时"§3 两个 shim 作废"的结论**已被修订 2 推翻**（因为 MSVC 要继续编译）。
+
+### 修订 2 的实测证据
+- `gcc --version` → `gcc.exe (x86_64-win32-seh-rev1, Built by MinGW-Builds project) 16.1.0`；`build-info.txt` 记录 `--with-default-msvcrt=ucrt --threads=win32 --exceptions=seh --arch=x86_64`（nomulti）。
+- `gcc -std=c17 -c` 编译同时含 `windows.h`/`d2d1.h`/`dwrite.h`/`wincodec.h`/`mmdeviceapi.h`/`audioclient.h`/`mfapi.h`/`mfidl.h`/`mfreadwrite.h`/`imm.h`/`avrt.h`/`dwmapi.h` 的 `.c`：全部头文件通过，接口调用被正确解析。
+- `d2d1.h`：152,087 字节，568 处 `lpVtbl`；`ID2D1ResourceVtbl` 定义于 L500；派生 vtbl 通过 `Base` 嵌套 `IUnknown`。
+- `dwrite.h`：225,946 字节，95 处 `__cplusplus` 分支、619 处 `lpVtbl`、27 处 `COBJMACROS`；`IDWriteFactoryVtbl` 定义于 L5231。
+- `shlwapi.h:981` 起在 C 模式下报 `unknown type name 'IQueryAssociations'`。
+- 工具链自带 `windres.exe`、`ar.exe`、`strip.exe`、`objdump.exe`；`x86_64-w64-mingw32\lib` 下 `libd2d1.a`/`libdwrite.a`/`libwindowscodecs.a`/`libmfplat.a`/`libmfreadwrite.a`/`libmfuuid.a`/`libuuid.a`/`libshlwapi.a`/`libavrt.a`/`libdwmapi.a`/`libucrt*.a` 均在位。
+- **MSVC 侧旧结论（初版实测）**：`cl /TC` 下 `dwrite.h` 完全不能 include（`dwrite.h:4704` → C2059），`d2d1.h` C 模式只给前向声明（L3571-3764）但已提供全部 `D2D1_*` 类型与 `IID_ID2D1*` 声明。
+- **未完成**：~~两套工具链的链接与体积测量都未做~~ → **已在修订 4 完成**（见下）。
+
+### 修订 4 的实测证据（启用完全权限后重跑）
+
+**1. `as.exe` 静默失败的根因（不是沙箱）**
+- 直接调用 `<x64>\bin\as.exe -o out.o in.s` → **成功**（`.s` 582 B → `.o` 914 B）；`as.exe --version` 正常。
+- 直接调用 `<x64>\x86_64-w64-mingw32\bin\as.exe`（**gcc 默认走的就是这个**）→ 退出码 **`-1073741515` = `0xC0000135` STATUS_DLL_NOT_FOUND**。
+- `objdump -p` 显示 `as.exe` 的导入表含 **`libwinpthread-1.dll`**，而该 DLL 只位于 `<root>\bin\`。gcc 调用它时**不打印任何诊断**，只返回 1。
+- 修复：把 `<root>\bin` 前置进 `PATH` → x64/x86 全部正常链接。**CI 与任何新 shell 都必须这么做。**
+
+**2. 体积与依赖（`-Os -s -mwindows`，空 `WinMain`）**
+
+| 配置 | x64 | x86 |
+|---|---|---|
+| `-Os -s` | **15,872 B** | **15,872 B** |
+| `-Os -s` + `--gc-sections` | **15,360 B** | 15,872 B |
+| `-Os -s` + `--gc-sections` + `-flto` | 15,360 B（**无收益**） | 15,872 B（**无收益**） |
+| `-Os`（不 strip） | 55,612 B | 52,510 B |
+
+- `objdump -p` 依赖表（x64 与 x86 相同）：`KERNEL32.dll` + `api-ms-win-crt-{environment,heap,locale,math,private,runtime,stdio,string}-l1-1-0.dll`。**没有 `msvcrt.dll`、没有 `vcruntime140.dll`、没有 `libgcc_s_*`、没有 `libwinpthread-1.dll`** —— 与 §1.6 的目标一致。
+- 含 `snprintf("%s=%d/%llu/%.2f")` 的版本体积相同（15,872 B），说明 `libmingwex` 的格式化开销被页对齐掩盖，量级很小。
+
+**3. 全 SDK 面一次性链接**
+- `D2D1CreateFactory` + `DWriteCreateFactory` + `CoCreateInstance(CLSID_WICImagingFactory)` + `CoCreateInstance(CLSID_MMDeviceEnumerator)` + `MFStartup` + `MFCreateSourceReaderFromURL` + `ImmGetContext` + `AvSetMmThreadCharacteristicsW` + `DwmSetWindowAttribute` 在同一 TU 内链接通过（**37,888 B**）。
+- **IID 来源实测**：带 `-luuid` 仍缺 `CLSID_MMDeviceEnumerator`、`IID_IMMDeviceEnumerator`、`IID_IDWriteFactory`；去掉 `-luuid` 连 `IID_ID2D1Factory` 都缺；**`#define INITGUID` 且不带 `-luuid` → 全部解析、链接成功**。→ 定稿为单一 `iids.c` + `INITGUID`。
+
+**4. `windres`**
+- `<x64>\bin\windres.exe -i t.rc -o t.res.o` → 成功；`.rc` 内含 UTF-8 中文注释、`1 ICON "…/pao-de-kuai.ico"`、`CARDS RCDATA "…/poker-cards.png"`；`.res.o` 85,858 B，链接出 101,888 B 的 exe。
+
+**5. shim 布局的编译期验证（本次最关键的结论）**
+- 方法：写脚本从 MinGW 头提取每个接口的**完整方法顺序**，生成 `PDK_*Vtbl`（按真实继承链嵌套 PDK 基类；未用到的方法用 `void*` 占位；只给用到的方法定型），然后断言 `sizeof(PDK_X) == sizeof(XVtbl)` 与逐方法 `offsetof`。
+- 结果：**ID2D1SolidColorBrush、ID2D1HwndRenderTarget、ID2D1PathGeometry、ID2D1GeometrySink、IDWriteFactory、IDWriteTextFormat、IDWriteTextLayout 共 7 个接口全部通过**（`gcc -std=c17 -Wall` 退出 0）。
+- 过程中被这套断言抓到的真实错误：① `ID2D1Factory` **直接继承 `IUnknown`（没有 `GetFactory`）**——我原先按"继承 ID2D1Resource"写；② `IDWriteFactory` 的 `CreateTextFormat` 前面还有 `GetSystemFontCollection` 等 8 个方法，**只写用到的方法会整体错位**。
+- 实测 vtable 大小（供 `tests/shim_layout/` 写死）：`ID2D1FactoryVtbl`=136、`ID2D1SolidColorBrushVtbl`=80、`ID2D1HwndRenderTargetVtbl`=480、`ID2D1PathGeometryVtbl`=168、`ID2D1GeometrySinkVtbl`=120、`IDWriteFactoryVtbl`=192、`IDWriteTextFormatVtbl`=224、`IDWriteTextLayoutVtbl`=536、`IDWriteInlineObjectVtbl`=56。
+
+**6. 其他**
+- MinGW 的 `ID2D1FactoryVtbl` 用 `IUnknownVtbl Base` 而非 `ID2D1ResourceVtbl Base`，**这不是头部 bug**（与 `interface ID2D1Factory : public IUnknown` 一致）；d2d1.h 用 `STDMETHOD(...)` 宏写函数指针，dwrite.h 用显式 `HRESULT (STDMETHODCALLTYPE *X)(...)` 写，两者在 C 模式下都可用。
+- **GCC 16 把隐式函数声明当错误**（我写错 `IMMGetContext` 时直接 `error:`，未加 `-Werror`）。
+- 探测脚本与产物在临时目录中完成，已删除；脚本原型建议迁到 `tests/shim_layout/`（§10 第 7 步）。
+
+### 修订 3 的实测证据
+
+**本地两条工具链（均已实地核对）**
+
+| | x64（主发布） | x86 |
+|---|---|---|
+| 根目录 | `D:\_\3rd\mingw64-ucrt` | `D:\_\3rd\mingw32-ucrt` |
+| `gcc --version` | `16.1.0`，pkgversion `x86_64-win32-seh-rev1` | `16.2.0`，pkgversion `i686-win32-dwarf-rev1` |
+| `-dumpmachine` | `x86_64-w64-mingw32` | `i686-w64-mingw32` |
+| `build-info.txt` args | `--mode=gcc-16.1.0 ... --with-default-msvcrt=ucrt --rt-version=v14 --threads=win32 --exceptions=seh --arch=x86_64` | `--mode=gcc-16.2.0 ... --with-default-msvcrt=ucrt --rt-version=v14 --threads=win32 --exceptions=dwarf --arch=i686` |
+| 构建日期 | 05.24.2026 | 08.16.2026 |
+| bin 工具 | `windres.exe`、`ar.exe`、`strip.exe`、`objdump.exe`、`ld.exe` | 同（另有 `ld.bfd.exe`） |
+
+- **版本不一致（需你决定，§8 开放项 1）**：x64 = 16.1.0、x86 = 16.2.0。CI 计划统一用 16.2.0。
+- x86 的 `i686-w64-mingw32\lib` 下 §2 链接列表用到的 import lib 全部在位：`libd2d1`、`libdwrite`、`libwindowscodecs`、`libole32`、`libuuid`、`libshlwapi`、`libimm32`、`libavrt`、`libmfplat`、`libmfreadwrite`、`libmfuuid`、`libgdi32`、`libuser32`、`libdwmapi`、`libucrt`/`libucrtbase`/`libucrtapp`、`libmsvcrt`。
+- **注意**：MinGW 的 `libmsvcrt.a` 在这个 UCRT 工具链里只是转发/兼容库。**已在修订 4 用 `objdump -p` 在链接产物上核对**：实际依赖是 `KERNEL32.dll` + `api-ms-win-crt-*`（UCRT API set），与库名无关。
+
+**CI 工具链来源（niXman/mingw-builds-binaries，CI 解析 latest，下表是 2026-08-16 的实测参考值）**
+
+| 用途 | 资产名 | 大小 | SHA256 |
+|---|---|---|---|
+| x64 job | `x86_64-16.2.0-release-win32-seh-ucrt-rt_v14-rev1.7z` | 107,950,837 | `c9ae8e4a3afa667b3301dd28c567109d174a0fa0856a2eeaa85a91b89569a50b` |
+| x86 job | `i686-16.2.0-release-win32-dwarf-ucrt-rt_v14-rev1.7z` | 109,488,001 | `24197df9616fc626143b0f91ceda22e0314c0ad7806a1eeace49a5c323f30027` |
+
+- 上表的 SHA256 **只在 CI 里作为"解析结果对照日志"打印，不作为断言**（因为不 pin 版本）；真正的门是 release API 每个 asset 自带的 `digest` 字段。要复现这次的工具链，就设 `PDK_MINGW_TAG=16.2.0-rt_v14-rev1`。
+- 同 tag 下还有 `posix-*` / `mcf-*` / `*-msvcrt` 等变体，**必须选 `win32` + `ucrt`**（与本地 `build-info.txt` 的 `--threads=win32 --with-default-msvcrt=ucrt` 一致）。
+- `i686` 的例外模型只有 `dwarf`（无 SEH），这与本机 x86 工具链一致，不是选错。
+- 资产清单来源：<https://github.com/niXman/mingw-builds-binaries/releases>（当时为 [16.2.0-rt_v14-rev1](https://github.com/niXman/mingw-builds-binaries/releases/tag/16.2.0-rt_v14-rev1)）

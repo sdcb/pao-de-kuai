@@ -14,6 +14,48 @@
         "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
         "PDK_BUILD_TESTS": "ON"
       }
+    },
+    {
+      "name": "mingw-ucrt-x64-release",
+      "displayName": "MinGW-w64 UCRT x64 Release (Ninja) -- main release target",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-mingw-ucrt-x64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+        "PDK_BUILD_TESTS": "ON",
+        "CMAKE_C_COMPILER": "$env{PDK_MINGW_ROOT}/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "$env{PDK_MINGW_ROOT}/bin/g++.exe",
+        "CMAKE_RC_COMPILER": "$env{PDK_MINGW_ROOT}/bin/windres.exe"
+      }
+    },
+    {
+      "name": "mingw-ucrt-x86-release",
+      "displayName": "MinGW-w64 UCRT x86 Release (Ninja)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-mingw-ucrt-x86",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+        "PDK_BUILD_TESTS": "ON",
+        "CMAKE_C_COMPILER": "$env{PDK_MINGW32_ROOT}/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "$env{PDK_MINGW32_ROOT}/bin/g++.exe",
+        "CMAKE_RC_COMPILER": "$env{PDK_MINGW32_ROOT}/bin/windres.exe"
+      }
+    },
+    {
+      "name": "mingw-ucrt-x64-debug",
+      "displayName": "MinGW-w64 UCRT x64 Debug (Ninja)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-mingw-ucrt-x64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+        "PDK_BUILD_TESTS": "ON",
+        "CMAKE_C_COMPILER": "$env{PDK_MINGW_ROOT}/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "$env{PDK_MINGW_ROOT}/bin/g++.exe",
+        "CMAKE_RC_COMPILER": "$env{PDK_MINGW_ROOT}/bin/windres.exe"
+      }
     }
   ],
   "buildPresets": [
@@ -23,6 +65,18 @@
       "environment": {
         "VSLANG": "1033"
       }
+    },
+    {
+      "name": "mingw-ucrt-x64-release",
+      "configurePreset": "mingw-ucrt-x64-release"
+    },
+    {
+      "name": "mingw-ucrt-x86-release",
+      "configurePreset": "mingw-ucrt-x86-release"
+    },
+    {
+      "name": "mingw-ucrt-x64-debug",
+      "configurePreset": "mingw-ucrt-x64-debug"
     }
   ],
   "testPresets": [
@@ -31,6 +85,30 @@
       "configurePreset": "vs2026-release",
       "environment": {
         "VSLANG": "1033"
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "mingw-ucrt-x64-release",
+      "configurePreset": "mingw-ucrt-x64-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "mingw-ucrt-x86-release",
+      "configurePreset": "mingw-ucrt-x86-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "mingw-ucrt-x64-debug",
+      "configurePreset": "mingw-ucrt-x64-debug",
+      "output": {
+        "outputOnFailure": true
       }
     }
   ]

@@ -10,6 +10,7 @@ on:
       - "external/**"
       - "src/**"
       - "tests/**"
+      - "tools/**"
       - "assets/pao-de-kuai.ico"
       - "assets/poker-cards.png"
       - "assets/audio/*.mp3"
@@ -21,10 +22,16 @@ on:
       - "external/**"
       - "src/**"
       - "tests/**"
+      - "tools/**"
       - "assets/pao-de-kuai.ico"
       - "assets/poker-cards.png"
       - "assets/audio/*.mp3"
   workflow_dispatch:
+    inputs:
+      mingw_tag:
+        description: "Pin the niXman/mingw-builds-binaries release tag (escape hatch for reproducing an old failure)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -37,84 +44,255 @@ jobs:
       matrix:
         include:
           - name: x64 /MD
+            kind: msvc
             arch: x64
             vcvars_arch: x64
             build_dir: build-vs2026-md-x64
             runtime: MD
-            use_vc_ltl: OFF
             run_tests: true
           - name: x86 /MD
+            kind: msvc
             arch: x86
             vcvars_arch: x86
             build_dir: build-vs2026-md-x86
             runtime: MD
-            use_vc_ltl: OFF
             run_tests: true
           - name: arm64 /MD
+            kind: msvc
             arch: arm64
             vcvars_arch: x64_arm64
             build_dir: build-vs2026-md-arm64
             runtime: MD
-            use_vc_ltl: OFF
             run_tests: false
           - name: x64 /MT
+            kind: msvc
             arch: x64
             vcvars_arch: x64
             build_dir: build-vs2026-mt-x64
             runtime: MT
-            use_vc_ltl: OFF
             run_tests: true
           - name: x86 /MT
+            kind: msvc
             arch: x86
             vcvars_arch: x86
             build_dir: build-vs2026-mt-x86
             runtime: MT
-            use_vc_ltl: OFF
             run_tests: true
           - name: arm64 /MT
+            kind: msvc
             arch: arm64
             vcvars_arch: x64_arm64
             build_dir: build-vs2026-mt-arm64
             runtime: MT
-            use_vc_ltl: OFF
             run_tests: false
-          - name: x64 VC-LTL
+          # Main release target: MinGW-w64 UCRT x64, linked against the system
+          # ucrtbase.dll (plan.md revision 2).  VC-LTL is gone.
+          - name: x64 MinGW/UCRT
+            kind: mingw
             arch: x64
-            vcvars_arch: x64
-            build_dir: build-vs2026-vcltl-x64
-            runtime: MT
-            use_vc_ltl: ON
+            mingw_slot: x64
+            mingw_asset_regex: '^x86_64-.*-release-win32-seh-ucrt-rt_v\d+-rev\d+\.7z$'
+            preset: mingw-ucrt-x64-release
+            build_dir: build-mingw-ucrt-x64
             run_tests: true
-          - name: x86 VC-LTL
+            publish: true
+          - name: x86 MinGW/UCRT
+            kind: mingw
             arch: x86
-            vcvars_arch: x86
-            build_dir: build-vs2026-vcltl-x86
-            runtime: MT
-            use_vc_ltl: ON
+            mingw_slot: x86
+            mingw_asset_regex: '^i686-.*-release-win32-dwarf-ucrt-rt_v\d+-rev\d+\.7z$'
+            preset: mingw-ucrt-x86-release
+            build_dir: build-mingw-ucrt-x86
             run_tests: true
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Configure
+      # ------------------------------------------------------------------
+      # MinGW toolchain
+      #
+      # Downloaded from niXman/mingw-builds-binaries, resolving the latest
+      # release on every run (no pinned version) because 16.1/16.2 make no
+      # difference to this project.  Reproducibility is preserved by:
+      #   * selecting the asset by file-name pattern, never by version number;
+      #   * verifying the download against the release API's own `digest`;
+      #   * keying the cache on the resolved tag, so a new release never
+      #     reuses an old extraction;
+      #   * printing the resolved tag, asset and `gcc --version`, and honouring
+      #     PDK_MINGW_TAG to reproduce an old failure.
+      #
+      # The asset must be the win32-threaded UCRT build (matching the local
+      # toolchains' `--threads=win32 --with-default-msvcrt=ucrt`), which is why
+      # the patterns below name `win32` and `ucrt` explicitly.
+      # ------------------------------------------------------------------
+      - name: Resolve MinGW toolchain release
+        if: ${{ matrix.kind == 'mingw' }}
+        id: resolve
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = "${{ github.event.inputs.mingw_tag }}"
+          if ([string]::IsNullOrWhiteSpace($tag)) { $tag = $env:PDK_MINGW_TAG }
+          $headers = @{ "User-Agent" = "pdk-build"; Authorization = "Bearer $env:GH_TOKEN" }
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/niXman/mingw-builds-binaries/releases/latest" -Headers $headers
+          } else {
+            Write-Host "PDK_MINGW_TAG pins the release to '$tag'"
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/niXman/mingw-builds-binaries/releases/tags/$tag" -Headers $headers
+          }
+          $pattern = "${{ matrix.mingw_asset_regex }}"
+          $found = @($release.assets | Where-Object { $_.name -match $pattern })
+          if ($found.Count -ne 1) {
+            throw "Expected exactly one asset matching '$pattern' in release '$($release.tag_name)' but found $($found.Count): $($found.name -join ', ')"
+          }
+          $asset = $found[0]
+          if ([string]::IsNullOrWhiteSpace($asset.digest)) {
+            throw "Release asset '$($asset.name)' has no digest; refusing to install an unverifiable toolchain."
+          }
+          $lines = @(
+            "resolved tag     : $($release.tag_name)",
+            "resolved asset   : $($asset.name) ($($asset.size) bytes)",
+            "expected sha256  : $($asset.digest)"
+          )
+          $lines | ForEach-Object { Write-Host $_ }
+          $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
+          "asset=$($asset.name)" >> $env:GITHUB_OUTPUT
+          "url=$($asset.browser_download_url)" >> $env:GITHUB_OUTPUT
+          "digest=$($asset.digest)" >> $env:GITHUB_OUTPUT
+          "cache_key=mingw-$($release.tag_name)-${{ matrix.mingw_slot }}-$($asset.name)" >> $env:GITHUB_OUTPUT
+          "root=$($env:GITHUB_WORKSPACE)/.mingw/${{ matrix.mingw_slot }}" >> $env:GITHUB_OUTPUT
+
+      - name: Cache MinGW toolchain
+        if: ${{ matrix.kind == 'mingw' }}
+        id: mingw_cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.mingw/${{ matrix.mingw_slot }}
+          key: ${{ steps.resolve.outputs.cache_key }}
+
+      - name: Install MinGW toolchain
+        if: ${{ matrix.kind == 'mingw' && steps.mingw_cache.outputs.cache-hit != 'true' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = "${{ steps.resolve.outputs.root }}"
+          $archive = Join-Path $env:RUNNER_TEMP "${{ steps.resolve.outputs.asset }}"
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Invoke-WebRequest -Uri "${{ steps.resolve.outputs.url }}" -OutFile $archive
+          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = "${{ steps.resolve.outputs.digest }}".Replace("sha256:", "").ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "SHA256 mismatch for $archive : expected $expected but got $actual"
+          }
+          Write-Host "SHA256 verified: $actual"
+          # The archive holds a single top-level directory (mingw64/ or mingw32/).
+          7z x -y -o"$root" $archive | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "7z extraction failed with exit code $LASTEXITCODE" }
+          Remove-Item -Force $archive
+          $gcc = Get-ChildItem -Path $root -Recurse -Filter gcc.exe |
+                 Where-Object { $_.DirectoryName -like "*\bin" } | Select-Object -First 1
+          if (-not $gcc) { throw "No bin/gcc.exe found under $root after extraction" }
+          "MINGW_BIN=$($gcc.DirectoryName)" >> $env:GITHUB_ENV
+
+      - name: Add MinGW bin to PATH and smoke check
+        if: ${{ matrix.kind == 'mingw' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = "${{ steps.resolve.outputs.root }}"
+          if ([string]::IsNullOrWhiteSpace($env:MINGW_BIN)) {
+            $gcc = Get-ChildItem -Path $root -Recurse -Filter gcc.exe |
+                   Where-Object { $_.DirectoryName -like "*\bin" } | Select-Object -First 1
+            if (-not $gcc) { throw "No bin/gcc.exe found under $root (restored from cache)" }
+            "MINGW_BIN=$($gcc.DirectoryName)" >> $env:GITHUB_ENV
+            $env:MINGW_BIN = $gcc.DirectoryName
+          }
+          # <root>/bin must be on PATH: gcc spawns <root>/<triple>/bin/as.exe,
+          # which needs libwinpthread-1.dll from <root>/bin.  Without it the
+          # assembler exits 0xC0000135 and gcc prints *no* diagnostics at all.
+          $env:MINGW_BIN >> $env:GITHUB_PATH
+          $env:PATH = "$env:MINGW_BIN;$env:PATH"
+
+          $version = (& gcc --version | Select-Object -First 1)
+          Write-Host $version
+          $version | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+          $smoke = Join-Path $env:RUNNER_TEMP "pdk-toolchain-smoke.c"
+          "int main(void) { return 0; }" | Set-Content -Encoding ascii $smoke
+          & gcc -std=c17 -o (Join-Path $env:RUNNER_TEMP "pdk-toolchain-smoke.exe") $smoke
+          if ($LASTEXITCODE -ne 0) {
+            throw "MinGW link smoke check failed (exit $LASTEXITCODE). Is <mingw-root>/bin on PATH?"
+          }
+          "MINGW_ROOT=$root" >> $env:GITHUB_ENV
+
+      - name: Configure (MSVC)
+        if: ${{ matrix.kind == 'msvc' }}
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.vcvars_arch }}
-          cmake -S . -B ${{ matrix.build_dir }} -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DPDK_BUILD_TESTS=ON -DPDK_MSVC_RUNTIME=${{ matrix.runtime }} -DPDK_USE_VC_LTL=${{ matrix.use_vc_ltl }}
+          cmake -S . -B ${{ matrix.build_dir }} -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DPDK_BUILD_TESTS=ON -DPDK_MSVC_RUNTIME=${{ matrix.runtime }}
 
-      - name: Build
+      - name: Configure (MinGW)
+        if: ${{ matrix.kind == 'mingw' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:PATH = "$env:MINGW_BIN;$env:PATH"
+          # The presets read these through $env{} so that no machine-specific
+          # path is ever committed.
+          "PDK_MINGW_ROOT=$env:MINGW_ROOT" >> $env:GITHUB_ENV
+          "PDK_MINGW32_ROOT=$env:MINGW_ROOT" >> $env:GITHUB_ENV
+          $env:PDK_MINGW_ROOT = $env:MINGW_ROOT
+          $env:PDK_MINGW32_ROOT = $env:MINGW_ROOT
+          cmake --preset ${{ matrix.preset }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build (MSVC)
+        if: ${{ matrix.kind == 'msvc' }}
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.vcvars_arch }}
           cmake --build ${{ matrix.build_dir }}
 
-      - name: Test
-        if: ${{ matrix.run_tests }}
+      - name: Build (MinGW)
+        if: ${{ matrix.kind == 'mingw' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:PATH = "$env:MINGW_BIN;$env:PATH"
+          cmake --build --preset ${{ matrix.preset }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test (MSVC)
+        if: ${{ matrix.kind == 'msvc' && matrix.run_tests }}
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{ matrix.vcvars_arch }}
           ctest --test-dir ${{ matrix.build_dir }} --output-on-failure
+
+      - name: Test (MinGW)
+        if: ${{ matrix.kind == 'mingw' && matrix.run_tests }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:PATH = "$env:MINGW_BIN;$env:PATH"
+          ctest --test-dir ${{ matrix.build_dir }} --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Report binary size and dependencies (MinGW)
+        if: ${{ matrix.kind == 'mingw' }}
+        shell: pwsh
+        run: |
+          $exe = "${{ matrix.build_dir }}/pao_de_kuai.exe"
+          $size = (Get-Item $exe).Length
+          Write-Host "pao_de_kuai.exe: $size bytes (baseline MSVC+VC-LTL x64: 679424)"
+          "pao_de_kuai.exe size: **$size bytes**" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          & objdump -p $exe | Select-String "DLL Name" | ForEach-Object { $_.Line.Trim() } | Write-Host
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v7
@@ -123,8 +301,8 @@ jobs:
           path: ${{ matrix.build_dir }}/pao_de_kuai.exe
           if-no-files-found: error
 
-      - name: Upload x64 VC-LTL app to MinIO
-        if: ${{ matrix.name == 'x64 VC-LTL' }}
+      - name: Upload x64 MinGW app to MinIO
+        if: ${{ matrix.publish }}
         shell: pwsh
         run: |
           aws s3 cp "${{ matrix.build_dir }}/pao_de_kuai.exe" "s3://${{ vars.MINIO_BUCKET }}/2026/pao-de-kuai.exe" `
