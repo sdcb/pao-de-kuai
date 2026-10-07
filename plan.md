@@ -582,6 +582,17 @@
 > - 线程池是最需要小心的部分（8 线程并行评估 + 原子任务分配 + 结果归约）。可参考
 >   `LocalAiController.c` 里已有的 Win32 线程写法。
 > - 顺带收益：`<thread>`/`<mutex>` 是全项目拖住 `libstdc++` 的主要来源之一，转完后 S8 摘
+>
+> **app 层的依赖方向（`App`/`Window`/`WinMain`，勘察结论）**
+> `Window` 只是薄薄一层 Win32 包装，持 `App*` 并转发消息（`ShouldQuit`/`Update`/`Render`/`Resize`/
+> `OnKeyDown`/`OnText`/`HandleImeMessage`/`RequestClose`/`RenderContext().View()`/`OnMouseMove`…），
+> 所以 **`Window` 与 `App` 必须一起转**——C 的 `Window` 需要 C 可调的 App 入口。
+> 最省事的顺序是**先转 `App`**：转完 App 后 `AppApi.h` 里那些 `extern "C"` 垫片就是真实
+> C API 的子集，整条边界（含 `App_GetSettings`/`App_ApplySettings`/`App_EnterGame`…）
+> **一次性删除**，`Window.c`/`WinMain.c` 直接调 `App_*`。
+> App 转 C 的前置：`GameScene` 先转 C（否则 App 无法构造场景对象）；
+> App 其余依赖都已是 C（`AudioEngine`/`RenderContext`/`RoundRecorder`/`ImeInput`/`AppSettings`）。
+> 所以顺序确定为：`GameState` → `GameScene` → `App`（删 `AppApi.h`）→ `Window`/`WinMain` → `StrongAiStrategy`。
 >   `-static-libstdc++` 的收益会更干净。
 >
 > **修订 25（S7d 完成记录，commit `4b70c6f`）——4 个小场景全部纯 C**：
