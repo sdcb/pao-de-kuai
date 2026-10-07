@@ -305,6 +305,25 @@
 > - 进度：`src/` 剩 **22 个 `.cpp`**，`check_c_only.py` 残留 202 处；
 >   MinGW x64 exe **692,736 → 686,080 B**（距 679,424 还差 6.7 KB）。
 >
+> **修订 18（S5c + S5d 完成记录，commit `5f3f802`、`7fa1ebd`）——UI 层开始批量转**：
+> - `Icons` → `.c`：`Icon` 枚举类 → `UI_ICON_*` 常量（**必须加 UI_ 前缀**，因为
+>   `resources/IconAtlasData.h` 已经占用了 `ICON_*` 作为图标*图集*的顺序——两件不相关的事在
+>   文件作用域撞名，编译器立刻抓到了）；`std::array` 顶点表 → 普通数组。
+> - `Theme.h` → C 头：`constexpr D2D1_COLOR_F` 命名空间常量 → `static const` 结构 +
+>   `PDK_RGBA` 花括号宏（仍是编译期常量表达式），名字加 `THEME_` 前缀。
+>   **关键在于零改动迁移**：`ui/CppCompat.h` 把调色板以 `inline const D2D1_COLOR_F theme::Gold`
+>   等形式重新导出（外加两个半径的 `inline constexpr float`），于是全树 **230 处 `theme::`**
+>   一处都不用改；C 文件直接用 `THEME_*`。
+>   `Text`/`Centered`/`Kai` 搬进门面——它们返回 `TextStyle`，而 C++ 侧那个是 DWRITE 类型的门面
+>   结构（C 侧是 `int`，因为 MSVC 的 C 模式解析不了 `<dwrite.h>`）。
+> - 顺带给 `RenderContext` 门面加了 `Native()` 访问器：任何"门面转 C 函数"的桥都需要它，
+>   UI 层剩下的每一次转换都要用。
+> - **Theme 是剩下 20 个 UI 文件共同的依赖**，所以这一步不只是整理，而是 CardView / Widgets /
+>   Inputs / overlays / scenes 的前置条件。
+> - 进度：`src/` 剩 **21 个 `.cpp`**，`check_c_only.py` 残留 200 处；exe 仍是 686,080 B
+>   （Icons/Theme 没有引入新的 C++ 运行库依赖被移除，libstdc++ 仍被其它 TU 链着，
+>   所以这一步没有体积收益——体积要等 `-static-libstdc++` 摘掉才会跳）。
+>
 >
 
 >
