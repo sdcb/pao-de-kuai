@@ -211,6 +211,26 @@
 > - 进度：`src/` 剩 **31 个 `.cpp`**，`check_c_only.py` 残留 222 处；
 >   MinGW x64 exe **713,216 → 707,584 B**。
 >
+> **修订 14（S4f 完成记录，commit `9137252`）——记录器已纯 C，并清掉两个空 TU**：
+> - `RoundRecorder` → `.c`：原类只装了一个 `StatStore`，默认构造函数本来就把 root 解析成
+>   进程当前目录，所以 C API 就是 `RoundRecorder_Init` + `RoundRecorder_AppendToday`。
+> - `RoundTraceRecorder` → `.c`，且 `RoundTrace` 从**拥有数据**（`std::array` + `std::vector<TurnRecord>`）
+>   改成**只读视图**（`const PlayerState*` / `const TurnRecord*` / `const RoundRecord*` + count）。
+>   这条不只是整洁：`TurnRecord` 约 **2.6 KB**（两个快照 + 两个 action + 256 字节校验消息 +
+>   512 字节 trace），一局的记录是几百 KB，旧代码每次写盘都要整份拷贝；记录器只是遍历，
+>   所以现在直接指向 GameState 自己的存储。
+> - 旧类只持有一个 root，所以 C API 直接收 root 参数（NULL/空 = 进程当前目录），
+>   没有为单字段结构造一个 struct。
+> - JSON 写入是逐行照搬（NULL pattern 等于旧的 nullopt，仍然写成 JSON null；时间键仍然去掉
+>   `:` 并在空时回退 `"000000"`）。
+> - **验证方式值得一提**：已有的往返记录测试断言的是**精确 JSON 字节串**（含 cJSON 的制表符
+>   分隔）——`"schemaVersion":\t2`、`"rulesVersion":\t"pdk48-v1"`、`"turnOrder":\t"counterclockwise"`、
+>   `"3S"` 等，所以格式或字段一旦回归会直接失败，不会溜过去。它原样通过。
+> - 另外删掉 `graphics/SpriteAtlas.cpp` 与 `graphics/TextRenderer.cpp`：两个文件各自只有一行
+>   `#include`，对应的头是纯 header-only 类，属于零贡献 TU。
+> - 进度：`src/` 剩 **27 个 `.cpp`**，`check_c_only.py` 残留 210 处；
+>   MinGW x64 exe **707,584 → 701,440 B**。
+>
 >
 
 >

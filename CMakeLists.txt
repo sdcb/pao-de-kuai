@@ -204,8 +204,6 @@ set(PDK_APP_SOURCES
     src/audio/SoundCatalog.c
     src/graphics/D2DContext.cpp
     src/graphics/ProceduralTextures.cpp
-    src/graphics/SpriteAtlas.cpp
-    src/graphics/TextRenderer.cpp
     src/graphics/WicImageLoader.cpp
     src/graphics/iids.c
     src/resources/CardAtlasData.c
