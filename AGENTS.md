@@ -144,7 +144,20 @@ ui_overlay_settings
 ui_scene_game_deal
 ui_scene_game_play
 ui_overlay_result
+ui_scene_stats
+ui_scene_help
+ui_scene_loading
+ui_overlay_confirm_exit
+ui_overlay_about
+ui_overlay_return_menu
+ui_overlay_invalid
 ```
+
+前四个 `ui_*` 渲染的就是发版要比对的 5 张基线截图（`ui-start` / `ui-settings` /
+`ui-game-deal` / `ui-game-play` / `ui-result`）。**后七个是 2026 年补的**：在它们存在之前，
+8 个覆盖层里只有 5 个、6 个场景里只有 4 个有任何测试，于是一个 `NULL` 面板样式在
+`AboutOverlay` 里活了一整个提交——点"关于"就崩，而没有任何测试变红。
+新增的用例各写自己的 jpg，所以基线截图不受影响。
 
 `shim_layout` 是 COM shim 的 ABI 自检：在 MinGW 下把生成的平铺 PDK vtable 与真实 SDK 的
 C vtable 做 `sizeof`/`offsetof` 静态断言，并在两套工具链上校验 vendored DirectWrite 类型。

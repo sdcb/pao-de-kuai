@@ -509,6 +509,37 @@
 > 4. `GameScene`(826) → 5 个
 > 5. `App`(334) / `Window`(158) / `WinMain`(19)：转完 App 后 `AppApi.h` 整条边界立即删除
 > 6. `StrongAiStrategy`(1321)：`std::thread` 后台控制器，注意线程生命周期
+>
+>
+> **修订 24（S7c 完成记录，commit `debe05c`）——覆盖层全部纯 C，并修掉一个潜伏崩溃**：
+> - `RoundResultOverlay` / `SettingsOverlay` → `.c`，直接实现 `OverlayVtbl`。`src/` 从 12 →
+>   **10 个 C++ 文件**；MinGW x64 exe 674,816 → **665,600 B**（**余量 13,824 B**，且仍链着
+>   `-static-libstdc++`）。
+> - 两者要跨 C 边界拿"活动设置"和"本局记录"：`AppApi.h` 增
+>   `App_GetSettings`/`App_ApplySettings`/`App_SetMasterVolume`/`App_Hwnd`（App.cpp 里基于已有的
+>   `ToCSettings`/`FromCSettings` 实现）；`RoundResultOverlay` 收 C 的 `RoundRecord`，
+>   由 App.cpp 用 `ToCRound` 转换。覆盖层永远看不到 `std::string`。
+>
+> **一个潜伏崩溃，以及它是怎么进来的。**
+> 第一次跑门禁时 `ui_overlay_settings` 和 `ui_overlay_result` 在**三套工具链上全部 SEGFAULT**。
+> release exe 被 strip 过（第一次 gdb 只有地址），于是编了 debug preset 拿到符号栈：
+> 崩在 `Widgets_DrawPanel`，调用点是覆盖层的 `Render` 传了 **NULL** 当 `PanelStyle`——
+> 字面读起来很像"没有样式"。
+> C API 无法承载 C++ 的默认实参 `style = {}`，所以正确的修法在 **API 层**而不是每个调用点：
+> `Widgets_DrawPanel` 与 `Widgets_DrawChip` 现在把 NULL 当作"取默认值"，也就是门面里
+> 默认构造的样式本来产生的东西。这一处改动同时修掉上述两处调用点。
+> 两件事值得记下来而不是含糊过去：
+>   * 同一个 NULL **已经在 `AboutOverlay.c` 里了，而那是我在 S7b 写的**。它在树里活了一整个提交，
+>     在开始界面点"关于"就会崩。
+>   * 它能活下来是因为**没有任何测试覆盖那个覆盖层**：8 个覆盖层里只有 5 个、6 个场景里只有 4 个
+>     有测试，而 5 张基线截图恰好不含 About。所以这次把缺口补上：新增 **7 个 `add_test`** 覆盖
+>     stats / help / loading / confirm-exit / about / return-menu / invalid，各自写到独立文件，
+>     所以发版要比对的 5 张基线截图不受影响。测试从 **8 → 15 个**，三链路全绿，
+>     而这类崩溃以后会在提交前就被抓住。
+> - 另外做了 **13 路探针**：`scene_viewer` 跑遍 start/stats/settings/help/loading/game 与
+>   confirm-exit/about/tip/invalid/talk/return-menu/result-win，全部 exit 0；
+>   `ui-settings` 与 `ui-result` 肉眼一致。
+> - `check_c_only.py` 残留 146 → **137** 处。
 > 7. S8 收尾
 >   是验证新分派最好的单张图）。
 >
