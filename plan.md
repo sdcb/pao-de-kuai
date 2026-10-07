@@ -733,6 +733,34 @@
 >    - MSVC：`/SUBSYSTEM:WINDOWS,10.0`（`target_link_options` 里按编译器分支）。
 >    CI 跑在 Win10 内核（Server 2019/2022 或 Win10/11）上，不会因此跑不起来；
 >    而这也正是"放弃 Win8 兼容"应有的、可被 `dumpbin`/`objdump` 验证的形式。
+>
+>
+> **修订 30（S7h 完成记录，commit `21948e3`）——`src/` 里 `.cpp` 归零**
+> - `game/StrongAiStrategy.cpp`(1442) → `.c`(2104)。**`src/` 里 0 个 `.cpp`**
+>   （`check_c_only.py`：`0 remaining C++ file(s)`；剩下 88 条全在临时门面头里，S8 处理）。
+> - 测试可见的 `class StrongAiStrategy` 留在 `game/CppCompat.h` 原位，转发的
+>   `StrongAiStrategy_ChooseMove` 现在就是 C 入口；**没有新增头文件**——`_Instance`/`_Metadata`
+>   本就在 `AiStrategy.h`/`AiStrategy.c`。
+> - 线程：4× `std::atomic<int>` → `volatile LONG` + **`InterlockedIncrement(&x) - 1`**（它返回**新**值，
+>   差一就会静默跳过任务）+ `InterlockedExchangeAdd` 做归约；2 处 8 线程池 → `_beginthreadex`×8
+>   + 调用线程同跑 + `WaitForMultipleObjects`，句柄由 `StartWorkers`/`JoinWorkers` 统一关闭
+>   （创建失败也不泄漏）。
+> - **C 没有 RAII，这才是真正的陷阱**：C++ 的 `std::lock_guard` 会在**加锁作用域内的早期 return**
+>    上释放，手工配对不会。所以每个缓存都收敛成 `Lookup`/`Store` 两个入口，Acquire→work→Release
+>    之间**没有任何分支**，调用方的早期 return 全部发生在释放之后；分配侧同理，用单一
+>   `cleanup:` 标签收口。（勘察里说的 4× `mutex` 实际是 2×，另两个 static 是 map。）
+> - **行为等价是量出来的，不是假设的**：把 200 局 AI 公平性语料（含完整决策 trace）跑在
+>   HEAD 的干净构建上——C++ 原版用 `std::sort` 得 46/88/66，C 移植得 48/86/66，
+>   而**把 `std::sort` 换成同一稳定插入排序的 C++ 原版得 48/86/66，与 C 移植逐字节一致**。
+>   所以唯一差异是 `std::sort` 对**完全并列**候选的未定义顺序——原版从未固定它，
+>   而且原版自己的两套工具链就差同样的量级（MSVC 49/86/65 vs MinGW 46/88/66）。
+>   花色不影响规则，所以可观测行为只是"两张同点数牌里出哪一张"。
+> - 体积：MinGW x64 `pao_de_kuai.exe` 593,408 → **423,936 B（−169,472，−28.6%）**，
+>   即 **目标 679,424 的 62.4%**（余量 255,488 B）。这个降幅来自 **C++ 机制本身**
+>   （libstdc++ 的 thread/mutex/exception 支持），也就是说 `pao_de_kuai` 目标上的
+>   `-static-libstdc++` 现在已经是**空操作**——体积达标不再依赖 S8 摘它。
+> - 三链路 15/15 全绿；截图与基线差值仍在历史区间（`ui-start` 0.327、`ui-settings` 0.326、
+>   `ui-game-play` 0.214、`ui-result` 0.456；`ui-game-deal` 4.915，其自身底噪在 0.9~4.3 间波动）。
 > 7. S8 收尾
 >
 > **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**
