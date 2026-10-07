@@ -30,6 +30,10 @@
 #include <string_view>
 #include <vector>
 
+#include "graphics/CppCompat.h"
+#include "core/Overlay.h"
+#include "core/Scene.h"
+#include "core/SceneManager.h"
 #include "core/Str.h"
 #include "core/WinFile.h"
 
@@ -189,6 +193,190 @@ inline std::vector<std::string> ListRegularFileNames(std::string_view directory)
     }
     StrList_Free(&list);
     return result;
+}
+
+/* ---- scenes and overlays (plan.md S7) -------------------------------- */
+
+using ::KeyEvent;
+using ::Overlay;
+using ::OverlayVtbl;
+using ::Scene;
+using ::SceneManager;
+using ::SceneVtbl;
+
+/*
+ * The twelve scenes and overlays that are not converted yet are still C++ classes deriving from
+ * `core::Scene` / `core::Overlay`, so those two names are reconstructed as abstract classes that
+ * bridge onto the C vtables -- the same pattern AiStrategyClass and ExternalAiControllerClass use.
+ * A converted file stops deriving from these and implements the C table directly.
+ *
+ * Two virtuals exist here that the old classes did not have, because the C side needs them and a
+ * C vtable has no RTTI:
+ *   - `OverlayClass::Expired` (default false) replaces App's dynamic_cast on InvalidMoveToast /
+ *     TalkBubbleOverlay.  Both already declare a non-virtual `Expired() const`, so they become
+ *     overrides without touching their declarations.
+ *   - `SceneClass::RestartRound` (default false) replaces App's dynamic_cast on GameScene.
+ */
+class SceneClass {
+public:
+    virtual ~SceneClass() = default;
+
+    virtual void OnEnter() {}
+    virtual void OnExit() {}
+
+    virtual void Update(float dt) = 0;
+    virtual void Render(graphics::RenderContext& context) = 0;
+
+    virtual bool OnMouseMove(float x, float y) { (void)x; (void)y; return false; }
+    virtual bool OnMouseDown(float x, float y) { (void)x; (void)y; return false; }
+    virtual bool OnMouseUp(float x, float y) { (void)x; (void)y; return false; }
+
+    virtual void OnD2DResourcesLost() {}
+    virtual void OnD2DResourcesRecreated() {}
+
+    /* True when this scene handled a "restart the current round" request. */
+    virtual bool RestartRound() { return false; }
+};
+
+class OverlayClass {
+public:
+    virtual ~OverlayClass() = default;
+
+    virtual void Update(float dt) = 0;
+    virtual void Render(graphics::RenderContext& context) = 0;
+
+    virtual bool BlocksInputBelow() const = 0;
+    virtual bool OnMouseMove(float x, float y) { (void)x; (void)y; return false; }
+    virtual bool OnMouseDown(float x, float y) { (void)x; (void)y; return false; }
+    virtual bool OnMouseUp(float x, float y) { (void)x; (void)y; return false; }
+
+    virtual bool OnKeyDown(const KeyEvent& key) { (void)key; return false; }
+    /* Committed text: typed characters and IME results. */
+    virtual bool OnText(const std::wstring& text) { (void)text; return false; }
+
+    /* True while a text field has focus; the app only enables the IME then. */
+    virtual bool WantsTextInput() const { return false; }
+    /* In-progress IME composition; empty text ends it. */
+    virtual void OnImeComposition(const std::wstring& text, int cursor) { (void)text; (void)cursor; }
+    /* Caret rectangle in logical coordinates, used to place the IME candidate window. */
+    virtual bool TextCaretRect(Rect& caret) const { (void)caret; return false; }
+
+    /* True once this overlay should be dropped by the app's per-frame sweep. */
+    virtual bool Expired() const { return false; }
+};
+
+namespace detail {
+
+inline void Scene_OnEnterFn(void* user) { static_cast<SceneClass*>(user)->OnEnter(); }
+inline void Scene_OnExitFn(void* user) { static_cast<SceneClass*>(user)->OnExit(); }
+inline void Scene_UpdateFn(void* user, float dt) { static_cast<SceneClass*>(user)->Update(dt); }
+inline void Scene_RenderFn(void* user, ::RenderContext* context)
+{
+    // View, not owner: the app owns the context and the C++ scene renders through the facade.
+    graphics::RenderContext view(context);
+
+    static_cast<SceneClass*>(user)->Render(view);
+}
+inline bool Scene_OnMouseMoveFn(void* user, float x, float y)
+{
+    return static_cast<SceneClass*>(user)->OnMouseMove(x, y);
+}
+inline bool Scene_OnMouseDownFn(void* user, float x, float y)
+{
+    return static_cast<SceneClass*>(user)->OnMouseDown(x, y);
+}
+inline bool Scene_OnMouseUpFn(void* user, float x, float y)
+{
+    return static_cast<SceneClass*>(user)->OnMouseUp(x, y);
+}
+inline void Scene_LostFn(void* user) { static_cast<SceneClass*>(user)->OnD2DResourcesLost(); }
+inline void Scene_RecreatedFn(void* user)
+{
+    static_cast<SceneClass*>(user)->OnD2DResourcesRecreated();
+}
+inline bool Scene_RestartFn(void* user) { return static_cast<SceneClass*>(user)->RestartRound(); }
+inline void Scene_DestroyFn(void* user) { delete static_cast<SceneClass*>(user); }
+
+inline void Overlay_UpdateFn(void* user, float dt) { static_cast<OverlayClass*>(user)->Update(dt); }
+inline void Overlay_RenderFn(void* user, ::RenderContext* context)
+{
+    graphics::RenderContext view(context);
+
+    static_cast<OverlayClass*>(user)->Render(view);
+}
+inline bool Overlay_BlocksFn(void* user)
+{
+    return static_cast<OverlayClass*>(user)->BlocksInputBelow();
+}
+inline bool Overlay_MouseMoveFn(void* user, float x, float y)
+{
+    return static_cast<OverlayClass*>(user)->OnMouseMove(x, y);
+}
+inline bool Overlay_MouseDownFn(void* user, float x, float y)
+{
+    return static_cast<OverlayClass*>(user)->OnMouseDown(x, y);
+}
+inline bool Overlay_MouseUpFn(void* user, float x, float y)
+{
+    return static_cast<OverlayClass*>(user)->OnMouseUp(x, y);
+}
+inline bool Overlay_KeyDownFn(void* user, const KeyEvent* key)
+{
+    return static_cast<OverlayClass*>(user)->OnKeyDown(*key);
+}
+inline bool Overlay_TextFn(void* user, const wchar_t* text)
+{
+    return static_cast<OverlayClass*>(user)->OnText(std::wstring(text != nullptr ? text : L""));
+}
+inline bool Overlay_WantsTextFn(void* user)
+{
+    return static_cast<OverlayClass*>(user)->WantsTextInput();
+}
+inline void Overlay_ImeFn(void* user, const wchar_t* text, int cursor)
+{
+    static_cast<OverlayClass*>(user)->OnImeComposition(
+        std::wstring(text != nullptr ? text : L""), cursor);
+}
+inline bool Overlay_CaretFn(void* user, Rect* caret)
+{
+    return static_cast<OverlayClass*>(user)->TextCaretRect(*caret);
+}
+inline bool Overlay_ExpiredFn(void* user) { return static_cast<OverlayClass*>(user)->Expired(); }
+inline void Overlay_DestroyFn(void* user) { delete static_cast<OverlayClass*>(user); }
+
+} // namespace detail
+
+/* Takes ownership of the scene; the C side destroys it. */
+inline ::Scene Transfer(SceneClass* scene)
+{
+    static const SceneVtbl vtbl = {
+        detail::Scene_OnEnterFn,   detail::Scene_OnExitFn,      detail::Scene_UpdateFn,
+        detail::Scene_RenderFn,    detail::Scene_OnMouseMoveFn, detail::Scene_OnMouseDownFn,
+        detail::Scene_OnMouseUpFn, detail::Scene_LostFn,        detail::Scene_RecreatedFn,
+        detail::Scene_RestartFn,   detail::Scene_DestroyFn
+    };
+    ::Scene handle;
+
+    handle.vtbl = scene != nullptr ? &vtbl : NULL;
+    handle.user = scene;
+    return handle;
+}
+
+/* Takes ownership of the overlay; the C side destroys it. */
+inline ::Overlay Transfer(OverlayClass* overlay)
+{
+    static const OverlayVtbl vtbl = {
+        detail::Overlay_UpdateFn,  detail::Overlay_RenderFn,    detail::Overlay_BlocksFn,
+        detail::Overlay_MouseMoveFn, detail::Overlay_MouseDownFn, detail::Overlay_MouseUpFn,
+        detail::Overlay_KeyDownFn, detail::Overlay_TextFn,      detail::Overlay_WantsTextFn,
+        detail::Overlay_ImeFn,     detail::Overlay_CaretFn,     detail::Overlay_ExpiredFn,
+        detail::Overlay_DestroyFn
+    };
+    ::Overlay handle;
+
+    handle.vtbl = overlay != nullptr ? &vtbl : NULL;
+    handle.user = overlay;
+    return handle;
 }
 
 } // namespace pdk::core

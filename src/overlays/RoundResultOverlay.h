@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Overlay.h"
+#include "core/CppCompat.h"
 #include "scenes/SceneCommon.h"
 #include "stats/CppCompat.h"
 
@@ -10,7 +10,7 @@ class App;
 
 namespace pdk::overlays {
 
-class RoundResultOverlay final : public core::Overlay {
+class RoundResultOverlay final : public core::OverlayClass {
 public:
     RoundResultOverlay(app::App& app, stats::RoundRecord record);
     void Update(float dt) override;

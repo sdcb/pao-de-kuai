@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Scene.h"
+#include "core/CppCompat.h"
 
 #include <string>
 
@@ -15,7 +15,7 @@ enum class LoadingTarget {
     Stats
 };
 
-class LoadingScene final : public core::Scene {
+class LoadingScene final : public core::SceneClass {
 public:
     LoadingScene(app::App& app, LoadingTarget target);
     void OnEnter() override;

@@ -42,52 +42,58 @@ bool App::Initialize(HWND hwnd, bool viewerMode, bool offscreen) {
 
 void App::Update(float dt) {
     sceneFade_ = std::max(0.0f, sceneFade_ - dt / 0.28f);
-    if (core::Scene* scene = sceneManager_.Current()) {
-        scene->Update(dt);
+    if (core::Scene* scene = SceneManager_Current(&sceneManager_)) {
+        Scene_Update(scene, dt);
     }
-    for (auto& overlay : overlays_) {
-        overlay->Update(dt);
+    for (int i = 0; i < overlayCount_; ++i) {
+        Overlay_Update(&overlays_[i], dt);
     }
-    overlays_.erase(
-        std::remove_if(overlays_.begin(), overlays_.end(), [](const std::unique_ptr<core::Overlay>& overlay) {
-            if (const auto* toast = dynamic_cast<const overlays::InvalidMoveToast*>(overlay.get())) {
-                return toast->Expired();
-            }
-            if (const auto* talk = dynamic_cast<const overlays::TalkBubbleOverlay*>(overlay.get())) {
-                return talk->Expired();
-            }
-            return false;
-        }),
-        overlays_.end());
+    // Drop the expired ones (the toasts and the AI bubbles), keeping the rest in order.  The old
+    // code told those two types apart with dynamic_cast; now the vtable answers for them, which
+    // also means a future expiring overlay needs no change here.
+    for (int i = 0; i < overlayCount_;) {
+        if (!Overlay_Expired(&overlays_[i])) {
+            ++i;
+            continue;
+        }
+        Overlay_Release(&overlays_[i]);
+        for (int j = i + 1; j < overlayCount_; ++j) {
+            overlays_[j - 1] = overlays_[j];
+        }
+        --overlayCount_;
+    }
     SyncIme();
 }
 
 core::Overlay* App::TopOverlay() const {
-    return overlays_.empty() ? nullptr : overlays_.back().get();
+    // A const method handing out a mutable overlay, exactly as the old vector<unique_ptr> did.
+    return overlayCount_ > 0 ? const_cast<core::Overlay*>(&overlays_[overlayCount_ - 1]) : nullptr;
 }
 
 bool App::WantsTextInput() const {
     const core::Overlay* top = TopOverlay();
-    return top && top->WantsTextInput();
+    return top != nullptr && Overlay_WantsTextInput(top);
 }
 
 void App::SyncIme() {
     const bool wants = WantsTextInput();
-    ime_.SetEnabled(wants);
+    core::Overlay* top = TopOverlay();
     Rect caret;
-    if (wants && TopOverlay()->TextCaretRect(caret)) {
+
+    ime_.SetEnabled(wants);
+    if (wants && top != nullptr && Overlay_TextCaretRect(top, &caret)) {
         ime_.SetCaret(caret, renderContext_.View());
     }
 }
 
 bool App::OnKeyDown(const core::KeyEvent& key) {
     core::Overlay* top = TopOverlay();
-    return top && top->OnKeyDown(key);
+    return top != nullptr && Overlay_OnKeyDown(top, &key);
 }
 
 bool App::OnText(const std::wstring& text) {
     core::Overlay* top = TopOverlay();
-    return top && top->OnText(text);
+    return top != nullptr && Overlay_OnText(top, text.c_str());
 }
 
 bool App::HandleImeMessage(UINT message, WPARAM wParam, LPARAM& lParam) {
@@ -107,18 +113,18 @@ bool App::HandleImeMessage(UINT message, WPARAM wParam, LPARAM& lParam) {
     case WM_IME_COMPOSITION: {
         std::wstring text;
         if ((lParam & GCS_RESULTSTR) && ime_.ReadResult(text) && !text.empty()) {
-            top->OnImeComposition({}, 0);
-            top->OnText(text);
+            Overlay_OnImeComposition(top, L"", 0);
+            Overlay_OnText(top, text.c_str());
         }
         int cursor = 0;
         if ((lParam & GCS_COMPSTR) && ime_.ReadComposition(text, cursor)) {
-            top->OnImeComposition(text, cursor);
+            Overlay_OnImeComposition(top, text.c_str(), cursor);
         }
         SyncIme();
         return true;
     }
     case WM_IME_ENDCOMPOSITION:
-        top->OnImeComposition({}, 0);
+        Overlay_OnImeComposition(top, L"", 0);
         return true;
     default:
         return false;
@@ -126,14 +132,16 @@ bool App::HandleImeMessage(UINT message, WPARAM wParam, LPARAM& lParam) {
 }
 
 void App::Render() {
+    core::Scene* scene = SceneManager_Current(&sceneManager_);
+
     renderContext_.BeginFrame();
-    if (core::Scene* scene = sceneManager_.Current()) {
-        scene->Render(renderContext_);
+    if (scene != nullptr) {
+        Scene_Render(scene, renderContext_.Native());
     } else {
         renderContext_.Clear(D2D1::ColorF(0.03f, 0.18f, 0.13f));
     }
-    for (auto& overlay : overlays_) {
-        overlay->Render(renderContext_);
+    for (int i = 0; i < overlayCount_; ++i) {
+        Overlay_Render(&overlays_[i], renderContext_.Native());
     }
     if (sceneFade_ > 0.0f) {
         const float t = sceneFade_ * sceneFade_ * (3.0f - 2.0f * sceneFade_);
@@ -141,8 +149,8 @@ void App::Render() {
     }
     if (!renderContext_.EndFrame()) {
         ReleaseGameResources();
-        if (core::Scene* scene = sceneManager_.Current()) {
-            scene->OnD2DResourcesLost();
+        if (scene != nullptr) {
+            Scene_OnD2DResourcesLost(scene);
         }
     }
 }
@@ -153,72 +161,79 @@ void App::Resize(int width, int height) {
 }
 
 bool App::OnMouseMove(float x, float y) {
-    for (auto it = overlays_.rbegin(); it != overlays_.rend(); ++it) {
-        if ((*it)->OnMouseMove(x, y) || (*it)->BlocksInputBelow()) {
+    for (int i = overlayCount_ - 1; i >= 0; --i) {
+        if (Overlay_OnMouseMove(&overlays_[i], x, y) || Overlay_BlocksInputBelow(&overlays_[i])) {
             return true;
         }
     }
-    return sceneManager_.Current() && sceneManager_.Current()->OnMouseMove(x, y);
+    core::Scene* scene = SceneManager_Current(&sceneManager_);
+    return scene != nullptr && Scene_OnMouseMove(scene, x, y);
 }
 
 bool App::OnMouseDown(float x, float y) {
-    for (auto it = overlays_.rbegin(); it != overlays_.rend(); ++it) {
-        core::Overlay* overlay = it->get();
-        if (overlay->OnMouseDown(x, y)) {
+    for (int i = overlayCount_ - 1; i >= 0; --i) {
+        core::Overlay* overlay = &overlays_[i];
+
+        if (Overlay_OnMouseDown(overlay, x, y)) {
             return true;
         }
-        if (overlay->BlocksInputBelow()) {
+        if (Overlay_BlocksInputBelow(overlay)) {
             return true;
         }
     }
-    return sceneManager_.Current() && sceneManager_.Current()->OnMouseDown(x, y);
+    core::Scene* scene = SceneManager_Current(&sceneManager_);
+    return scene != nullptr && Scene_OnMouseDown(scene, x, y);
 }
 
 bool App::OnMouseUp(float x, float y) {
-    for (auto it = overlays_.rbegin(); it != overlays_.rend(); ++it) {
-        if ((*it)->OnMouseUp(x, y) || (*it)->BlocksInputBelow()) {
+    for (int i = overlayCount_ - 1; i >= 0; --i) {
+        if (Overlay_OnMouseUp(&overlays_[i], x, y) || Overlay_BlocksInputBelow(&overlays_[i])) {
             return true;
         }
     }
-    return sceneManager_.Current() && sceneManager_.Current()->OnMouseUp(x, y);
+    core::Scene* scene = SceneManager_Current(&sceneManager_);
+    return scene != nullptr && Scene_OnMouseUp(scene, x, y);
 }
 
 void App::ShowStart() {
-    ChangeScene(std::make_unique<scenes::StartScene>(*this));
+    ChangeScene(core::Transfer(new scenes::StartScene(*this)));
 }
 
 void App::StartGame(bool mock) {
     if (mock || GameResourcesReady()) {
-        ChangeScene(std::make_unique<scenes::GameScene>(*this, mock));
+        ChangeScene(core::Transfer(new scenes::GameScene(*this, mock)));
     } else {
-        ChangeScene(std::make_unique<scenes::LoadingScene>(*this, scenes::LoadingTarget::Game));
+        ChangeScene(core::Transfer(new scenes::LoadingScene(*this, scenes::LoadingTarget::Game)));
     }
 }
 
 void App::RestartCurrentGame() {
-    if (auto* gameScene = dynamic_cast<scenes::GameScene*>(sceneManager_.Current())) {
+    core::Scene* scene = SceneManager_Current(&sceneManager_);
+
+    // The scene decides for itself now: only the game scene restarts a round, and it reports that
+    // through the vtable instead of App casting to a concrete type.
+    if (scene != nullptr && Scene_RestartRound(scene)) {
         ClearOverlays();
-        gameScene->StartNextRound();
         return;
     }
     StartGame();
 }
 
 void App::ShowStats() {
-    ChangeScene(std::make_unique<scenes::StatsScene>(*this));
+    ChangeScene(core::Transfer(new scenes::StatsScene(*this)));
 }
 
 void App::ShowSettings() {
-    PushOverlay(std::make_unique<overlays::SettingsOverlay>(*this));
+    PushOverlay(core::Transfer(new overlays::SettingsOverlay(*this)));
 }
 
 void App::ShowHelp() {
-    ChangeScene(std::make_unique<scenes::HelpScene>(*this));
+    ChangeScene(core::Transfer(new scenes::HelpScene(*this)));
 }
 
 void App::ShowViewerScene(const std::string& scene, const std::string& overlay, const std::string& mock) {
     if (scene == "game" && mock == "midgame") {
-        ChangeScene(std::make_unique<scenes::GameScene>(*this, true, true));
+        ChangeScene(core::Transfer(new scenes::GameScene(*this, true, true)));
     } else if (scene == "game") {
         StartGame(true);
     } else if (scene == "stats") {
@@ -229,23 +244,23 @@ void App::ShowViewerScene(const std::string& scene, const std::string& overlay, 
     } else if (scene == "help") {
         ShowHelp();
     } else if (scene == "loading") {
-        ChangeScene(std::make_unique<scenes::LoadingScene>(*this, scenes::LoadingTarget::Game));
+        ChangeScene(core::Transfer(new scenes::LoadingScene(*this, scenes::LoadingTarget::Game)));
     } else {
         ShowStart();
     }
 
     if (overlay == "confirm-exit") {
-        PushOverlay(std::make_unique<overlays::ConfirmExitDialog>(*this));
+        PushOverlay(core::Transfer(new overlays::ConfirmExitDialog(*this)));
     } else if (overlay == "about") {
-        PushOverlay(std::make_unique<overlays::AboutOverlay>(*this));
+        PushOverlay(core::Transfer(new overlays::AboutOverlay(*this)));
     } else if (overlay == "tip") {
-        PushOverlay(std::make_unique<overlays::TipOverlay>(*this, "推荐先走顺子，少留散牌"));
+        PushOverlay(core::Transfer(new overlays::TipOverlay(*this, "推荐先走顺子，少留散牌")));
     } else if (overlay == "invalid") {
-        PushOverlay(std::make_unique<overlays::InvalidMoveToast>("牌型或点数压不过上家"));
+        PushOverlay(core::Transfer(new overlays::InvalidMoveToast("牌型或点数压不过上家")));
     } else if (overlay == "talk") {
-        PushOverlay(std::make_unique<overlays::TalkBubbleOverlay>(PLAYER_AI1, "哇，李姐你太强了！"));
+        PushOverlay(core::Transfer(new overlays::TalkBubbleOverlay(PLAYER_AI1, "哇，李姐你太强了！")));
     } else if (overlay == "return-menu") {
-        PushOverlay(std::make_unique<overlays::ReturnToMenuOverlay>(*this));
+        PushOverlay(core::Transfer(new overlays::ReturnToMenuOverlay(*this)));
     } else if (overlay == "result-win") {
         stats::RoundRecord record;
         record.winner = PLAYER_HUMAN;
@@ -253,28 +268,41 @@ void App::ShowViewerScene(const std::string& scene, const std::string& overlay, 
         record.scores = {18, -8, -10};
         record.remainingCards = {0, 8, 10};
         record.bombs = {rules::BombScoreEvent{PLAYER_HUMAN, 20}};
-        PushOverlay(std::make_unique<overlays::RoundResultOverlay>(*this, record));
+        PushOverlay(core::Transfer(new overlays::RoundResultOverlay(*this, record)));
     }
 }
 
-void App::ChangeScene(std::unique_ptr<core::Scene> scene) {
+void App::ChangeScene(core::Scene scene) {
     ClearOverlays();
     sceneFade_ = 1.0f;
-    sceneManager_.Change(std::move(scene));
+    SceneManager_Change(&sceneManager_, scene);
 }
 
-void App::PushOverlay(std::unique_ptr<core::Overlay> overlay) {
-    overlays_.push_back(std::move(overlay));
+void App::PushOverlay(core::Overlay overlay) {
+    if (overlayCount_ >= OverlayCapacity || overlay.vtbl == nullptr) {
+        Overlay_Release(&overlay);
+        return;
+    }
+    overlays_[overlayCount_++] = overlay;
 }
 
 void App::CloseTopOverlay() {
-    if (!overlays_.empty()) {
-        overlays_.pop_back();
+    if (overlayCount_ > 0) {
+        Overlay_Release(&overlays_[overlayCount_ - 1]);
+        --overlayCount_;
     }
 }
 
 void App::ClearOverlays() {
-    overlays_.clear();
+    for (int i = 0; i < overlayCount_; ++i) {
+        Overlay_Release(&overlays_[i]);
+    }
+    overlayCount_ = 0;
+}
+
+App::~App() {
+    ClearOverlays();
+    SceneManager_Release(&sceneManager_);
 }
 
 void App::RequestClose() {
@@ -282,7 +310,7 @@ void App::RequestClose() {
         ConfirmExit();
         return;
     }
-    PushOverlay(std::make_unique<overlays::ConfirmExitDialog>(*this));
+    PushOverlay(core::Transfer(new overlays::ConfirmExitDialog(*this)));
     audio_.Play(SOUND_PAUSE);
 }
 

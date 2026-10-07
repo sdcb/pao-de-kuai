@@ -155,8 +155,19 @@ inline ::TextStyle ToCTextStyle(const TextStyle& style)
 
 class RenderContext {
 public:
-    RenderContext() { ::RenderContext_Init(&data_); }
-    ~RenderContext() { ::RenderContext_Shutdown(&data_); }
+    RenderContext() : data_(&storage_), owns_(true) { ::RenderContext_Init(data_); }
+
+    // A non-owning view over a context someone else owns.  The scene and overlay bridge needs it:
+    // the C vtable hands back a ::RenderContext* which a C++ implementation then renders through
+    // as this facade type, and that view must not Init or Shutdown anything.
+    explicit RenderContext(::RenderContext* borrowed) : data_(borrowed), owns_(false) {}
+
+    ~RenderContext()
+    {
+        if (owns_) {
+            ::RenderContext_Shutdown(data_);
+        }
+    }
 
     RenderContext(const RenderContext&) = delete;
     RenderContext& operator=(const RenderContext&) = delete;
@@ -165,138 +176,138 @@ public:
     // screenshots do not depend on the window being visible on an active display.
     bool Initialize(HWND hwnd, bool offscreen = false)
     {
-        return ::RenderContext_Initialize(&data_, hwnd, offscreen);
+        return ::RenderContext_Initialize(data_, hwnd, offscreen);
     }
     void Resize(int pixelWidth, int pixelHeight)
     {
-        ::RenderContext_Resize(&data_, pixelWidth, pixelHeight);
+        ::RenderContext_Resize(data_, pixelWidth, pixelHeight);
     }
-    void BeginFrame() { ::RenderContext_BeginFrame(&data_); }
-    bool EndFrame() { return ::RenderContext_EndFrame(&data_); }
-    void DiscardDeviceResources() { ::RenderContext_DiscardDeviceResources(&data_); }
-    bool EnsureDeviceResources() { return ::RenderContext_EnsureDeviceResources(&data_); }
+    void BeginFrame() { ::RenderContext_BeginFrame(data_); }
+    bool EndFrame() { return ::RenderContext_EndFrame(data_); }
+    void DiscardDeviceResources() { ::RenderContext_DiscardDeviceResources(data_); }
+    bool EnsureDeviceResources() { return ::RenderContext_EnsureDeviceResources(data_); }
 
     ID2D1RenderTarget* Target() const
     {
-        return reinterpret_cast<ID2D1RenderTarget*>(::RenderContext_Target(&data_));
+        return reinterpret_cast<ID2D1RenderTarget*>(::RenderContext_Target(data_));
     }
-    IWICBitmap* OffscreenBitmap() const { return ::RenderContext_OffscreenBitmap(&data_); }
+    IWICBitmap* OffscreenBitmap() const { return ::RenderContext_OffscreenBitmap(data_); }
     ID2D1Factory* Factory() const
     {
-        return reinterpret_cast<ID2D1Factory*>(::RenderContext_Factory(&data_));
+        return reinterpret_cast<ID2D1Factory*>(::RenderContext_Factory(data_));
     }
     IDWriteFactory* DWriteFactory() const
     {
-        return reinterpret_cast<IDWriteFactory*>(::RenderContext_DWriteFactory(&data_));
+        return reinterpret_cast<IDWriteFactory*>(::RenderContext_DWriteFactory(data_));
     }
-    IWICImagingFactory* WicFactory() const { return ::RenderContext_WicFactory(&data_); }
-    ViewTransform View() const { return ::RenderContext_View(&data_); }
+    IWICImagingFactory* WicFactory() const { return ::RenderContext_WicFactory(data_); }
+    ViewTransform View() const { return ::RenderContext_View(data_); }
 
     // Clear also resets the transform and opacity stacks to the logical 1280x720 view.
-    void Clear(D2D1_COLOR_F color) { ::RenderContext_Clear(&data_, color); }
+    void Clear(D2D1_COLOR_F color) { ::RenderContext_Clear(data_, color); }
 
     void PushTransform(const D2D1_MATRIX_3X2_F& local)
     {
-        ::RenderContext_PushTransform(&data_, local);
+        ::RenderContext_PushTransform(data_, local);
     }
-    void PushTranslation(float dx, float dy) { ::RenderContext_PushTranslation(&data_, dx, dy); }
+    void PushTranslation(float dx, float dy) { ::RenderContext_PushTranslation(data_, dx, dy); }
     void PushScale(float scale, Point center)
     {
-        ::RenderContext_PushScale(&data_, scale, center);
+        ::RenderContext_PushScale(data_, scale, center);
     }
     void PushRotation(float degrees, Point center)
     {
-        ::RenderContext_PushRotation(&data_, degrees, center);
+        ::RenderContext_PushRotation(data_, degrees, center);
     }
-    void PopTransform() { ::RenderContext_PopTransform(&data_); }
-    void PushOpacity(float opacity) { ::RenderContext_PushOpacity(&data_, opacity); }
-    void PopOpacity() { ::RenderContext_PopOpacity(&data_); }
-    float Opacity() const { return ::RenderContext_Opacity(&data_); }
-    void PushClip(const Rect& rect) { ::RenderContext_PushClip(&data_, &rect); }
-    void PopClip() { ::RenderContext_PopClip(&data_); }
+    void PopTransform() { ::RenderContext_PopTransform(data_); }
+    void PushOpacity(float opacity) { ::RenderContext_PushOpacity(data_, opacity); }
+    void PopOpacity() { ::RenderContext_PopOpacity(data_); }
+    float Opacity() const { return ::RenderContext_Opacity(data_); }
+    void PushClip(const Rect& rect) { ::RenderContext_PushClip(data_, &rect); }
+    void PopClip() { ::RenderContext_PopClip(data_); }
 
     ID2D1Brush* Solid(D2D1_COLOR_F color)
     {
-        return reinterpret_cast<ID2D1Brush*>(::RenderContext_Solid(&data_, color));
+        return reinterpret_cast<ID2D1Brush*>(::RenderContext_Solid(data_, color));
     }
     ID2D1Brush* Linear(Point from, Point to, std::initializer_list<GradientStop> stops)
     {
         return reinterpret_cast<ID2D1Brush*>(::RenderContext_Linear(
-            &data_, from, to, stops.begin(), static_cast<int>(stops.size())));
+            data_, from, to, stops.begin(), static_cast<int>(stops.size())));
     }
     ID2D1Brush* Radial(Point center, float radiusX, float radiusY,
                        std::initializer_list<GradientStop> stops)
     {
         return reinterpret_cast<ID2D1Brush*>(::RenderContext_Radial(
-            &data_, center, radiusX, radiusY, stops.begin(), static_cast<int>(stops.size())));
+            data_, center, radiusX, radiusY, stops.begin(), static_cast<int>(stops.size())));
     }
     // Tiled felt grain; the caller controls strength with PushOpacity.
     ID2D1Brush* FeltBrush()
     {
-        return reinterpret_cast<ID2D1Brush*>(::RenderContext_FeltBrush(&data_));
+        return reinterpret_cast<ID2D1Brush*>(::RenderContext_FeltBrush(data_));
     }
 
     void FillRect(const Rect& rect, D2D1_COLOR_F color)
     {
-        ::RenderContext_FillRect(&data_, &rect, color);
+        ::RenderContext_FillRect(data_, &rect, color);
     }
     void FillRect(const Rect& rect, ID2D1Brush* brush)
     {
-        ::RenderContext_FillRectBrush(&data_, &rect, PDK_AS(ID2D1Brush, brush));
+        ::RenderContext_FillRectBrush(data_, &rect, PDK_AS(ID2D1Brush, brush));
     }
     void StrokeRect(const Rect& rect, D2D1_COLOR_F color, float width = 1.0f)
     {
-        ::RenderContext_StrokeRect(&data_, &rect, color, width);
+        ::RenderContext_StrokeRect(data_, &rect, color, width);
     }
     void FillRoundedRect(const Rect& rect, float radius, D2D1_COLOR_F color)
     {
-        ::RenderContext_FillRoundedRect(&data_, &rect, radius, color);
+        ::RenderContext_FillRoundedRect(data_, &rect, radius, color);
     }
     void FillRoundedRect(const Rect& rect, float radius, ID2D1Brush* brush)
     {
-        ::RenderContext_FillRoundedRectBrush(&data_, &rect, radius, PDK_AS(ID2D1Brush, brush));
+        ::RenderContext_FillRoundedRectBrush(data_, &rect, radius, PDK_AS(ID2D1Brush, brush));
     }
     void StrokeRoundedRect(const Rect& rect, float radius, D2D1_COLOR_F color, float width = 1.0f)
     {
-        ::RenderContext_StrokeRoundedRect(&data_, &rect, radius, color, width);
+        ::RenderContext_StrokeRoundedRect(data_, &rect, radius, color, width);
     }
     void StrokeRoundedRect(const Rect& rect, float radius, ID2D1Brush* brush, float width = 1.0f)
     {
-        ::RenderContext_StrokeRoundedRectBrush(&data_, &rect, radius, PDK_AS(ID2D1Brush, brush),
+        ::RenderContext_StrokeRoundedRectBrush(data_, &rect, radius, PDK_AS(ID2D1Brush, brush),
                                                width);
     }
     void FillEllipse(const Rect& rect, D2D1_COLOR_F color)
     {
-        ::RenderContext_FillEllipse(&data_, &rect, color);
+        ::RenderContext_FillEllipse(data_, &rect, color);
     }
     void FillEllipse(const Rect& rect, ID2D1Brush* brush)
     {
-        ::RenderContext_FillEllipseBrush(&data_, &rect, PDK_AS(ID2D1Brush, brush));
+        ::RenderContext_FillEllipseBrush(data_, &rect, PDK_AS(ID2D1Brush, brush));
     }
     void StrokeEllipse(const Rect& rect, D2D1_COLOR_F color, float width = 1.0f)
     {
-        ::RenderContext_StrokeEllipse(&data_, &rect, color, width);
+        ::RenderContext_StrokeEllipse(data_, &rect, color, width);
     }
     void StrokeEllipse(const Rect& rect, ID2D1Brush* brush, float width = 1.0f)
     {
-        ::RenderContext_StrokeEllipseBrush(&data_, &rect, PDK_AS(ID2D1Brush, brush), width);
+        ::RenderContext_StrokeEllipseBrush(data_, &rect, PDK_AS(ID2D1Brush, brush), width);
     }
     void DrawLine(Point from, Point to, D2D1_COLOR_F color, float width = 1.0f)
     {
-        ::RenderContext_DrawLine(&data_, from, to, color, width);
+        ::RenderContext_DrawLine(data_, from, to, color, width);
     }
     void DrawLine(Point from, Point to, ID2D1Brush* brush, float width = 1.0f)
     {
-        ::RenderContext_DrawLineBrush(&data_, from, to, PDK_AS(ID2D1Brush, brush), width);
+        ::RenderContext_DrawLineBrush(data_, from, to, PDK_AS(ID2D1Brush, brush), width);
     }
     void FillPolygon(std::span<const Point> points, D2D1_COLOR_F color)
     {
-        ::RenderContext_FillPolygon(&data_, points.data(), static_cast<int>(points.size()), color);
+        ::RenderContext_FillPolygon(data_, points.data(), static_cast<int>(points.size()), color);
     }
     void StrokePolyline(std::span<const Point> points, D2D1_COLOR_F color, float width,
                         bool closed = false)
     {
-        ::RenderContext_StrokePolyline(&data_, points.data(), static_cast<int>(points.size()),
+        ::RenderContext_StrokePolyline(data_, points.data(), static_cast<int>(points.size()),
                                        color, width, closed);
     }
 
@@ -304,7 +315,7 @@ public:
     // logical pixels.
     void DrawShadow(const Rect& rect, float blur, D2D1_COLOR_F color)
     {
-        ::RenderContext_DrawShadow(&data_, &rect, blur, color);
+        ::RenderContext_DrawShadow(data_, &rect, blur, color);
     }
 
     void DrawTextUtf8(const std::string& text, const Rect& rect, const TextStyle& style,
@@ -312,14 +323,14 @@ public:
     {
         const ::TextStyle cstyle = ToCTextStyle(style);
 
-        ::RenderContext_DrawTextUtf8(&data_, text.c_str(), &rect, &cstyle, color);
+        ::RenderContext_DrawTextUtf8(data_, text.c_str(), &rect, &cstyle, color);
     }
     void DrawTextUtf8(const std::string& text, const Rect& rect, const TextStyle& style,
                       ID2D1Brush* brush)
     {
         const ::TextStyle cstyle = ToCTextStyle(style);
 
-        ::RenderContext_DrawTextUtf8Brush(&data_, text.c_str(), &rect, &cstyle,
+        ::RenderContext_DrawTextUtf8Brush(data_, text.c_str(), &rect, &cstyle,
                                           PDK_AS(ID2D1Brush, brush));
     }
     void DrawTextUtf8(const std::string& text, const Rect& rect, float fontSize,
@@ -327,7 +338,7 @@ public:
                       DWRITE_TEXT_ALIGNMENT align = DWRITE_TEXT_ALIGNMENT_LEADING,
                       DWRITE_PARAGRAPH_ALIGNMENT valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR)
     {
-        ::RenderContext_DrawTextUtf8Simple(&data_, text.c_str(), &rect, fontSize, color,
+        ::RenderContext_DrawTextUtf8Simple(data_, text.c_str(), &rect, fontSize, color,
                                            static_cast<int>(align), static_cast<int>(valign));
     }
     Size MeasureText(const std::string& text, const TextStyle& style, float maxWidth = 4096.0f)
@@ -335,7 +346,7 @@ public:
         const ::TextStyle cstyle = ToCTextStyle(style);
         Size size;
 
-        ::RenderContext_MeasureText(&data_, text.c_str(), &cstyle, maxWidth, &size);
+        ::RenderContext_MeasureText(data_, text.c_str(), &cstyle, maxWidth, &size);
         return size;
     }
     // Layouts give editors caret hit-testing; they do not depend on the device and survive
@@ -347,25 +358,25 @@ public:
         ComPtr<IDWriteTextLayout> layout;
 
         layout.Attach(reinterpret_cast<IDWriteTextLayout*>(::RenderContext_CreateTextLayout(
-            &data_, text.c_str(), static_cast<int>(text.size()), &cstyle, maxWidth, maxHeight)));
+            data_, text.c_str(), static_cast<int>(text.size()), &cstyle, maxWidth, maxHeight)));
         return layout;
     }
     void DrawTextLayout(IDWriteTextLayout* layout, Point origin, D2D1_COLOR_F color)
     {
-        ::RenderContext_DrawTextLayout(&data_, reinterpret_cast<PDK_IDWriteTextLayout*>(layout),
+        ::RenderContext_DrawTextLayout(data_, reinterpret_cast<PDK_IDWriteTextLayout*>(layout),
                                        origin, color);
     }
 
     void DrawBitmap(ID2D1Bitmap* bitmap, const Rect& dest, const D2D1_RECT_U* source = nullptr,
                     float opacity = 1.0f)
     {
-        ::RenderContext_DrawBitmap(&data_, reinterpret_cast<PDK_ID2D1Bitmap*>(bitmap), &dest,
+        ::RenderContext_DrawBitmap(data_, reinterpret_cast<PDK_ID2D1Bitmap*>(bitmap), &dest,
                                    source, opacity);
     }
     void DrawBitmap(ID2D1Bitmap* bitmap, const Rect& dest, const D2D1_RECT_F& source,
                     float opacity = 1.0f)
     {
-        ::RenderContext_DrawBitmapRect(&data_, reinterpret_cast<PDK_ID2D1Bitmap*>(bitmap), &dest,
+        ::RenderContext_DrawBitmapRect(data_, reinterpret_cast<PDK_ID2D1Bitmap*>(bitmap), &dest,
                                        &source, opacity);
     }
 
@@ -375,7 +386,7 @@ public:
         std::wstring out;
 
         WStr_Init(&wide);
-        ::RenderContext_Utf8ToWide(&data_, text.c_str(), &wide);
+        ::RenderContext_Utf8ToWide(data_, text.c_str(), &wide);
         out.assign(WStr_CStr(&wide));
         WStr_Free(&wide);
         return out;
@@ -383,11 +394,13 @@ public:
 
     /* The underlying C struct, for the layer facades that forward to C functions taking a
      * RenderContext*. */
-    ::RenderContext* Native() { return &data_; }
-    const ::RenderContext* Native() const { return &data_; }
+    ::RenderContext* Native() { return data_; }
+    const ::RenderContext* Native() const { return data_; }
 
 private:
-    ::RenderContext data_;
+    ::RenderContext storage_;
+    ::RenderContext* data_;
+    bool owns_;
 };
 
 } // namespace pdk::graphics

@@ -170,7 +170,7 @@ bool StartScene::OnMouseDown(float x, float y) {
     } else if (hit == 3) {
         app_.ShowHelp();
     } else if (hit == 4) {
-        app_.PushOverlay(std::make_unique<overlays::AboutOverlay>(app_));
+        app_.PushOverlay(core::Transfer(new overlays::AboutOverlay(app_)));
     } else if (hit == 5) {
         app_.RequestClose();
     }

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "core/Overlay.h"
+#include "core/CppCompat.h"
 
 #include <string>
 
 namespace pdk::overlays {
 
-class InvalidMoveToast final : public core::Overlay {
+class InvalidMoveToast final : public core::OverlayClass {
 public:
     explicit InvalidMoveToast(std::string text);
     void Update(float dt) override;

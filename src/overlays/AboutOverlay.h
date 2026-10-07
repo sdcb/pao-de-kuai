@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Overlay.h"
+#include "core/CppCompat.h"
 #include "scenes/SceneCommon.h"
 
 namespace pdk::app {
@@ -9,7 +9,7 @@ class App;
 
 namespace pdk::overlays {
 
-class AboutOverlay final : public core::Overlay {
+class AboutOverlay final : public core::OverlayClass {
 public:
     explicit AboutOverlay(app::App& app);
     void Update(float dt) override;

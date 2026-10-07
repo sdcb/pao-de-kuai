@@ -689,7 +689,7 @@ bool GameScene::OnMouseDown(float x, float y) {
     if (Button_HitTest(&backButton_, x, y)) {
         backButton_.pressT = 1.0f;
         app_.Audio().Play(SOUND_BUTTON_CLICK);
-        app_.PushOverlay(std::make_unique<overlays::ReturnToMenuOverlay>(app_));
+        app_.PushOverlay(core::Transfer(new overlays::ReturnToMenuOverlay(app_)));
         return true;
     }
     if (!InteractionReady()) {
@@ -846,7 +846,7 @@ void GameScene::ConsumeEvents() {
         case game::GameEventType::Talk:
             if (event.player != PLAYER_HUMAN) {
                 app_.Audio().Play(SOUND_AI_TALK);
-                app_.PushOverlay(std::make_unique<overlays::TalkBubbleOverlay>(event.player, event.message));
+                app_.PushOverlay(core::Transfer(new overlays::TalkBubbleOverlay(event.player, event.message)));
             } else {
                 app_.Audio().Play(SOUND_TURN_PROMPT);
             }
@@ -884,7 +884,7 @@ void GameScene::ShowRoundResultOverlay() {
     for (int i = 0; i < 3; ++i) {
         todayScores_[i] += record.scores[i];
     }
-    app_.PushOverlay(std::make_unique<overlays::RoundResultOverlay>(app_, record));
+    app_.PushOverlay(core::Transfer(new overlays::RoundResultOverlay(app_, record)));
     recordedRound_ = true;
     roundResultPending_ = false;
 }

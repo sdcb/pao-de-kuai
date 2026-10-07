@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Scene.h"
+#include "core/CppCompat.h"
 #include "scenes/SceneCommon.h"
 
 #include <string>
@@ -11,7 +11,7 @@ class App;
 
 namespace pdk::scenes {
 
-class StartScene final : public core::Scene {
+class StartScene final : public core::SceneClass {
 public:
     explicit StartScene(app::App& app);
     void OnEnter() override;

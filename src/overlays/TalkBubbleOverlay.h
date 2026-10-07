@@ -1,13 +1,13 @@
 #pragma once
 
-#include "core/Overlay.h"
+#include "core/CppCompat.h"
 #include "rules/CppCompat.h"
 
 #include <string>
 
 namespace pdk::overlays {
 
-class TalkBubbleOverlay final : public core::Overlay {
+class TalkBubbleOverlay final : public core::OverlayClass {
 public:
     TalkBubbleOverlay(rules::PlayerId player, std::string text);
     void Update(float dt) override;

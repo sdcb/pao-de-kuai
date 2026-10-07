@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Overlay.h"
+#include "core/CppCompat.h"
 #include "scenes/SceneCommon.h"
 
 #include <string>
@@ -11,7 +11,7 @@ class App;
 
 namespace pdk::overlays {
 
-class TipOverlay final : public core::Overlay {
+class TipOverlay final : public core::OverlayClass {
 public:
     TipOverlay(app::App& app, std::string text);
     void Update(float dt) override;

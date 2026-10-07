@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Scene.h"
+#include "core/CppCompat.h"
 #include "game/GameState.h"
 #include "scenes/SceneCommon.h"
 
@@ -14,12 +14,14 @@ class App;
 
 namespace pdk::scenes {
 
-class GameScene final : public core::Scene {
+class GameScene final : public core::SceneClass {
 public:
     // midgame is a scene_viewer mock: skips the deal and scripts a couple of moves.
     explicit GameScene(app::App& app, bool mock = false, bool midgame = false);
     void OnEnter() override;
     void StartNextRound();
+    // App asks through the scene vtable instead of casting to this concrete type.
+    bool RestartRound() override { StartNextRound(); return true; }
     void Update(float dt) override;
     void Render(graphics::RenderContext& context) override;
     bool OnMouseMove(float x, float y) override;

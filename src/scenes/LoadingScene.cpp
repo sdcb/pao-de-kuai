@@ -31,9 +31,9 @@ void LoadingScene::Update(float dt) {
     }
     if (loaded_ && elapsed_ > 0.45f) {
         if (target_ == LoadingTarget::Game) {
-            app_.ChangeScene(std::make_unique<GameScene>(app_));
+            app_.ChangeScene(core::Transfer(new GameScene(app_)));
         } else {
-            app_.ChangeScene(std::make_unique<StatsScene>(app_));
+            app_.ChangeScene(core::Transfer(new StatsScene(app_)));
         }
     }
 }

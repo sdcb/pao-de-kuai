@@ -2,8 +2,7 @@
 
 #include "app/CppCompat.h"
 #include "audio/CppCompat.h"
-#include "core/Overlay.h"
-#include "core/SceneManager.h"
+#include "core/CppCompat.h"
 #include "game/RoundRecorder.h"
 #include "graphics/CppCompat.h"
 #include "graphics/CppCompat.h"
@@ -19,6 +18,8 @@ namespace pdk::app {
 
 class App {
 public:
+    ~App();
+
     bool Initialize(HWND hwnd, bool viewerMode = false, bool offscreen = false);
     void Update(float dt);
     void Render();
@@ -39,9 +40,9 @@ public:
     void ShowSettings();
     void ShowHelp();
     void ShowViewerScene(const std::string& scene, const std::string& overlay, const std::string& mock);
-    void ChangeScene(std::unique_ptr<core::Scene> scene);
+    void ChangeScene(core::Scene scene);
 
-    void PushOverlay(std::unique_ptr<core::Overlay> overlay);
+    void PushOverlay(core::Overlay overlay);
     void CloseTopOverlay();
     void ClearOverlays();
     void RequestClose();
@@ -79,7 +80,11 @@ private:
     audio::AudioEngine audio_;
     graphics::SpriteAtlas cardAtlas_;
     core::SceneManager sceneManager_;
-    std::vector<std::unique_ptr<core::Overlay>> overlays_;
+    // Overlays are stacked and swept in order every frame, so a fixed array is enough; the
+    // deepest stack is a dialog plus a toast.  Each live entry owns its implementation.
+    enum { OverlayCapacity = 8 };
+    core::Overlay overlays_[OverlayCapacity]{};
+    int overlayCount_{0};
     ImeInput ime_;
     stats::AppSettings settings_;
     ::RoundRecorder recorder_;
