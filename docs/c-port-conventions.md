@@ -185,6 +185,16 @@ cleanup:
 7. **本地 DSH 沙箱**：放在工作区内的 exe 无法在 `%TEMP%` 建目录
    （返回 EACCES），会误伤 `unit_tests` 的 temp 目录用例。
    本地跑 ctest 时把 `TEMP`/`TMP` 指到构建目录即可；CI 不受影响。
+8. **不要用 `interface` 当局部变量名。** MinGW 的 `basetyps.h` 里有
+   `#define interface struct`（给 COM 头用），于是 `Foo interface;` 会静默变成
+   `Foo struct;`，报的是"expected '{' before ';'"这种和真因毫无关系的错。
+   同理要避开的是 `small`、`near`/`far`、`IN`/`OUT`、`OPTIONAL` 这些老 Windows 宏。
+9. **新加的 C 结构成员必须显式初始化。** 这一条是被 MSVC 抓出来的真事故：
+   `GameState` 新增的 `externalAiControllerCount_` 没有初值，析构函数按这个
+   未定值遍历数组并对垃圾指针调用 `Destroy` —— MinGW 恰好没崩，MSVC 在
+   往返记录用例里直接 SIGSEGV。**规则**：C++ 类里的 C 结构成员一律用类内初始化
+   （`Foo x_{};` / `int n_{0};`），数组用 `{}`；数组型成员即使每次开局都会清空，
+   也要在构造函数里清一次。跨工具链的"一个崩一个不崩"几乎总是这类问题。
 
 ## 8. 每个阶段的验收
 

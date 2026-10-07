@@ -191,6 +191,26 @@
 >   以及 `Borrow`/`Transfer` 两个桥（不接管 / 接管 C++ 策略的所有权）。
 > - 进度：MinGW x64 exe **717,824 → 713,216 B**；`check_c_only.py` 残留 237 处。
 >
+> **修订 13（S4e 完成记录，commit `8339e5f`）——外部 AI 控制器已纯 C**：
+> - `ExternalAiController` 抽象类 → `(vtable, user)`；两个 `std::optional` 返回 → bool + 出参。
+> - **删掉两个死字段**：`ExternalAiRequest::humanName` / `::history` 每回合都被构造
+>   （history 还整份拷贝 turn-record 向量）却从没有人读过，包括测试替身。
+>   删掉后每回合少一次 vector 拷贝，请求固定约 4 KB。
+> - `LocalAiController` → `.c`：`std::thread` 分离线程 + `shared_ptr<SharedState>` →
+>   `CreateThread` + `CloseHandle` + **显式引用计数的 `LocalAiShared`**
+>   （控制器持一份、每个在飞 worker 各持一份），generation 计数器让取消是"正确"
+>   而不只是"大概率"；`std::map<PlayerId, LocalAiKind>` → 定长数组 + 每座位配置标志。
+> - 所有权：`GameState` 销毁交给它的控制器，所以接口值是同一对 `(vtable, user)` 的**借用**
+>   ——这正是接口做成小可拷贝结构而不是引用计数句柄的原因。`GameState` 新增析构函数释放它们。
+> - C++ 版的 `try/catch(...)` 兜底没有了：C 没有异常，两个策略都是纯值计算。
+> - **踩坑**：局部变量不能叫 `interface`（MinGW `basetyps.h` 里
+>   `#define interface struct`），已写进约定文档第 7 节。
+> - **双工具链抓到真 bug**：新增的 `externalAiControllerCount_` 没有初值，析构函数按未定值
+>   遍历并对垃圾指针调 `Destroy`——**MinGW 恰好不崩、MSVC 在往返记录用例里 SIGSEGV**。
+>   已给全部新成员加类内初始值，并在构造函数里清一次 pass 数组。这正是保留双工具链的价值。
+> - 进度：`src/` 剩 **31 个 `.cpp`**，`check_c_only.py` 残留 222 处；
+>   MinGW x64 exe **713,216 → 707,584 B**。
+>
 >
 
 >
