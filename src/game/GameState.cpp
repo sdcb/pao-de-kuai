@@ -1,7 +1,7 @@
 #include "game/GameState.h"
 
 #include "core/CppCompat.h"
-#include "stats/StatStore.h"
+#include "stats/CppCompat.h"
 
 #include <algorithm>
 #include <array>

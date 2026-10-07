@@ -2,7 +2,7 @@
 
 #include "game/Player.h"
 #include "game/TurnRecord.h"
-#include "stats/DailyStat.h"
+#include "stats/CppCompat.h"
 
 #include <array>
 #include <string>

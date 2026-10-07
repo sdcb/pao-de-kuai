@@ -7,7 +7,7 @@
 #include "game/RoundRecorder.h"
 #include "graphics/D2DContext.h"
 #include "graphics/SpriteAtlas.h"
-#include "stats/AppSettings.h"
+#include "stats/CppCompat.h"
 
 #include <memory>
 #include <string>

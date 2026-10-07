@@ -2,7 +2,7 @@
 
 #include "core/Overlay.h"
 #include "scenes/SceneCommon.h"
-#include "stats/AppSettings.h"
+#include "stats/CppCompat.h"
 #include "ui/Inputs.h"
 
 namespace pdk::app {

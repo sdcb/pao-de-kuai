@@ -4,7 +4,7 @@
 #include "audio/SoundIds.h"
 #include "core/CppCompat.h"
 #include "overlays/AboutOverlay.h"
-#include "stats/StatStore.h"
+#include "stats/CppCompat.h"
 
 #include <array>
 #include <cmath>

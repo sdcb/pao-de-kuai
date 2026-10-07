@@ -2,7 +2,7 @@
 
 #include "core/Scene.h"
 #include "scenes/SceneCommon.h"
-#include "stats/StatStore.h"
+#include "stats/CppCompat.h"
 
 namespace pdk::app {
 class App;

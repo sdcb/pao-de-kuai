@@ -1,6 +1,6 @@
 #pragma once
 
-#include "stats/StatStore.h"
+#include "stats/CppCompat.h"
 
 namespace pdk::game {
 

@@ -1,8 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "rules/CppCompat.h"
-#include "stats/AppSettings.h"
-#include "stats/StatStore.h"
+#include "stats/CppCompat.h"
 
 #include <filesystem>
 #include <fstream>

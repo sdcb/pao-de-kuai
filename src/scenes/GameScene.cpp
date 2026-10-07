@@ -9,7 +9,7 @@
 #include "overlays/TalkBubbleOverlay.h"
 #include "resources/CardAtlasData.h"
 #include "scenes/GameLayout.h"
-#include "stats/StatStore.h"
+#include "stats/CppCompat.h"
 
 #include <algorithm>
 #include <cmath>

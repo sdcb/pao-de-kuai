@@ -178,8 +178,8 @@ set(PDK_CORE_SOURCES
     src/game/RoundTraceRecorder.cpp
     src/game/StrongAiStrategy.cpp
     src/game/TurnRecord.cpp
-    src/stats/AppSettings.cpp
-    src/stats/StatStore.cpp
+    src/stats/AppSettings.c
+    src/stats/StatStore.c
 )
 
 add_library(pdk_core STATIC ${PDK_CORE_SOURCES})
