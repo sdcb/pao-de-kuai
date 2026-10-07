@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Geometry.h"
+#include "core/KeyEvent.h"
 
 #include <string>
 
@@ -10,11 +11,9 @@ class RenderContext;
 
 namespace pdk::core {
 
-struct KeyEvent {
-    unsigned key{0};
-    bool ctrl{false};
-    bool shift{false};
-};
+/* The struct itself moved to core/KeyEvent.h so the pure-C src/ui/Inputs.h can name it; the
+ * `pdk::core` spelling the C++ callers use stays valid through this alias. */
+using ::KeyEvent;
 
 class Overlay {
 public:

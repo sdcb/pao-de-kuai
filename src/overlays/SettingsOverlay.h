@@ -22,7 +22,7 @@ public:
     bool OnMouseUp(float x, float y) override;
     bool OnKeyDown(const core::KeyEvent& key) override;
     bool OnText(const std::wstring& text) override;
-    bool WantsTextInput() const override { return nameField_.Focused(); }
+    bool WantsTextInput() const override { return TextField_Focused(&nameField_); }
     void OnImeComposition(const std::wstring& text, int cursor) override;
     bool TextCaretRect(Rect& caret) const override;
 

@@ -22,6 +22,7 @@
 #include "graphics/CppCompat.h"
 #include "rules/CppCompat.h"
 #include "ui/CardView.h"
+#include "ui/Inputs.h"
 #include "ui/Widgets.h"
 #include "ui/Icons.h"
 #include "ui/Theme.h"
@@ -289,5 +290,20 @@ inline void EndModal(graphics::RenderContext& context)
 {
     Widgets_EndModal(context.Native());
 }
+
+/* ---- form widgets ---------------------------------------------------- */
+
+/*
+ * src/ui/Inputs.* is pure C now (plan.md S7).  The four types keep their old spellings through
+ * plain `using` declarations -- every C entry point takes the widget as its first pointer
+ * argument, so the converted call sites read the same as the old method calls and there is
+ * nothing to wrap.  The one shape that changed is `TextField::Utf8()`, which returned a
+ * std::string and is now TextField_Utf8 (caller-owned Str) / TextField_Utf8To (fixed buffer);
+ * SettingsOverlay picks the buffer form for its 64-byte player name.
+ */
+using ::Segmented;
+using ::Slider;
+using ::TextField;
+using ::Toggle;
 
 } // namespace pdk::ui

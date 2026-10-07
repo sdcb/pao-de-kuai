@@ -30,6 +30,25 @@ std::string TrimSpaces(std::string text) {
     return text.substr(first, last - first + 1);
 }
 
+/* The C++ TextField::Utf8() member returned a std::string; the C API fills a caller-owned
+ * buffer (TextField_Utf8To), which this turns back into the std::string the settings field
+ * wants. */
+std::string FieldText(const TextField& field) {
+    char text[PDK_PLAYER_NAME_CAP];
+    const int written = TextField_Utf8To(&field, text, PDK_PLAYER_NAME_CAP);
+
+    return std::string(text, static_cast<std::size_t>(written));
+}
+
+/* Copies a std::wstring into a caller-owned WStr for the C widget entry points. */
+WStr ToWStr(const std::wstring& text) {
+    WStr out;
+
+    WStr_Init(&out);
+    WStr_AssignN(&out, text.data(), static_cast<int>(text.size()));
+    return out;
+}
+
 void DrawRowLabel(graphics::RenderContext& context, const char* text, float centerY) {
     graphics::TextStyle style = Text(17.0f);
     style.valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
@@ -52,21 +71,21 @@ const char* StrategyNote(int selected) {
 
 SettingsOverlay::SettingsOverlay(app::App& app) : app_(app), draft_(app.Settings()), originalVolume_(app.Settings().masterVolume) {
     nameField_.rect = {ControlX, RowName - 23.0f, ControlRight - ControlX, 46.0f};
-    nameField_.placeholder = "输入你的名字";
+    Str_CopyTo(nameField_.placeholder, PDK_TEXT_FIELD_PLACEHOLDER_CAP, "输入你的名字");
     nameField_.clipboardOwner = app.Hwnd();
-    nameField_.SetUtf8(draft_.playerName);
-    nameField_.SetFocused(true);
+    TextField_SetUtf8(&nameField_, draft_.playerName.c_str());
+    TextField_SetFocused(&nameField_, true);
 
     volume_.rect = {ControlX + 10.0f, RowVolume - 14.0f, 300.0f, 28.0f};
     volume_.value = draft_.masterVolume;
 
-    const std::vector<std::string> strategies{"基础", "强力"};
+    const char* const strategies[]{"基础", "强力"};
     ai1_.rect = {ControlX, RowAi1 - 20.0f, 240.0f, 40.0f};
-    ai1_.options = strategies;
+    Segmented_SetOptions(&ai1_, strategies, 2);
     ai1_.selected = draft_.ai1 == "strong" ? 1 : 0;
     ai1_.slide = static_cast<float>(ai1_.selected);
     ai2_.rect = {ControlX, RowAi2 - 20.0f, 240.0f, 40.0f};
-    ai2_.options = strategies;
+    Segmented_SetOptions(&ai2_, strategies, 2);
     ai2_.selected = draft_.ai2 == "strong" ? 1 : 0;
     ai2_.slide = static_cast<float>(ai2_.selected);
 
@@ -83,11 +102,11 @@ SettingsOverlay::SettingsOverlay(app::App& app) : app_(app), draft_(app.Settings
 
 void SettingsOverlay::Update(float dt) {
     elapsed_ += dt;
-    nameField_.Update(dt);
-    volume_.Update(dt);
-    ai1_.Update(dt);
-    ai2_.Update(dt);
-    trace_.Update(dt);
+    TextField_Update(&nameField_, dt);
+    Slider_Update(&volume_, dt);
+    Segmented_Update(&ai1_, dt);
+    Segmented_Update(&ai2_, dt);
+    Toggle_Update(&trace_, dt);
     ButtonGroup::UpdateAll(buttons_, dt);
 }
 
@@ -104,10 +123,9 @@ void SettingsOverlay::Render(graphics::RenderContext& context) {
     DrawHairline(context, Panel.x + 32.0f, Panel.x + Panel.width - 32.0f, Panel.y + 84.0f, 0.45f);
 
     DrawRowLabel(context, "玩家名", RowName);
-    nameField_.Draw(context);
-
+    TextField_Draw(&nameField_, context.Native());
     DrawRowLabel(context, "主音量", RowVolume);
-    volume_.Draw(context);
+    Slider_Draw(&volume_, context.Native());
     std::string percent;
     core::AppendNumber(percent, RoundToInt(volume_.value * 100.0f));
     percent += '%';
@@ -118,15 +136,15 @@ void SettingsOverlay::Render(graphics::RenderContext& context) {
     context.DrawTextUtf8(percent, {ControlRight - 70.0f, RowVolume - 16.0f, 70.0f, 32.0f}, valueStyle, theme::GoldLight);
 
     DrawRowLabel(context, "AI1 策略", RowAi1);
-    ai1_.Draw(context);
+    Segmented_Draw(&ai1_, context.Native());
     DrawRowNote(context, StrategyNote(ai1_.selected), ai1_.rect.x + ai1_.rect.width + 18.0f, RowAi1);
 
     DrawRowLabel(context, "AI2 策略", RowAi2);
-    ai2_.Draw(context);
+    Segmented_Draw(&ai2_, context.Native());
     DrawRowNote(context, StrategyNote(ai2_.selected), ai2_.rect.x + ai2_.rect.width + 18.0f, RowAi2);
 
     DrawRowLabel(context, "复盘记录", RowTrace);
-    trace_.Draw(context);
+    Toggle_Draw(&trace_, context.Native());
     DrawRowNote(context, "每局结束写入复盘 JSON", trace_.rect.x + trace_.rect.width + 18.0f, RowTrace);
 
     ButtonGroup::DrawAll(context, buttons_);
@@ -134,34 +152,34 @@ void SettingsOverlay::Render(graphics::RenderContext& context) {
 }
 
 bool SettingsOverlay::OnMouseMove(float x, float y) {
-    nameField_.UpdateHover(x, y);
-    nameField_.OnMouseMove(x, y);
-    if (volume_.OnMouseMove(x, y)) {
+    TextField_UpdateHover(&nameField_, x, y);
+    TextField_OnMouseMove(&nameField_, x, y);
+    if (Slider_OnMouseMove(&volume_, x, y)) {
         draft_.masterVolume = volume_.value;
         app_.Audio().SetMasterVolume(draft_.masterVolume);
     }
-    ai1_.UpdateHover(x, y);
-    ai2_.UpdateHover(x, y);
-    trace_.UpdateHover(x, y);
+    Segmented_UpdateHover(&ai1_, x, y);
+    Segmented_UpdateHover(&ai2_, x, y);
+    Toggle_UpdateHover(&trace_, x, y);
     ButtonGroup::UpdateHover(buttons_, x, y);
     return true;
 }
 
 bool SettingsOverlay::OnMouseDown(float x, float y) {
     const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-    if (nameField_.OnMouseDown(x, y, shift)) {
+    if (TextField_OnMouseDown(&nameField_, x, y, shift)) {
         return true;
     }
-    if (volume_.OnMouseDown(x, y)) {
+    if (Slider_OnMouseDown(&volume_, x, y)) {
         draft_.masterVolume = volume_.value;
         app_.Audio().SetMasterVolume(draft_.masterVolume);
         return true;
     }
-    if (ai1_.OnMouseDown(x, y) || ai2_.OnMouseDown(x, y)) {
+    if (Segmented_OnMouseDown(&ai1_, x, y) || Segmented_OnMouseDown(&ai2_, x, y)) {
         app_.Audio().Play(SOUND_SELECT_CARD);
         return true;
     }
-    if (trace_.OnMouseDown(x, y)) {
+    if (Toggle_OnMouseDown(&trace_, x, y)) {
         app_.Audio().Play(SOUND_BUTTON_CLICK);
         return true;
     }
@@ -177,8 +195,8 @@ bool SettingsOverlay::OnMouseDown(float x, float y) {
 bool SettingsOverlay::OnMouseUp(float x, float y) {
     (void)x;
     (void)y;
-    nameField_.OnMouseUp();
-    if (volume_.OnMouseUp()) {
+    TextField_OnMouseUp(&nameField_);
+    if (Slider_OnMouseUp(&volume_)) {
         app_.Audio().Play(SOUND_SELECT_CARD);
     }
     return true;
@@ -194,32 +212,37 @@ bool SettingsOverlay::OnKeyDown(const core::KeyEvent& key) {
         return true;
     }
     if (key.key == VK_TAB) {
-        nameField_.SetFocused(!nameField_.Focused());
+        TextField_SetFocused(&nameField_, !TextField_Focused(&nameField_));
         return true;
     }
-    nameField_.OnKeyDown(key);
+    TextField_OnKeyDown(&nameField_, &key);
     return true;
 }
 
 bool SettingsOverlay::OnText(const std::wstring& text) {
-    nameField_.Insert(text);
+    WStr wide = ToWStr(text);
+
+    TextField_Insert(&nameField_, &wide);
+    WStr_Free(&wide);
     return true;
 }
 
 void SettingsOverlay::OnImeComposition(const std::wstring& text, int cursor) {
-    nameField_.SetComposition(text, cursor);
+    WStr wide = ToWStr(text);
+
+    TextField_SetComposition(&nameField_, &wide, cursor);
+    WStr_Free(&wide);
 }
 
 bool SettingsOverlay::TextCaretRect(Rect& caret) const {
-    if (!nameField_.Focused()) {
+    if (!TextField_Focused(&nameField_)) {
         return false;
     }
-    caret = nameField_.CaretRect();
-    return true;
+    return TextField_CaretRect(&nameField_, &caret);
 }
 
 void SettingsOverlay::Save() {
-    const std::string name = TrimSpaces(nameField_.Utf8());
+    const std::string name = TrimSpaces(FieldText(nameField_));
     if (!name.empty()) {
         draft_.playerName = name;
     }

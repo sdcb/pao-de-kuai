@@ -225,7 +225,7 @@ set(PDK_APP_SOURCES
     src/overlays/TipOverlay.cpp
     src/ui/CardView.c
     src/ui/Icons.c
-    src/ui/Inputs.cpp
+    src/ui/Inputs.c
     src/ui/Widgets.c
 )
 
