@@ -335,6 +335,15 @@ void ButtonGroup_UpdateHover(Button *buttons, int count, float x, float y)
 
 void Widgets_DrawPanel(RenderContext *context, const Rect *rect, const PanelStyle *style)
 {
+    /* The C API cannot carry the C++ default argument `style = {}`, so NULL means the defaults --
+     * exactly what the facade's default-constructed PanelStyle produced.  Without this, a caller
+     * that writes NULL (which reads like "no style") takes the whole process down on the first
+     * dereference. */
+    const PanelStyle defaults = PanelStyle_Default();
+
+    if (style == NULL) {
+        style = &defaults;
+    }
     if (style->shadow > 0.0f) {
         Rect inner = Inset(rect, 6.0f);
         const Rect shadowRect = Offset(&inner, 0.0f, 12.0f);
@@ -475,7 +484,14 @@ void Widgets_DrawChipInRect(RenderContext *context, const Rect *rect, const char
 Rect Widgets_DrawChip(RenderContext *context, Point anchor, Anchor align, const char *text,
                       const ChipStyle *style)
 {
-    const Rect rect = Widgets_ChipRect(context, anchor, align, text, style);
+    /* NULL means the defaults, as in Widgets_DrawPanel. */
+    const ChipStyle defaults = ChipStyle_Default();
+    Rect rect;
+
+    if (style == NULL) {
+        style = &defaults;
+    }
+    rect = Widgets_ChipRect(context, anchor, align, text, style);
 
     Widgets_DrawChipInRect(context, &rect, text, style);
     return rect;

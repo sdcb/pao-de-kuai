@@ -877,14 +877,14 @@ void GameScene::ShowRoundResultOverlay() {
     }
 
     const stats::RoundRecord record = game_.LastRoundRecord();
+    const ::RoundRecord stored = ToCRound(record);
     if (!app_.ViewerMode()) {
-        const ::RoundRecord stored = ToCRound(record);
         RoundRecorder_AppendToday(&app_.Recorder(), &stored);
     }
     for (int i = 0; i < 3; ++i) {
         todayScores_[i] += record.scores[i];
     }
-    app_.PushOverlay(core::Transfer(new overlays::RoundResultOverlay(app_, record)));
+    app_.PushOverlay(RoundResultOverlay_New(&app_, &stored));
     recordedRound_ = true;
     roundResultPending_ = false;
 }

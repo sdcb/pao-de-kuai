@@ -207,6 +207,22 @@ extern "C" void App_ConfirmExit(void *app) { static_cast<App *>(app)->ConfirmExi
 extern "C" void App_ShowStart(void *app) { static_cast<App *>(app)->ShowStart(); }
 extern "C" void App_RestartCurrentGame(void *app) { static_cast<App *>(app)->RestartCurrentGame(); }
 extern "C" void App_SaveSettings(void *app) { static_cast<App *>(app)->SaveSettings(); }
+extern "C" void *App_Hwnd(void *app) { return static_cast<App *>(app)->Hwnd(); }
+
+extern "C" void App_GetSettings(void *app, AppSettings *out)
+{
+    *out = stats::ToCSettings(static_cast<App *>(app)->Settings());
+}
+
+extern "C" void App_ApplySettings(void *app, const AppSettings *in)
+{
+    static_cast<App *>(app)->Settings() = stats::FromCSettings(*in);
+}
+
+extern "C" void App_SetMasterVolume(void *app, float volume)
+{
+    static_cast<App *>(app)->Audio().SetMasterVolume(volume);
+}
 
 void App::ShowStart() {
     ChangeScene(core::Transfer(new scenes::StartScene(*this)));
@@ -237,7 +253,7 @@ void App::ShowStats() {
 }
 
 void App::ShowSettings() {
-    PushOverlay(core::Transfer(new overlays::SettingsOverlay(*this)));
+    PushOverlay(SettingsOverlay_New(this));
 }
 
 void App::ShowHelp() {
@@ -281,7 +297,8 @@ void App::ShowViewerScene(const std::string& scene, const std::string& overlay, 
         record.scores = {18, -8, -10};
         record.remainingCards = {0, 8, 10};
         record.bombs = {rules::BombScoreEvent{PLAYER_HUMAN, 20}};
-        PushOverlay(core::Transfer(new overlays::RoundResultOverlay(*this, record)));
+        const ::RoundRecord raw = ToCRound(record);
+        PushOverlay(RoundResultOverlay_New(this, &raw));
     }
 }
 

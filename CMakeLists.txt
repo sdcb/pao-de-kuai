@@ -219,8 +219,8 @@ set(PDK_APP_SOURCES
     src/overlays/AboutOverlay.c
     src/overlays/InvalidMoveToast.c
     src/overlays/ReturnToMenuOverlay.c
-    src/overlays/RoundResultOverlay.cpp
-    src/overlays/SettingsOverlay.cpp
+    src/overlays/RoundResultOverlay.c
+    src/overlays/SettingsOverlay.c
     src/overlays/TalkBubbleOverlay.c
     src/overlays/TipOverlay.c
     src/ui/CardView.c
@@ -327,4 +327,16 @@ if(PDK_BUILD_TESTS)
     add_test(NAME ui_scene_game_deal COMMAND scene_viewer --scene game --mock deal --screenshot ${CMAKE_BINARY_DIR}/ui-game-deal.jpg --quality 75)
     add_test(NAME ui_scene_game_play COMMAND scene_viewer --scene game --mock midgame --screenshot ${CMAKE_BINARY_DIR}/ui-game-play.jpg --quality 75)
     add_test(NAME ui_overlay_result COMMAND scene_viewer --scene game --overlay result-win --screenshot ${CMAKE_BINARY_DIR}/ui-result.jpg --quality 75)
+# The four screenshots above are the ones the release notes compare.  These extra cases exist
+# because they were NOT covered by any of them: the about and confirm-exit panels and the
+# invalid-move toast could all crash on startup without a single test going red (that is exactly
+# how a NULL panel style reached a commit once).  They render to their own files so the four
+# baseline screenshots stay stable.
+add_test(NAME ui_scene_stats COMMAND scene_viewer --scene stats --screenshot ${CMAKE_BINARY_DIR}/ui-stats.jpg --quality 75)
+add_test(NAME ui_scene_help COMMAND scene_viewer --scene help --screenshot ${CMAKE_BINARY_DIR}/ui-help.jpg --quality 75)
+add_test(NAME ui_scene_loading COMMAND scene_viewer --scene loading --screenshot ${CMAKE_BINARY_DIR}/ui-loading.jpg --quality 75)
+add_test(NAME ui_overlay_confirm_exit COMMAND scene_viewer --overlay confirm-exit --screenshot ${CMAKE_BINARY_DIR}/ui-confirm-exit.jpg --quality 75)
+add_test(NAME ui_overlay_about COMMAND scene_viewer --overlay about --screenshot ${CMAKE_BINARY_DIR}/ui-about.jpg --quality 75)
+add_test(NAME ui_overlay_return_menu COMMAND scene_viewer --overlay return-menu --screenshot ${CMAKE_BINARY_DIR}/ui-return-menu.jpg --quality 75)
+add_test(NAME ui_overlay_invalid COMMAND scene_viewer --overlay invalid --screenshot ${CMAKE_BINARY_DIR}/ui-invalid.jpg --quality 75)
 endif()
