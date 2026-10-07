@@ -408,6 +408,26 @@
 >    以及从 `tools/check_c_only.py` 的白名单里移除它。
 > 7. 量最终体积并比对 5 张基线截图。
 >
+> **修订 21（S5g 完成记录，commit `d7e5f07`）——`ui/` 已全部纯 C，体积目标达成**：
+> - 四个控件（`TextField`/`Slider`/`Segmented`/`Toggle`）→ C 结构 + `*_Init` + 函数；
+>   唯一消费者 `SettingsOverlay` 的约 33 处方法调用改成 C 调用。
+> - `core/KeyEvent.h`（新，C）：`KeyEvent` 从 `core/Overlay.h` 拆出——因为 `ui/Inputs.h` 现在是 C 头，
+>   文本编辑器要用同一个结构；`core/Overlay.h` 仍是 C++（`Overlay` 是虚类），用 `using` 把全局
+>   类型重新导出为 `pdk::core::KeyEvent`。
+> - `TextField` 的 `std::wstring` → `WStr`，`ComPtr<IDWriteTextLayout>` → 结构自己持有的裸指针
+>   （`PDK_RELEASE` 释放），`private` 状态在 C 里变成普通字段（标注为 internal）。
+> - **`Segmented` 的选项必须自己持有（拷贝）**：`SettingsOverlay` 是从一个**局部**
+>   `std::vector<std::string>` 赋值的，C++ 版把这些字符串拷进了控件。存指针会在构造函数返回后
+>   悬空、分段控件渲染出乱码。
+> - 四个结构体都有 `#ifdef __cplusplus` 构造函数调用各自的 `*_Init`（默认值唯一来源），
+>   否则 `TextField field;` 的状态是不定的。
+> - **里程碑：MinGW x64 `pao-de-kuai.exe` = 678,400 B ≤ 679,424 B，体积目标达成**（余量 1,024 B）。
+>   注意这**仍链着** `-static-libstdc++`/`-static-libgcc`（还剩 18 个 C++ 文件），
+>   S8 摘掉后余量会大幅扩大。
+> - 新增 `tools/verify_all.ps1`：三工具链 build+ctest 一键验收（自动处理"每个工具链自己的 bin 上
+>   PATH"和"TEMP/TMP 指到构建目录"这两个手工最容易搞错的步骤）。本次提交就是用它验收的。
+> - 进度：`src/` 剩 **18 个 `.cpp`**，`check_c_only.py` 残留 185 处。
+>
 >
 
 >
