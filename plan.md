@@ -252,6 +252,30 @@
 > - 进度：`src/` 剩 **26 个 `.cpp`**，`check_c_only.py` 残留 205 处；
 >   MinGW x64 exe **701,440 → 693,760 B**。
 >
+> **修订 16（S5a 完成记录，commit `36e27b6`）——graphics 层开工，D2D shim 首次真正被使用**：
+> - `ProceduralTextures` 与 `WicImageLoader` → `.c`。**这是全树第一次真正在 C 里驱动 Direct2D**
+>   ——`tests/shim_layout` 只证明了 vtable 布局，没证明"调用真的能用"；现在两套工具链
+>   （含 MSVC）都编过并渲染正确，才算真的验证了 shim 存在的意义。
+> - `ComPtr` 成员 → 结构自己持有的裸接口指针（懒创建，`ProceduralTextures_Reset` 释放）；
+>   `D2D1::BitmapProperties`/`SizeU` 是 `<d2d1.h>` 的 C++ 帮助函数，改成直接填结构体；
+>   `std::vector<float>` 临时缓冲 → 定长数组（阴影掩码恰好 96²、绒面 128²、高斯核
+>   `2*ceil(3σ)+1 = 61`，都是编译期常量），**每次构建纹理少 3 次堆分配**；
+>   `std::span` → 指针 + 长度；返回 ComPtr → 返回持有**新引用**的裸指针。
+> - WIC 需要 3 处 C++ 隐式转换改成显式：`IWICStream`→`IStream`、
+>   `IWICBitmapFrameDecode`→`IWICBitmapSource`、`REFWICPixelFormatGUID` 在 C 里是指针。
+> - 新增 `graphics/CppCompat.h`（临时，路线 B）：在 C API 之上复现
+>   `graphics::LoadBitmapFromMemory` 返回 ComPtr、以及 `textures_.Shadow(target)` 形状；
+>   包装本身只是类型转换（PDK_* 镜像与 SDK 接口布局一致，shim_layout 编译期已断言）。
+> - **本轮确立的一条结构性规则（要记住）**：**D2D shim 不能被 C++ 翻译单元会包含的头间接引入**。
+>   `d2d_c.h` 会拉进 `dwrite_c.h`，其 vendored `DWRITE_*` 类型与 C++ 侧 `<d2d1.h>` 带进来的
+>   真 `<dwrite.h>` 冲突（`multiple definition of 'enum DWRITE_FACTORY_TYPE'`）。所以这两个头
+>   只**前向声明** `PDK_*` 镜像，由 `.c` 去包含 shim。重复 typedef 在两门语言里都合法，零成本。
+> - **验证经验（写给后续轮次）**：UI 截图**逐次运行并不可复现**——同一个 binary 跑两次得到
+>   114,097 与 114,091 字节、SHA256 不同（场景里有计时与洗牌）。所以目标里"5 张截图与基线肉眼
+>   无差异"才是正确的判据，**字节数漂移不能当作回归证据**。绒面桌布与圆角阴影与基线肉眼一致。
+> - 进度：`src/` 剩 **24 个 `.cpp`**，`check_c_only.py` 残留 205 处；
+>   MinGW x64 exe **693,760 → 692,736 B**；依赖表仍是 22 个系统 DLL。
+>
 >
 
 >
