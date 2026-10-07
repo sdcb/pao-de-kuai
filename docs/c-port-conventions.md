@@ -211,6 +211,29 @@ cleanup:
       那就照惯例加 `#ifdef __cplusplus` 构造函数并调用 `<Type>_Init`。
     - 判断依据是"调用点怎么写的"，不是"类型长什么样"——动手前先 grep 一遍初始化点。
 
+12. **常量不一定住在你猜的那个头里。** `PLAYER_HUMAN`/`PLAYER_AI1`/`PLAYER_AI2` 在
+    **`rules/Scoring.h`**，不在 `rules/Card.h`——只包含后者会报"未声明"。转一个文件之前，
+    先 grep 一下你要用的每个符号**定义**在哪，别按名字猜（这一条一次转换里踩了两次：
+    `GameLayout.h` 和 `TalkBubbleOverlay.c`）。同理 `GAME_LAYOUT_*` 常量只在
+    `scenes/GameLayout.h`，不在任何 scene 头里。
+13. **共享助手放在它所属的类型旁边，不要每个文件各写一份。** 转 UI 层时一次性补了这些，
+    后面每个文件都直接用：`Point_Make`/`Rect_Make`（`core/Geometry.h`，对应 C 无法移植地
+    写出的花括号初始化 `{x, y, w, h}`）、`ColorF_Make`（`ui/Theme.h`）、`GradientStop_Make`、
+    `TextStyle_Label`/`TextStyle_Centered`/`TextStyle_Kai`（`graphics/D2DContext.h`，按它们替代的
+    C++ 门面函数命名）、`ClampF`（`ui/Anim.h`）、`Button_Make`（`ui/Widgets.h`）。
+    发现自己在第二个文件里复制同一个 static 助手时，就把它提升到类型所属的头里。
+14. **C 消费者可以先于它依赖的 C++ 类转换——用一条极小的 `extern "C"` 边界。**
+    覆盖层转 C 时 App 还是 C++，而它们只需要"放音效、关自己、确认退出、回主菜单"四件事，
+    于是有了 `app/AppApi.h`：C 头声明、`App.cpp` 里 `extern "C"` 定义、覆盖层持不透明的
+    `void *app`。**先转 App 会让一次改动变成三个文件**；这条边界把顺序解耦，头文件里写明
+    App 变 C 后即删除。同类情况（C 结构 vs 带 `std::string` 的 C++ 门面结构）用显式转换函数
+    而不是 `static_cast`：`stats/CppCompat.h` 的 `ToCSettings`/`FromCSettings`、`ToCRound`/
+    `FromCRound` 就是为此存在的。
+15. **`RenderContext` 门面有"视图"形态。** `graphics/CppCompat.h` 的 `RenderContext` 持有
+    `::RenderContext*` + 所有权标志；`RenderContext view(cContextPtr);` 是不拥有、不 Init/不
+    Shutdown 的视图。场景/覆盖层的 C vtable 递回 C context、而 C++ 实现要门面引用时，就靠它
+    （见 `core/CppCompat.h` 的 `Scene_RenderFn`）。这是 S7 为了桥接才加的形态。
+
 ## 8. 每个阶段的验收
 
 每个阶段的提交都必须同时满足下面全部条件（本地就按这个跑，别只跑一个工具链）：
