@@ -359,6 +359,55 @@
 >   **MinGW x64 exe 683,520 → 680,960 B，距 679,424 只差 1,536 B**。
 >   S8 摘掉 `-static-libstdc++`/`-static-libgcc`（等最后一个 C++ 文件消失）的收益远大于这 1.5 KB。
 >
+> **S7 设计与 S8 清单（勘察结论，供后续轮次直接执行）**
+>
+> **S7 的 C 接口形状**（已从 8 个覆盖层 + 5 个场景的重写集合反推确定）：
+> - `OverlayVtbl` = C++ 接口的 11 个虚函数（Update / Render / BlocksInputBelow / OnMouseMove /
+>   OnMouseDown / OnMouseUp / OnKeyDown / OnText / WantsTextInput / OnImeComposition /
+>   TextCaretRect）+ **`Expired`** + `Destroy`。
+> - `SceneVtbl` = 9 个虚函数（OnEnter / OnExit / Update / Render / OnMouseMove / OnMouseDown /
+>   OnMouseUp / OnD2DResourcesLost / OnD2DResourcesRecreated）+ **`RestartRound`** + `Destroy`。
+> - 那两个新增槽位不是装饰：它们**消掉 `App.cpp` 里仅有的两处 `dynamic_cast`**（C vtable 没有
+>   RTTI）。`App::Update` 现在用 `dynamic_cast<overlays::InvalidMoveToast*>` /
+>   `<overlays::TalkBubbleOverlay*>` 判断过期 → 改成查 `Expired` 槽（NULL = 永不过期）；
+>   `App::RestartCurrentGame` 用 `dynamic_cast<scenes::GameScene*>` → 改成 `RestartRound()` 虚函数
+>   （基类默认 false）。**改完设计比现在更干净**，不是权宜之计。
+> - 容器：`App::overlays_`（`std::vector<std::unique_ptr<Overlay>>`）→ 定长数组 + count + 拥有权；
+>   `SceneManager`（`std::unique_ptr<Scene>`）→ `{ Scene scene; bool has; }`。
+> - 12 个尚未转换的 C++ 场景/覆盖层用 `core/CppCompat.h` 的 `SceneClass`/`OverlayClass` 桥接
+>   （与 `AiStrategyClass`、`ExternalAiControllerClass` 同一套手法），所以它们能原样编译；
+>   转换某个文件时把它的基类从 `core::Scene` 换成 C vtable 即可。
+>
+> **各覆盖层状态映射**（`buttons_` 最多 4 个 → 定长数组；`text_` → 定长缓冲）：
+> | 文件 | 重写 | 状态 |
+> |---|---|---|
+> | InvalidMoveToast(32) | Update/Render/BlocksInputBelow(false)/**Expired(>2s)** | text, elapsed |
+> | TalkBubbleOverlay(51) | 同上 | text, elapsed |
+> | TipOverlay(36) | Update/Render/BlocksInputBelow(false)/OnMouseDown | app&, text, elapsed |
+> | AboutOverlay(59) / ConfirmExitDialog(42) / ReturnToMenuOverlay(42) / RoundResultOverlay(172) | Update/Render/BlocksInputBelow(true)/OnMouseMove/OnMouseDown | app&, buttons, elapsed |
+> | SettingsOverlay(212) | 上面 5 个 + OnMouseUp/OnKeyDown/OnText/WantsTextInput/OnImeComposition/TextCaretRect | app&, originalVolume, buttons, elapsed, + 5 个控件成员 |
+>
+> **各场景状态映射**：
+> | 文件 | 重写 | 状态 |
+> |---|---|---|
+> | LoadingScene(47) | OnEnter/Update/Render | app&, elapsed, progress, shownProgress, item(串), loaded |
+> | StartScene(152) | + OnMouseMove/OnMouseDown | app&, buttons, welcome(串), elapsed |
+> | StatsScene(134) | + OnMouseMove/OnMouseDown | app&, buttons, elapsed |
+> | HelpScene(113) | + OnMouseMove/OnMouseDown, `DrawBullets(string_view)` | app&, buttons, elapsed |
+> | GameScene(824) | + OnMouseUp | app& + buttons/dragPath/handLift/handHover 四个 vector + 约 20 个旗标/浮点 + toastText(串) |
+>
+> **S8 清单（已勘察到具体位置）**：
+> 1. CI **已经是 8 组合**（6 MSVC + 2 MinGW），并且已经跑 `gen_com_shim.py --check` ✓ 无需改动。
+> 2. `tools/check_c_only.py` **本来就在不合格时 `exit 1`** → CI 接入只需加一个 step，**不用改代码**。
+> 3. 摘掉 `-static-libstdc++ -static-libgcc`：`CMakeLists.txt` **第 268 行**（app 目标的 foreach）
+>    与 **第 315 行**（`unit_tests`）。注意 `unit_tests` 仍是 C++/doctest，**这两行删掉后
+>    `unit_tests` 仍需要它们**——只有 `pao_de_kuai`/`scene_viewer` 该摘。
+> 4. 删掉 9 个临时门面：`src/{app,audio,core,game,graphics,resources,rules,stats,ui}/CppCompat.h`。
+> 5. 更新 `README.md`（已改过构建段落）与 `AGENTS.md`（本轮已改两处失效描述）。
+> 6. 删除 `src/rules/Card.h` 里的 `#ifdef __cplusplus` 成员垫片（`Cards` 的 vector 形状 API），
+>    以及从 `tools/check_c_only.py` 的白名单里移除它。
+> 7. 量最终体积并比对 5 张基线截图。
+>
 >
 
 >
