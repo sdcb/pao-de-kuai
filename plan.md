@@ -129,6 +129,27 @@
 > - 进度：`src/` 剩 **33 个 `.cpp`**，`check_c_only.py` 残留 254 处。体积：MinGW x64 741,376 B、
 >   MSVC /MT x64 764,416 B；依赖表仍然只有系统 DLL（无 msvcrt/vcruntime/libgcc/libwinpthread）。
 >
+> **修订 10（S4b 完成记录，commit `039cf83`）——`Cards` 在全仓库翻成 C 定长值类型**：
+> 这是附录 B 路线 A 预判的"必须一次跨过"的那一步：只要 `rules::Cards` 对 C++ 还是
+> `std::vector<Card>`，任何 C 文件都没法持有手牌，game 层就无法开工。
+> - **做法（避免长时间断树）**：`src/rules/Card.h` 里加了一段**明确标注为临时**的
+>   `#ifdef __cplusplus` 成员垫片（`size/empty/clear/reserve/resize/push_back/emplace_back/
+>   pop_back/operator[]/front/back/begin/end/erase/insert`），让约 255 个 vector 形状的调用点
+>   先继续编过；它随 `rules/CppCompat.h` 一起删除，文件一旦变成 `.c` 就自动失去它。
+>   `tools/check_c_only.py` 已把该头列入白名单并写明理由。
+> - **垫片里的"清零默认构造函数"是必须的**：`Cards x;` 原来是空 vector，直接换成裸 struct 会让
+>   `count` 未初始化，第一次 `push_back` 就越界写。
+> - `rules/CppCompat.h` 去掉 vector 别名与 `ToCCards/FromCCards`，改成对指针形 C API 的引用形薄包装。
+> - **brace-aware 代码改写**（`tools/_wrap_cards_init.py`）：把 `Cards a{C(...)}` 之类的聚合初始化
+>   全改成 `MakeCards({...})`——否则 `Cards a{C(...)}` 只初始化 `items` 数组而 `count` 仍为 0，
+>   **静默变成空手牌**。它只动"元素全是 `C(...)` 的最内层花括号组"，且**故意不动空 `{}`**
+>   （空 `{}` 有歧义：可能是 `HandPattern` 或 `std::string`）。第一遍的误伤已手工修回。
+> - 结果：**MinGW x64 741,376 → 726,016 B、MSVC /MT x64 764,416 → 761,344 B**（`std::vector` 机制消失）。
+> - 下一步 game 层逐文件开工：`StrategyMetadata`/`Player`/`AiPlayer`/`TurnRecord`/`RoundRecorder`/
+>   `AiStrategy`(vtable)/`ExternalAiController`+`LocalAiController` → `GameState` → `StrongAiStrategy`
+>   + `RoundTraceRecorder`。`TurnRecord`/`ExternalAiRequest` 里的 `std::string`/`std::vector` 成员
+>   是主要改动面，`GameState.cpp`（1,348 行）是它们的消费大户。
+>
 >
 
 >
