@@ -59,11 +59,11 @@ ctest --preset vs2026-release --output-on-failure
 - 视觉风格为“东方雅致”：墨绿丝绒牌桌、香槟金细线、朱红只用于印章/炸弹/危险操作；带音高的音效和配色一样统一在 D 大调五声音阶。
 - 自绘 UI 分三层：`src/graphics/D2DContext.*`（画刷/文字格式缓存、圆角、渐变、变换栈和透明度栈、`MeasureText`）、`src/graphics/ProceduralTextures.*`（CPU 生成的软阴影九宫格和绒面噪点，只依赖 Direct2D 1.0）、`src/ui/`（`Theme` 色板、`Anim` 缓动、`Widgets` 按钮/面板/胶囊/头像/印章/弹窗、`Icons` 矢量图标、`CardView` 牌面渲染）。新界面优先复用 `src/ui/`，不要在场景里直接写纯色矩形。
 - 牌图集加载时额外用 WIC Fant 预缩小 1/2 和 1/4 两级，`CardView` 按目标像素尺寸选级，小牌不会锯齿。
-- 生产源码不要用 `std::lround` 等 `msvcrt.dll` 不导出的 C99 数学函数，VC-LTL 构建会链接失败；需要取整用 `ui::RoundToInt`。
+- 纯 C 的 `src/` 里没有 `snprintf`/流式格式化：数字拼接走 `Str_AppendNumber`/`Str_AppendPaddedNumber`，取整走 `ui/Anim.h` 的 `RoundToInt`（唯一一处取整实现）。定长缓冲区一律用 `Str_CopyTo`，不要 `strncpy`。
 - 运行资源通过 `src/resources/resources.rc` 嵌入。
 - 设置和统计路径基于进程当前工作目录，不基于 exe 所在目录。
 - 应用使用固定 1280x720 逻辑布局。窗口缩放应在场景布局外处理，窗口不应小于 1280x720。
-- Windows 基线尽量保持 Win8 兼容：`WINVER=0x0602`、`_WIN32_WINNT=0x0602`、Direct2D、DirectWrite、WIC、Media Foundation、WASAPI（Win10 上额外使用 `IAudioClient3` 低延迟周期）、IMM32。
+- Windows 基线是 **Win10**：`pdk_win32` 目标设 `WINVER=0x0A00`、`_WIN32_WINNT=0x0A00`（plan.md 修订 1 已放弃 Win8 兼容）。用到 Direct2D、DirectWrite、WIC、Media Foundation、WASAPI（`IAudioClient3` 低延迟周期）、IMM32。
 - 需要处理 `D2DERR_RECREATE_TARGET`：游戏/窗口状态应保留，Direct2D 设备资源和 bitmap 应重建，音频和 CPU 数据应不受影响。
 
 ## 体积约束
