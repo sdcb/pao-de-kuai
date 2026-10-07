@@ -428,6 +428,36 @@
 >   PATH"和"TEMP/TMP 指到构建目录"这两个手工最容易搞错的步骤）。本次提交就是用它验收的。
 > - 进度：`src/` 剩 **18 个 `.cpp`**，`check_c_only.py` 残留 185 处。
 >
+> **修订 22（S7a 完成记录，commit `ba8d1fb`）——场景/覆盖层已是 C vtable，两处 `dynamic_cast` 消失**：
+> - `core/{Scene.h,Overlay.h,SceneManager.h}` → 纯 C。`OverlayVtbl` = 原 11 个虚函数 + `Expired` +
+>   `Destroy`；`SceneVtbl` = 原 9 个 + `RestartRound` + `Destroy`。可选槽可空、内联包装吸收判空，
+>   实现只填自己需要的。**本提交没有把任何 `.cpp` 变成 C**——它是脚手架，让剩下 13 个
+>   场景/覆盖层文件可以逐个独立转换、逐个独立可构建。
+> - 两个新增槽位的价值就是**删掉 `App.cpp` 里仅有的两处 `dynamic_cast`**（C vtable 没有 RTTI）：
+>   - `App::Update` 的每帧清扫原本用 `dynamic_cast<InvalidMoveToast>/<TalkBubbleOverlay>` 只为问一句
+>     "你过期了吗"。现在问 vtable。而这两个类**本来就声明了非虚的 `bool Expired() const`**，
+>     于是**一个字都不用改**就变成了重写——而且以后再加会过期的覆盖层，App 不用动。
+>   - `App::RestartCurrentGame` 原本 `dynamic_cast<GameScene*>` 再 `StartNextRound()`。现在场景自己
+>     通过 `Scene::RestartRound` 回答，基类默认 false，也就是"当前场景不是牌局"成了基类行为，
+>     而不是一次恰好失败的转换。
+> - `App` 的 `std::vector<std::unique_ptr<Overlay>>` → 定长数组（容量 8，最深是"对话框 + toast"），
+>   移除时显式释放；`std::unique_ptr<Scene>` 管理器 → C 的 `SceneManager`（Change/Release 会触发
+>   OnExit/OnEnter 并释放）。`App` 补了析构函数——原来这两个成员的释放是 C++ 隐式完成的。
+> - `core/CppCompat.h` 新增 `SceneClass`/`OverlayClass`（12 个未转换实现仍继承的 C++ 抽象基类）与
+>   `Transfer`（把 C++ 对象交给 C 侧，由 C 侧拥有并 delete）。13 个头文件的基类从
+>   `core::Scene`/`core::Overlay` 改名为这两个，`Render` 收门面的 `graphics::RenderContext&`。
+> - 为让上面这条成立，`graphics::RenderContext` 改成**视图**：持有 `::RenderContext*` + 所有权标志，
+>   这样桥接层能把 vtable 递回来的 C context 包成一个**非拥有**的门面视图交给 C++ 实现。
+>   原先是按值内嵌 C 结构，这种视图根本无法表达。拥有版本的默认构造对调用方没有变化，
+>   `App::renderContext_` 仍然只有一个对象。
+> - **体积如实说明**：MinGW x64 `pao-de-kuai.exe` 678,400 → **679,936 B**，即**超出目标 512 B**。
+>   这一步**只可能**如此：它加了两层 vtable 和一层桥接，却**没有删掉任何 C++**。所以体积要靠后续
+>   转换（13 个文件各自丢掉 class、RTTI 和 `std::string`）回收，最后由 S8 摘掉
+>   `-static-libstdc++`/`-static-libgcc` 一举确定。
+> - 进度：`src/` 仍剩 **18 个 `.cpp`**，`check_c_only.py` 残留 177 处。三链路 8/8 全绿，
+>   `ui-result` 肉眼一致（它同时覆盖 `Scene_Render`、结算覆盖层和新增 `Expired` 槽的对话气泡，
+>   是验证新分派最好的单张图）。
+>
 >
 
 >
