@@ -14,6 +14,8 @@
  */
 
 #include "audio/SoundIds.h"
+#include "core/Overlay.h"
+#include "graphics/SpriteAtlas.h"
 #include "stats/AppSettings.h"
 
 #ifdef __cplusplus
@@ -26,6 +28,36 @@ void App_ConfirmExit(void *app);
 void App_ShowStart(void *app);
 void App_RestartCurrentGame(void *app);
 void App_SaveSettings(void *app);
+
+/* ---- the four small menu scenes -------------------------------------- */
+
+/* Takes ownership of the handle, exactly like App::PushOverlay did. */
+void App_PushOverlay(void *app, Overlay overlay);
+void App_ShowHelp(void *app);
+void App_ShowSettings(void *app);
+void App_ShowStats(void *app);
+void App_StartGame(void *app);
+void App_RequestClose(void *app);
+void App_LoadGameResources(void *app);
+
+/*
+ * A C translation unit cannot construct a scene type, and the loading screen finishes by handing
+ * over to one of the two scenes that are still C++: these two are that hand-over.
+ */
+void App_EnterGame(void *app);
+void App_EnterStats(void *app);
+
+/* App::CardAtlas() returns the C++ SpriteAtlas facade; hand C its inner ::SpriteAtlas. */
+SpriteAtlas *App_CardAtlas(void *app);
+bool App_LoadCardAtlas(void *app);
+
+/*
+ * The "欢迎回来" chip on the start screen.  It needs the player name (which the C side could read
+ * through App_GetSettings) and today's aggregate score, which lives behind the C++ StatStore
+ * facade; composing the string here keeps that aggregation on the C++ side, where it is a single
+ * call, and the scene just copies the finished text.
+ */
+void App_BuildWelcomeText(void *app, char *out, int cap);
 /* The process's window, as an HWND.  `void *` keeps windows.h out of this header; the only user
  * is the settings modal, which hands it to the text field as its clipboard owner. */
 void *App_Hwnd(void *app);

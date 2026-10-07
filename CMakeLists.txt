@@ -211,10 +211,10 @@ set(PDK_APP_SOURCES
 
     src/resources/ResourceLoader.c
     src/scenes/GameScene.cpp
-    src/scenes/HelpScene.cpp
-    src/scenes/LoadingScene.cpp
-    src/scenes/StartScene.cpp
-    src/scenes/StatsScene.cpp
+    src/scenes/HelpScene.c
+    src/scenes/LoadingScene.c
+    src/scenes/StartScene.c
+    src/scenes/StatsScene.c
     src/overlays/ConfirmExitDialog.c
     src/overlays/AboutOverlay.c
     src/overlays/InvalidMoveToast.c

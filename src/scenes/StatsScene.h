@@ -1,31 +1,22 @@
 #pragma once
 
-#include "core/CppCompat.h"
-#include "scenes/SceneCommon.h"
-#include "stats/CppCompat.h"
+/*
+ * The stats page: today, this month and all-time, one tall card per period, aggregated from the
+ * per-round records on disk.  Pure C.
+ *
+ * `app` is an opaque App* (see app/AppApi.h).  The returned handle owns its state and frees it
+ * through the scene vtable's Destroy slot.
+ */
 
-namespace pdk::app {
-class App;
+#include "core/Scene.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Returns an owning handle. */
+Scene StatsScene_New(void *app);
+
+#ifdef __cplusplus
 }
-
-namespace pdk::scenes {
-
-class StatsScene final : public core::SceneClass {
-public:
-    explicit StatsScene(app::App& app);
-    void OnEnter() override;
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool OnMouseMove(float x, float y) override;
-    bool OnMouseDown(float x, float y) override;
-
-private:
-    app::App& app_;
-    std::vector<Button> buttons_;
-    stats::StatSummary today_;
-    stats::StatSummary month_;
-    stats::StatSummary history_;
-    float elapsed_{0.0f};
-};
-
-} // namespace pdk::scenes
+#endif

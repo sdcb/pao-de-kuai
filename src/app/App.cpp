@@ -224,15 +224,77 @@ extern "C" void App_SetMasterVolume(void *app, float volume)
     static_cast<App *>(app)->Audio().SetMasterVolume(volume);
 }
 
+/* ---- the four small menu scenes (S7d) -------------------------------- */
+
+extern "C" void App_PushOverlay(void *app, Overlay overlay)
+{
+    static_cast<App *>(app)->PushOverlay(overlay);
+}
+
+extern "C" void App_ShowHelp(void *app) { static_cast<App *>(app)->ShowHelp(); }
+extern "C" void App_ShowSettings(void *app) { static_cast<App *>(app)->ShowSettings(); }
+extern "C" void App_ShowStats(void *app) { static_cast<App *>(app)->ShowStats(); }
+extern "C" void App_StartGame(void *app) { static_cast<App *>(app)->StartGame(); }
+extern "C" void App_RequestClose(void *app) { static_cast<App *>(app)->RequestClose(); }
+
+extern "C" void App_LoadGameResources(void *app)
+{
+    static_cast<App *>(app)->LoadGameResources();
+}
+
+/* The loading screen's two exits.  The game scene is still C++, so the construction has to happen
+ * here; a C translation unit cannot name it. */
+extern "C" void App_EnterGame(void *app)
+{
+    App *self = static_cast<App *>(app);
+
+    self->ChangeScene(core::Transfer(new scenes::GameScene(*self)));
+}
+
+extern "C" void App_EnterStats(void *app) { static_cast<App *>(app)->ShowStats(); }
+
+extern "C" SpriteAtlas *App_CardAtlas(void *app)
+{
+    return static_cast<App *>(app)->CardAtlas().Native();
+}
+
+extern "C" bool App_LoadCardAtlas(void *app)
+{
+    return static_cast<App *>(app)->LoadCardAtlas();
+}
+
+extern "C" void App_BuildWelcomeText(void *app, char *out, int cap)
+{
+    App *self = static_cast<App *>(app);
+    const stats::StatStore store;
+    const stats::StatSummary today = store.SummarizeDay(stats::TodayDateKey());
+    std::string welcome;
+
+    if (self->Settings().playerName.empty()) {
+        welcome = "欢迎回来";
+    } else {
+        welcome = self->Settings().playerName + "，欢迎回来";
+    }
+    if (today.rounds > 0) {
+        welcome += "  ·  今日 ";
+        if (today.scores[0] > 0) {
+            welcome += "+";
+        }
+        core::AppendNumber(welcome, today.scores[0]);
+        welcome += " 分";
+    }
+    stats::CopyToBuffer(out, cap, welcome);
+}
+
 void App::ShowStart() {
-    ChangeScene(core::Transfer(new scenes::StartScene(*this)));
+    ChangeScene(StartScene_New(this));
 }
 
 void App::StartGame(bool mock) {
     if (mock || GameResourcesReady()) {
         ChangeScene(core::Transfer(new scenes::GameScene(*this, mock)));
     } else {
-        ChangeScene(core::Transfer(new scenes::LoadingScene(*this, scenes::LoadingTarget::Game)));
+        ChangeScene(LoadingScene_New(this, LOADING_TARGET_GAME));
     }
 }
 
@@ -249,7 +311,7 @@ void App::RestartCurrentGame() {
 }
 
 void App::ShowStats() {
-    ChangeScene(core::Transfer(new scenes::StatsScene(*this)));
+    ChangeScene(StatsScene_New(this));
 }
 
 void App::ShowSettings() {
@@ -257,7 +319,7 @@ void App::ShowSettings() {
 }
 
 void App::ShowHelp() {
-    ChangeScene(core::Transfer(new scenes::HelpScene(*this)));
+    ChangeScene(HelpScene_New(this));
 }
 
 void App::ShowViewerScene(const std::string& scene, const std::string& overlay, const std::string& mock) {
@@ -273,7 +335,7 @@ void App::ShowViewerScene(const std::string& scene, const std::string& overlay, 
     } else if (scene == "help") {
         ShowHelp();
     } else if (scene == "loading") {
-        ChangeScene(core::Transfer(new scenes::LoadingScene(*this, scenes::LoadingTarget::Game)));
+        ChangeScene(LoadingScene_New(this, LOADING_TARGET_GAME));
     } else {
         ShowStart();
     }

@@ -10,6 +10,8 @@
 #include "resources/CppCompat.h"
 #include "scenes/GameLayout.h"
 #include "stats/CppCompat.h"
+/* scenes/SceneCommon.h used to pull the ui facade in transitively; it is a pure C header now. */
+#include "ui/CppCompat.h"
 
 #include <algorithm>
 #include <cmath>
