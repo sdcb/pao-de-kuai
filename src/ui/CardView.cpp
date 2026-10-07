@@ -1,6 +1,6 @@
 #include "ui/CardView.h"
 
-#include "resources/CardAtlasData.h"
+#include "resources/CppCompat.h"
 #include "ui/Anim.h"
 
 #include <algorithm>

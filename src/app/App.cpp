@@ -11,7 +11,7 @@
 #include "overlays/TalkBubbleOverlay.h"
 #include "overlays/TipOverlay.h"
 #include "resources/ResourceIds.h"
-#include "resources/ResourceLoader.h"
+#include "resources/CppCompat.h"
 #include "scenes/GameScene.h"
 #include "scenes/HelpScene.h"
 #include "scenes/LoadingScene.h"

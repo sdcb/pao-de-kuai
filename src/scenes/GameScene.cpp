@@ -7,7 +7,7 @@
 #include "overlays/ReturnToMenuOverlay.h"
 #include "overlays/RoundResultOverlay.h"
 #include "overlays/TalkBubbleOverlay.h"
-#include "resources/CardAtlasData.h"
+#include "resources/CppCompat.h"
 #include "scenes/GameLayout.h"
 #include "stats/CppCompat.h"
 

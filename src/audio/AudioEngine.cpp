@@ -2,7 +2,7 @@
 
 #include "audio/AudioDecoder.h"
 #include "audio/SoundCatalog.h"
-#include "resources/ResourceLoader.h"
+#include "resources/CppCompat.h"
 
 #include <algorithm>
 #include <atomic>

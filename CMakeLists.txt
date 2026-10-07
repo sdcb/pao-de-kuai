@@ -205,9 +205,9 @@ set(PDK_APP_SOURCES
     src/graphics/TextRenderer.cpp
     src/graphics/WicImageLoader.cpp
     src/graphics/iids.c
-    src/resources/CardAtlasData.cpp
-    src/resources/IconAtlasData.cpp
-    src/resources/ResourceLoader.cpp
+    src/resources/CardAtlasData.c
+
+    src/resources/ResourceLoader.c
     src/scenes/GameScene.cpp
     src/scenes/HelpScene.cpp
     src/scenes/LoadingScene.cpp
