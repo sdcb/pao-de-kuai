@@ -171,12 +171,14 @@ set(PDK_CORE_SOURCES
     src/rules/PaoDeKuaiRules.c
     src/rules/RuleText.c
     src/rules/Scoring.c
-    src/game/AiStrategy.cpp
+    src/game/BasicAiStrategy.cpp
     src/game/GameState.cpp
     src/game/LocalAiController.cpp
     src/game/RoundRecorder.cpp
     src/game/RoundTraceRecorder.cpp
     src/game/StrongAiStrategy.cpp
+    src/game/AiPlayer.c
+    src/game/AiStrategy.c
     src/game/TurnRecord.c
     src/stats/AppSettings.c
     src/stats/StatStore.c

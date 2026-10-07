@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/AiStrategy.h"
+#include "rules/CppCompat.h"
 
 #include <map>
 #include <string>

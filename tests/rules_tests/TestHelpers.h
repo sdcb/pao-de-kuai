@@ -1,6 +1,6 @@
 #pragma once
 
-#include "game/AiStrategy.h"
+#include "game/CppCompat.h"
 #include "rules/CppCompat.h"
 
 #include <algorithm>
@@ -23,7 +23,7 @@ inline game::AiContext LeadContext(int ownRemaining, int nextRemaining = 16, int
     context.ownRemainingCards = ownRemaining;
     context.nextPlayerRemainingCards = nextRemaining;
     context.minOpponentRemainingCards = minOpponentRemaining;
-    context.remainingCards = {ownRemaining, nextRemaining, minOpponentRemaining};
+    game::SetRemainingCards(context, ownRemaining, nextRemaining, minOpponentRemaining);
     return context;
 }
 
@@ -34,7 +34,7 @@ inline game::AiContext FollowContext(const rules::HandPattern& previous, int own
     context.ownRemainingCards = ownRemaining;
     context.nextPlayerRemainingCards = 16;
     context.minOpponentRemainingCards = 16;
-    context.remainingCards = {ownRemaining, 16, 16};
+    game::SetRemainingCards(context, ownRemaining, 16, 16);
     return context;
 }
 

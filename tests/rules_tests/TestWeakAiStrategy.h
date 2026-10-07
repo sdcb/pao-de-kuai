@@ -1,13 +1,14 @@
 #pragma once
 
-#include "game/AiStrategy.h"
+#include "game/CppCompat.h"
+#include "rules/CppCompat.h"
 
 #include <algorithm>
 #include <cstdint>
 
 namespace pdk::tests {
 
-class TestWeakAiStrategy final : public game::AiStrategy {
+class TestWeakAiStrategy final : public game::AiStrategyClass {
 public:
     game::AiMoveChoice ChooseMove(const rules::Cards& hand, const game::AiContext& context) override {
         const int n = static_cast<int>(hand.size());
@@ -33,13 +34,8 @@ public:
                 continue;
             }
 
-            choices.push_back(game::AiMoveChoice{
-                false,
-                cards,
-                validation.pattern,
-                "测试弱 AI 选择最低合法牌",
-                0
-            });
+            choices.push_back(game::AiMoveChoice_MakePlay(&cards, &validation.pattern,
+                                                         "测试弱 AI 选择最低合法牌", 0));
         }
 
         if (choices.empty()) {
@@ -84,7 +80,8 @@ private:
     }
 
     static game::AiMoveChoice PassChoice(const game::AiContext& context) {
-        return game::AiMoveChoice{true, MakeCards({}), {}, context.leading ? "测试弱 AI 没有可出的牌型" : "测试弱 AI 压牌失败"};
+        return game::AiMoveChoice_MakePass(context.leading ? "测试弱 AI 没有可出的牌型"
+                                                          : "测试弱 AI 压牌失败");
     }
 };
 

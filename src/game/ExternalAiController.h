@@ -1,6 +1,8 @@
 #pragma once
 
 #include "game/AiStrategy.h"
+#include "game/CppCompat.h"
+#include "rules/CppCompat.h"
 #include "game/TurnRecord.h"
 
 #include <optional>

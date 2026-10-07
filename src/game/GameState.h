@@ -70,7 +70,7 @@ public:
     const std::optional<rules::HandPattern>& LastPattern() const { return lastPattern_; }
     rules::PlayerId LastMovePlayer() const { return lastMovePlayer_; }
     const rules::Cards& PlayedCards() const { return playedCards_; }
-    const std::array<std::optional<PassObservation>, 3>& PassObservations() const { return passObservations_; }
+    const OptionalPassObservation* PassObservations() const { return passObservations_; }
     const std::set<int>& SelectedIndices() const { return selectedIndices_; }
     const std::vector<int>& HintIndices() const { return hintIndices_; }
     const std::vector<GameEvent>& Events() const { return events_; }
@@ -97,7 +97,7 @@ public:
     bool SelectBestPatternFromDraggedCards(const std::vector<int>& handIndices);
     void SetExternalAiController(std::shared_ptr<ExternalAiController> controller);
     void SetExternalAiControllers(std::vector<std::shared_ptr<ExternalAiController>> controllers);
-    void SetLocalAiStrategy(rules::PlayerId player, std::unique_ptr<AiStrategy> strategy);
+    void SetLocalAiStrategy(rules::PlayerId player, AiStrategy strategy, bool takeOwnership);
     void SetRoundTraceEnabled(bool enabled);
     void SetRoundTraceRoot(std::string root);
     const std::string& LastRoundTracePath() const { return lastRoundTracePath_; }
@@ -153,7 +153,7 @@ private:
 
     rules::PaoDeKuaiRules rules_;
     std::array<PlayerState, 3> players_;
-    std::array<AiPlayer, 3> aiPlayers_;
+    AiPlayer aiPlayers_[PDK_AI_SEATS];
     std::vector<std::shared_ptr<ExternalAiController>> externalAiControllers_;
     std::shared_ptr<ExternalAiController> activeExternalAi_;
     rules::PlayerId currentPlayer_{PLAYER_HUMAN};
@@ -164,8 +164,8 @@ private:
     std::optional<rules::PlayerId> nextRoundLeader_;
     rules::Cards lastCards_;
     rules::Cards playedCards_;
-    std::array<std::optional<PassObservation>, 3> passObservations_{};
-    std::array<std::vector<PassObservation>, 3> passHistory_{};
+    OptionalPassObservation passObservations_[PDK_AI_SEATS];
+    PassHistory passHistory_[PDK_AI_SEATS];
     int passCount_{0};
     bool roundOver_{true};
     bool autoplay_{false};

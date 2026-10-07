@@ -362,6 +362,9 @@ GameState::GameState() {
     Str_CopyTo(players_[0].name, PDK_SEAT_NAME_CAP, "\xE6\x9D\x8E\xE5\xA7\x90");
     Str_CopyTo(players_[1].name, PDK_SEAT_NAME_CAP, "AI1");
     Str_CopyTo(players_[2].name, PDK_SEAT_NAME_CAP, "AI2");
+    for (int i = 0; i < PDK_AI_SEATS; ++i) {
+        AiPlayer_Init(&aiPlayers_[i]);
+    }
     lastTalkIndices_.fill(-1);
 }
 
@@ -385,9 +388,9 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     standingBombIndex_.reset();
     lastCards_.clear();
     playedCards_.clear();
-    passObservations_.fill(std::nullopt);
-    for (auto& history : passHistory_) {
-        history.clear();
+    PassObservations_Clear(passObservations_, PDK_AI_SEATS);
+    for (int i = 0; i < PDK_AI_SEATS; ++i) {
+        PassHistory_Clear(&passHistory_[i]);
     }
     lastPattern_.reset();
     passCount_ = 0;
@@ -568,7 +571,8 @@ bool GameState::ApplyHint() {
     if (!IsHumanTurn()) {
         return false;
     }
-    AiMoveChoice choice = aiPlayers_[0].ChooseMove(players_[0].hand, MakeAiContext(PLAYER_HUMAN));
+    AiContext humanContext = MakeAiContext(PLAYER_HUMAN);
+    AiMoveChoice choice = AiPlayer_ChooseMove(&aiPlayers_[0], &players_[0].hand, &humanContext);
     if (choice.pass) {
         if (!CurrentPlayerLeads()) {
             const TurnSnapshot before = Snapshot();
@@ -796,9 +800,9 @@ void GameState::TestSetRound(
     lastPattern_ = previousPattern;
     lastCards_.clear();
     playedCards_.clear();
-    passObservations_.fill(std::nullopt);
-    for (auto& history : passHistory_) {
-        history.clear();
+    PassObservations_Clear(passObservations_, PDK_AI_SEATS);
+    for (int i = 0; i < PDK_AI_SEATS; ++i) {
+        PassHistory_Clear(&passHistory_[i]);
     }
     passCount_ = 0;
     roundOver_ = false;
@@ -855,8 +859,8 @@ AiContext GameState::MakeAiContext(rules::PlayerId player) const {
         }
     }
     context.playedCards = playedCards_;
-    context.passObservations = passObservations_;
-    context.passHistory = passHistory_;
+    PassObservations_Copy(context.passObservations, passObservations_, PDK_AI_SEATS);
+    PassHistories_Copy(context.passHistory, passHistory_, PDK_AI_SEATS);
     return context;
 }
 
@@ -960,7 +964,7 @@ TurnRecord GameState::BuildTurnRecord(
         } else if (source == TURN_SOURCE_HUMAN) {
             strategy = HumanStrategyMetadata();
         } else if (source == TURN_SOURCE_LOCAL_AI && actor == PLAYER_HUMAN) {
-            strategy = aiPlayers_[Index(actor)].Metadata();
+            strategy = AiPlayer_Metadata(&aiPlayers_[Index(actor)]);
         } else {
             strategy = roundStrategies_[static_cast<std::size_t>(Index(actor))];
         }
@@ -1051,10 +1055,10 @@ void GameState::SetExternalAiControllers(std::vector<std::shared_ptr<ExternalAiC
     externalAiPending_ = false;
 }
 
-void GameState::SetLocalAiStrategy(rules::PlayerId player, std::unique_ptr<AiStrategy> strategy) {
-    const StrategyMetadata metadata = strategy ? strategy->Metadata() : BasicStrategyMetadata();
-    aiPlayers_[Index(player)].SetStrategy(std::move(strategy));
-    roundStrategies_[static_cast<std::size_t>(Index(player))] = metadata;
+void GameState::SetLocalAiStrategy(rules::PlayerId player, AiStrategy strategy, bool takeOwnership) {
+    AiPlayer_SetStrategy(&aiPlayers_[Index(player)], strategy, takeOwnership);
+    roundStrategies_[static_cast<std::size_t>(Index(player))] =
+        AiPlayer_Metadata(&aiPlayers_[Index(player)]);
 }
 
 void GameState::SetRoundTraceEnabled(bool enabled) {
@@ -1085,7 +1089,9 @@ void GameState::PlayLocalAiTurn(rules::PlayerId player) {
         reason = TURN_REASON_CANNOT_BEAT;
         choice.pass = true;
     } else {
-        choice = aiPlayers_[Index(player)].ChooseMove(players_[Index(player)].hand, MakeAiContext(player));
+        AiContext seatContext = MakeAiContext(player);
+        choice = AiPlayer_ChooseMove(&aiPlayers_[Index(player)], &players_[Index(player)].hand,
+                                     &seatContext);
         if (choice.pass) {
             reason = TURN_REASON_CANNOT_BEAT;
         }
@@ -1246,25 +1252,27 @@ void GameState::AdvanceTurn() {
 
 void GameState::RecordPassObservation(rules::PlayerId player, const rules::HandPattern& pattern) {
     const int index = Index(player);
-    PassObservation observation{pattern, static_cast<int>(players_[index].hand.size())};
-    passHistory_[static_cast<std::size_t>(index)].push_back(observation);
-    std::optional<PassObservation>& existing = passObservations_[static_cast<std::size_t>(index)];
+    PassObservation observation;
+    observation.pattern = pattern;
+    observation.remainingCards = players_[index].hand.count;
+    PassHistory_Add(&passHistory_[index], &observation);
+    OptionalPassObservation& existing = passObservations_[index];
 
-    if (existing && existing->pattern.type == PATTERN_SINGLE && pattern.type == PATTERN_SINGLE) {
+    if (existing.has && existing.value.pattern.type == PATTERN_SINGLE && pattern.type == PATTERN_SINGLE) {
         // For singles, a lower failed-to-beat rank is stronger information:
         // failing to beat Q proves K/A/2 are unavailable, while failing to beat K
         // still leaves open the possibility that the player has a K.
-        if (rules::RankValue(pattern.mainRank) < rules::RankValue(existing->pattern.mainRank)) {
-            existing = observation;
+        if (rules::RankValue(pattern.mainRank) < rules::RankValue(existing.value.pattern.mainRank)) {
+            OptionalPassObservation_Set(&existing, &observation);
         }
         return;
     }
 
-    if (existing && existing->pattern.type == PATTERN_SINGLE && pattern.type != PATTERN_SINGLE) {
+    if (existing.has && existing.value.pattern.type == PATTERN_SINGLE && pattern.type != PATTERN_SINGLE) {
         return;
     }
 
-    existing = observation;
+    OptionalPassObservation_Set(&existing, &observation);
 }
 
 void GameState::PlayCards(rules::PlayerId player, const rules::Cards& cards, const rules::HandPattern& pattern, int disruptionPenalty) {

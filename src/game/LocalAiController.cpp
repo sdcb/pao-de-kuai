@@ -6,7 +6,7 @@
 namespace pdk::game {
 namespace {
 
-std::unique_ptr<AiStrategy> MakeStrategy(LocalAiKind kind) {
+std::unique_ptr<AiStrategyClass> MakeStrategy(LocalAiKind kind) {
     switch (kind) {
     case LocalAiKind::Basic:
         return std::make_unique<BasicAiStrategy>();
@@ -78,7 +78,7 @@ void LocalAiController::Start(ExternalAiRequest request) {
         ExternalAiResult result;
         result.source = TURN_SOURCE_LOCAL_AI;
         try {
-            std::unique_ptr<AiStrategy> strategy = MakeStrategy(kind);
+            std::unique_ptr<AiStrategyClass> strategy = MakeStrategy(kind);
             result.localChoice = strategy->ChooseMove(
                 request.snapshot.hands[static_cast<std::size_t>(rules::PlayerIndex(request.player))],
                 request.context);

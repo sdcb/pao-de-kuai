@@ -65,20 +65,20 @@ int ProvenControlBonus(const Candidate& candidate, const AiContext& context) {
     }
 
     int provenOpponents = 0;
-    for (int i = 0; i < static_cast<int>(context.passObservations.size()); ++i) {
+    for (int i = 0; i < PDK_AI_SEATS; ++i) {
         if (i == context.currentPlayerIndex || context.remainingCards[i] <= 0) {
             continue;
         }
         bool proven = false;
-        const auto& history = context.passHistory[static_cast<std::size_t>(i)];
-        for (const PassObservation& observation : history) {
-            if (ObservationProvesCannotBeat(candidate, observation)) {
+        const PassHistory& history = context.passHistory[i];
+        for (int h = 0; h < history.count; ++h) {
+            if (ObservationProvesCannotBeat(candidate, history.items[h])) {
                 proven = true;
                 break;
             }
         }
-        const std::optional<PassObservation>& observation = context.passObservations[static_cast<std::size_t>(i)];
-        if (!proven && observation && ObservationProvesCannotBeat(candidate, *observation)) {
+        const OptionalPassObservation& observation = context.passObservations[i];
+        if (!proven && observation.has && ObservationProvesCannotBeat(candidate, observation.value)) {
             proven = true;
         }
         if (proven) {
@@ -432,16 +432,17 @@ void ShuffleSample(rules::Cards& cards, std::uint32_t seed) {
 }
 
 bool IsConsistentWithPassHistory(const rules::Cards& hand, int playerIndex, const AiContext& context) {
-    if (playerIndex < 0 || playerIndex >= static_cast<int>(context.passHistory.size())) {
+    if (playerIndex < 0 || playerIndex >= PDK_AI_SEATS) {
         return true;
     }
-    for (const PassObservation& observation : context.passHistory[static_cast<std::size_t>(playerIndex)]) {
-        if (CachedHasAnyFollowMove(hand, observation.pattern, observation.remainingCards)) {
+    const PassHistory& history = context.passHistory[playerIndex];
+    for (int h = 0; h < history.count; ++h) {
+        if (CachedHasAnyFollowMove(hand, history.items[h].pattern, history.items[h].remainingCards)) {
             return false;
         }
     }
-    const std::optional<PassObservation>& latest = context.passObservations[static_cast<std::size_t>(playerIndex)];
-    if (latest && CachedHasAnyFollowMove(hand, latest->pattern, latest->remainingCards)) {
+    const OptionalPassObservation& latest = context.passObservations[playerIndex];
+    if (latest.has && CachedHasAnyFollowMove(hand, latest.value.pattern, latest.value.remainingCards)) {
         return false;
     }
     return true;
@@ -582,8 +583,8 @@ struct RolloutState {
     int roundLeaderIndex{0};
     std::optional<rules::HandPattern> lastPattern;
     rules::Cards playedCards;
-    std::array<std::optional<PassObservation>, 3> passObservations{};
-    std::array<std::vector<PassObservation>, 3> passHistory{};
+    OptionalPassObservation passObservations[PDK_AI_SEATS];
+    PassHistory passHistory[PDK_AI_SEATS];
     int passCount{0};
 };
 
@@ -599,9 +600,11 @@ void RemoveRolloutCards(rules::Cards& hand, const rules::Cards& cards) {
 }
 
 void RecordRolloutPass(RolloutState& state, int playerIndex, const rules::HandPattern& pattern) {
-    PassObservation observation{pattern, static_cast<int>(state.hands[static_cast<std::size_t>(playerIndex)].size())};
-    state.passHistory[static_cast<std::size_t>(playerIndex)].push_back(observation);
-    state.passObservations[static_cast<std::size_t>(playerIndex)] = observation;
+    PassObservation observation;
+    observation.pattern = pattern;
+    observation.remainingCards = state.hands[playerIndex].count;
+    PassHistory_Add(&state.passHistory[playerIndex], &observation);
+    OptionalPassObservation_Set(&state.passObservations[playerIndex], &observation);
 }
 
 AiContext RolloutContext(const RolloutState& state) {
@@ -629,20 +632,19 @@ AiContext RolloutContext(const RolloutState& state) {
         }
     }
     context.playedCards = state.playedCards;
-    context.passObservations = state.passObservations;
-    context.passHistory = state.passHistory;
+    PassObservations_Copy(context.passObservations, state.passObservations, PDK_AI_SEATS);
+    PassHistories_Copy(context.passHistory, state.passHistory, PDK_AI_SEATS);
     return context;
 }
 
 AiMoveChoice ChooseRolloutMove(const rules::Cards& hand, const AiContext& context, bool strongSelf) {
     if (!strongSelf) {
-        BasicAiStrategy basic;
-        return basic.ChooseMove(hand, context);
+        return BasicAiStrategy_ChooseMove(&hand, &context);
     }
 
     std::vector<Candidate> candidates = GenerateCandidates(hand, context);
     if (candidates.empty()) {
-        return AiMoveChoice{true, MakeCards({}), {}, context.leading ? "rollout strong no lead" : "rollout strong pass"};
+        return AiMoveChoice_MakePass(context.leading ? "rollout strong no lead" : "rollout strong pass");
     }
     for (Candidate& candidate : candidates) {
         candidate.score += StrongAdjustment(candidate, context);
@@ -686,14 +688,14 @@ AiMoveChoice ChooseRolloutMove(const rules::Cards& hand, const AiContext& contex
 }
 
 int RolloutWinner(RolloutState state, int strongIndex) {
-    BasicAiStrategy basic;
     for (int turn = 0; turn < 240; ++turn) {
         rules::Cards& hand = state.hands[static_cast<std::size_t>(state.currentIndex)];
         AiMoveChoice choice;
         if (state.currentIndex == strongIndex) {
             choice = ChooseRolloutMove(hand, RolloutContext(state), true);
         } else {
-            choice = basic.ChooseMove(hand, RolloutContext(state));
+            AiContext rolloutContext = RolloutContext(state);
+            choice = BasicAiStrategy_ChooseMove(&hand, &rolloutContext);
         }
         if (choice.pass) {
             if (!state.lastPattern) {
@@ -763,8 +765,8 @@ int ScoreRolloutDistribution(
     state.lastPattern = candidate.pattern;
     state.playedCards = context.playedCards;
     state.playedCards.insert(state.playedCards.end(), candidate.cards.begin(), candidate.cards.end());
-    state.passObservations = context.passObservations;
-    state.passHistory = context.passHistory;
+    PassObservations_Copy(state.passObservations, context.passObservations, PDK_AI_SEATS);
+    PassHistories_Copy(state.passHistory, context.passHistory, PDK_AI_SEATS);
 
     const int winner = RolloutWinner(std::move(state), self);
     const int selfWinScore = self == context.roundLeaderIndex ? 3800 : 2600;
@@ -962,8 +964,8 @@ int FastRolloutBonus(
         state.lastPattern = candidate.pattern;
         state.playedCards = context.playedCards;
         state.playedCards.insert(state.playedCards.end(), candidate.cards.begin(), candidate.cards.end());
-        state.passObservations = context.passObservations;
-        state.passHistory = context.passHistory;
+        PassObservations_Copy(state.passObservations, context.passObservations, PDK_AI_SEATS);
+        PassHistories_Copy(state.passHistory, context.passHistory, PDK_AI_SEATS);
 
         const int winner = RolloutWinner(std::move(state), self);
         const int selfWinScore = self == context.roundLeaderIndex ? 3800 : 2600;
@@ -1219,7 +1221,7 @@ namespace {
 AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context) {
     std::vector<Candidate> candidates = GenerateCandidates(hand, context);
     if (candidates.empty()) {
-        return AiMoveChoice{true, MakeCards({}), {}, context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败"};
+        return AiMoveChoice_MakePass(context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败");
     }
 
     for (Candidate& candidate : candidates) {
@@ -1233,7 +1235,7 @@ AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context
     FilterStrongBombSplits(candidates, hand, context);
     FilterStrongMidgameSingleSplits(candidates, hand, context);
     if (candidates.empty()) {
-        return AiMoveChoice{true, MakeCards({}), {}, context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败"};
+        return AiMoveChoice_MakePass(context.leading ? "强 AI 没有可出的牌型" : "强 AI 压牌失败");
     }
 
     std::optional<rules::Cards> unknown;
@@ -1351,19 +1353,16 @@ AiMoveChoice ChooseStrongMove(const rules::Cards& hand, const AiContext& context
             }
         }
     }
-    return AiMoveChoice{
-        false,
-        best->cards,
-        best->pattern,
-        "强 AI 推荐 " + rules::PatternName(best->pattern.type),
-        best->disruptionPenalty
-    };
+    const std::string reason = "强 AI 推荐 " + rules::PatternName(best->pattern.type);
+    return AiMoveChoice_MakePlay(&best->cards, &best->pattern, reason.c_str(), best->disruptionPenalty);
 }
 
 } // namespace
 
-AiMoveChoice StrongAiStrategy::ChooseMove(const rules::Cards& hand, const AiContext& context) {
-    return ChooseStrongMove(hand, context);
-}
-
 } // namespace pdk::game
+
+/* The C entry point; the body above stays in the namespace with the helpers it uses. */
+AiMoveChoice StrongAiStrategy_ChooseMove(const Cards* hand, const AiContext* context)
+{
+    return pdk::game::ChooseStrongMove(*hand, *context);
+}

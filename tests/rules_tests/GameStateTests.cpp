@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "TestHelpers.h"
-#include "game/AiStrategy.h"
+#include "game/CppCompat.h"
 #include "game/GameState.h"
 #include "game/LocalAiController.h"
 
@@ -182,25 +182,27 @@ rules::PlayerId NextSimPlayer(rules::PlayerId player) {
 }
 
 void RecordSimPassObservation(
-    std::array<std::optional<game::PassObservation>, 3>& observations,
-    std::array<std::vector<game::PassObservation>, 3>& history,
+    game::OptionalPassObservation* observations,
+    game::PassHistory* history,
     rules::PlayerId player,
     const rules::HandPattern& pattern,
     int remainingCards) {
-    std::optional<game::PassObservation>& existing = observations[static_cast<std::size_t>(rules::PlayerIndex(player))];
-    game::PassObservation observation{pattern, remainingCards};
-    history[static_cast<std::size_t>(rules::PlayerIndex(player))].push_back(observation);
+    game::OptionalPassObservation& existing = observations[rules::PlayerIndex(player)];
+    game::PassObservation observation;
+    observation.pattern = pattern;
+    observation.remainingCards = remainingCards;
+    game::PassHistory_Add(&history[rules::PlayerIndex(player)], &observation);
 
-    if (existing && existing->pattern.type == PATTERN_SINGLE && pattern.type == PATTERN_SINGLE) {
-        if (rules::RankValue(pattern.mainRank) < rules::RankValue(existing->pattern.mainRank)) {
-            existing = observation;
+    if (existing.has && existing.value.pattern.type == PATTERN_SINGLE && pattern.type == PATTERN_SINGLE) {
+        if (rules::RankValue(pattern.mainRank) < rules::RankValue(existing.value.pattern.mainRank)) {
+            game::OptionalPassObservation_Set(&existing, &observation);
         }
         return;
     }
-    if (existing && existing->pattern.type == PATTERN_SINGLE && pattern.type != PATTERN_SINGLE) {
+    if (existing.has && existing.value.pattern.type == PATTERN_SINGLE && pattern.type != PATTERN_SINGLE) {
         return;
     }
-    existing = observation;
+    game::OptionalPassObservation_Set(&existing, &observation);
 }
 
 void RemoveSimCards(rules::Cards& hand, const rules::Cards& cards) {
@@ -222,8 +224,8 @@ game::AiContext MakeSimContext(
     rules::PlayerId roundLeader,
     int passCount,
     const rules::Cards& playedCards,
-    const std::array<std::optional<game::PassObservation>, 3>& observations,
-    const std::array<std::vector<game::PassObservation>, 3>& history) {
+    const game::OptionalPassObservation* observations,
+    const game::PassHistory* history) {
     const int currentIndex = rules::PlayerIndex(current);
     game::AiContext context;
     context.leading = !lastPattern.has_value();
@@ -248,8 +250,8 @@ game::AiContext MakeSimContext(
         }
     }
     context.playedCards = playedCards;
-    context.passObservations = observations;
-    context.passHistory = history;
+    game::PassObservations_Copy(context.passObservations, observations, game::PDK_AI_SEATS);
+    game::PassHistories_Copy(context.passHistory, history, game::PDK_AI_SEATS);
     return context;
 }
 
@@ -304,7 +306,7 @@ std::string SimCardsText(const rules::Cards& cards) {
 }
 
 SimRoundResult RunSimRound(
-    const std::array<game::AiStrategy*, 3>& strategies,
+    const std::array<game::AiStrategyClass*, 3>& strategies,
     unsigned seed,
     std::optional<rules::PlayerId> requestedLeader,
     std::vector<std::string>* trace = nullptr) {
@@ -324,8 +326,12 @@ SimRoundResult RunSimRound(
     rules::PlayerId trickLeader = current;
     std::optional<rules::HandPattern> lastPattern;
     rules::Cards playedCards;
-    std::array<std::optional<game::PassObservation>, 3> observations{};
-    std::array<std::vector<game::PassObservation>, 3> passHistory{};
+    game::OptionalPassObservation observations[game::PDK_AI_SEATS];
+    game::PassHistory passHistory[game::PDK_AI_SEATS];
+    game::PassObservations_Clear(observations, game::PDK_AI_SEATS);
+    for (int i = 0; i < game::PDK_AI_SEATS; ++i) {
+        game::PassHistory_Clear(&passHistory[i]);
+    }
     int passCount = 0;
 
     if (trace != nullptr) {
@@ -431,9 +437,9 @@ struct AiTimingStats {
     }
 };
 
-class TimedAiStrategy final : public game::AiStrategy {
+class TimedAiStrategy final : public game::AiStrategyClass {
 public:
-    explicit TimedAiStrategy(std::unique_ptr<game::AiStrategy> inner) : inner_(std::move(inner)) {}
+    explicit TimedAiStrategy(std::unique_ptr<game::AiStrategyClass> inner) : inner_(std::move(inner)) {}
 
     game::AiMoveChoice ChooseMove(const rules::Cards& hand, const game::AiContext& context) override {
         const auto start = std::chrono::steady_clock::now();
@@ -446,7 +452,7 @@ public:
     AiTimingStats stats;
 
 private:
-    std::unique_ptr<game::AiStrategy> inner_;
+    std::unique_ptr<game::AiStrategyClass> inner_;
 };
 
 void PrintTiming(const char* name, AiTimingStats& stats) {
@@ -477,7 +483,7 @@ void RunRotatedStrongTimingDiagnostic(const char* title) {
                 timed[static_cast<std::size_t>((rotation + 1) % 3)],
                 timed[static_cast<std::size_t>((rotation + 2) % 3)]
             };
-            std::array<game::AiStrategy*, 3> strategies{seated[0], seated[1], seated[2]};
+            std::array<game::AiStrategyClass*, 3> strategies{seated[0], seated[1], seated[2]};
             const SimRoundResult result = RunSimRound(
                 strategies,
                 20260714u + static_cast<unsigned>(round),
@@ -526,7 +532,7 @@ void RunRotatedStrongTimingDiagnostic(const char* title) {
     CHECK(strategyWins[0] + strategyWins[1] + strategyWins[2] == roundsPerRotation * 3);
 }
 
-SimSummary RunAutoplayRounds(std::array<game::AiStrategy*, 3> strategies, unsigned seedBase, int roundCount) {
+SimSummary RunAutoplayRounds(std::array<game::AiStrategyClass*, 3> strategies, unsigned seedBase, int roundCount) {
     SimSummary summary;
     std::optional<rules::PlayerId> nextLeader;
     const bool continuous = RunContinuousFairnessRounds();
@@ -724,9 +730,9 @@ TEST_CASE("disabled strong ai beats basic over 1000 autoplay rounds" * doctest::
     game::BasicAiStrategy ai1Basic;
     game::StrongAiStrategy strongAi;
     game::BasicAiStrategy ai2;
-    game::AiStrategy* ai1 = RunStrongFairnessStrategy() ? static_cast<game::AiStrategy*>(&strongAi) : &ai1Basic;
+    game::AiStrategyClass* ai1 = RunStrongFairnessStrategy() ? static_cast<game::AiStrategyClass*>(&strongAi) : &ai1Basic;
     const SimSummary summary = RunAutoplayRounds(
-        std::array<game::AiStrategy*, 3>{&playerAi, ai1, &ai2},
+        std::array<game::AiStrategyClass*, 3>{&playerAi, ai1, &ai2},
         20260619u,
         roundCount);
     const std::array<int, 3>& wins = summary.wins;
@@ -783,12 +789,12 @@ TEST_CASE("disabled compare strong ai decisions against basic seeds" * doctest::
         std::vector<std::string>* strongTracePtr = traceSeed == seed ? &strongTrace : nullptr;
 
         const SimRoundResult basic = RunSimRound(
-            std::array<game::AiStrategy*, 3>{&basicPlayer, &basicAi1, &basicAi2},
+            std::array<game::AiStrategyClass*, 3>{&basicPlayer, &basicAi1, &basicAi2},
             seed,
             forcedLeader,
             basicTracePtr);
         const SimRoundResult strong = RunSimRound(
-            std::array<game::AiStrategy*, 3>{&basicPlayer, &strongAi, &basicAi2},
+            std::array<game::AiStrategyClass*, 3>{&basicPlayer, &strongAi, &basicAi2},
             seed,
             forcedLeader,
             strongTracePtr);
@@ -1241,8 +1247,8 @@ TEST_CASE("game state tracks played cards and clears observations for a fresh te
         PLAYER_HUMAN);
 
     CHECK(state.PlayedCards().empty());
-    for (const auto& observation : state.PassObservations()) {
-        CHECK_FALSE(observation.has_value());
+    for (int i = 0; i < game::PDK_AI_SEATS; ++i) {
+        CHECK_FALSE(state.PassObservations()[i].has);
     }
 }
 
@@ -1261,10 +1267,10 @@ TEST_CASE("game state records pass observations from mandatory-play rule") {
 
     REQUIRE(state.PassHuman());
     const auto& observation = state.PassObservations()[rules::PlayerIndex(PLAYER_HUMAN)];
-    REQUIRE(observation.has_value());
-    CHECK(observation->pattern.type == PATTERN_SINGLE);
-    CHECK(observation->pattern.mainRank == RANK_QUEEN);
-    CHECK(observation->remainingCards == 1);
+    REQUIRE(observation.has);
+    CHECK(observation.value.pattern.type == PATTERN_SINGLE);
+    CHECK(observation.value.pattern.mainRank == RANK_QUEEN);
+    CHECK(observation.value.remainingCards == 1);
 }
 
 TEST_CASE("ai pass observations survive the relaunch lead") {
@@ -1287,10 +1293,10 @@ TEST_CASE("ai pass observations survive the relaunch lead") {
     CHECK_FALSE(state.LastPattern().has_value());
     const auto& ai1Observation = state.PassObservations()[rules::PlayerIndex(PLAYER_AI1)];
     const auto& ai2Observation = state.PassObservations()[rules::PlayerIndex(PLAYER_AI2)];
-    REQUIRE(ai1Observation.has_value());
-    REQUIRE(ai2Observation.has_value());
-    CHECK(ai1Observation->pattern.mainRank == RANK_QUEEN);
-    CHECK(ai2Observation->pattern.mainRank == RANK_QUEEN);
+    REQUIRE(ai1Observation.has);
+    REQUIRE(ai2Observation.has);
+    CHECK(ai1Observation.value.pattern.mainRank == RANK_QUEEN);
+    CHECK(ai2Observation.value.pattern.mainRank == RANK_QUEEN);
 }
 
 TEST_CASE("ai bomb talk ignores existing normal talk cooldown") {

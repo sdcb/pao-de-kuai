@@ -291,16 +291,16 @@ int ProvenSingleControlBonus(const Candidate& candidate, const AiContext& contex
 
     int best = 0;
     const int candidateRank = rules::RankValue(candidate.pattern.mainRank);
-    for (int i = 0; i < static_cast<int>(context.passObservations.size()); ++i) {
+    for (int i = 0; i < PDK_AI_SEATS; ++i) {
         if (i == context.currentPlayerIndex || context.remainingCards[i] <= 0) {
             continue;
         }
-        const std::optional<PassObservation>& observation = context.passObservations[static_cast<std::size_t>(i)];
-        if (!observation || observation->pattern.type != PATTERN_SINGLE) {
+        const OptionalPassObservation& observation = context.passObservations[i];
+        if (!observation.has || observation.value.pattern.type != PATTERN_SINGLE) {
             continue;
         }
 
-        const int failedRank = rules::RankValue(observation->pattern.mainRank);
+        const int failedRank = rules::RankValue(observation.value.pattern.mainRank);
         if (candidateRank >= failedRank) {
             // Consume only same-pattern information: failing to beat Q single
             // proves Q/K below A can be useful leads, but says nothing about
@@ -556,10 +556,10 @@ void DeduplicateCandidates(std::vector<Candidate>& candidates) {
 
 using namespace ai_internal;
 
-std::vector<AiMoveChoice> BasicAiStrategy::RecommendMoves(const rules::Cards& hand, const AiContext& context, int limit) const {
+std::vector<AiMoveChoice> RecommendBasicMoves(const rules::Cards& hand, const AiContext& context, int limit) {
     std::vector<Candidate> candidates = GenerateCandidates(hand, context);
     if (candidates.empty()) {
-        return {AiMoveChoice{true, MakeCards({}), {}, context.leading ? "没有可出的牌型" : "压不过，选择不要"}};
+        return {AiMoveChoice_MakePass(context.leading ? "没有可出的牌型" : "压不过，选择不要")};
     }
 
     std::sort(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
@@ -583,24 +583,26 @@ std::vector<AiMoveChoice> BasicAiStrategy::RecommendMoves(const rules::Cards& ha
         if (!seen.insert(CandidateKey(candidate)).second) {
             continue;
         }
-        recommendations.push_back(AiMoveChoice{
-            false,
-            candidate.cards,
-            candidate.pattern,
-            "基础 AI 推荐 " + rules::PatternName(candidate.pattern.type),
-            candidate.disruptionPenalty
-        });
+        const std::string reason = "基础 AI 推荐 " + rules::PatternName(candidate.pattern.type);
+        recommendations.push_back(AiMoveChoice_MakePlay(&candidate.cards, &candidate.pattern,
+                                                       reason.c_str(), candidate.disruptionPenalty));
     }
     return recommendations;
 }
 
-AiMoveChoice BasicAiStrategy::ChooseMove(const rules::Cards& hand, const AiContext& context) {
-    const std::vector<AiMoveChoice> recommendations = RecommendMoves(hand, context, 1);
+AiMoveChoice ChooseBasicMove(const rules::Cards& hand, const AiContext& context) {
+    const std::vector<AiMoveChoice> recommendations = RecommendBasicMoves(hand, context, 1);
     return recommendations.empty()
-        ? AiMoveChoice{true, MakeCards({}), {}, context.leading ? "没有可出的牌型" : "压不过，选择不要"}
+        ? AiMoveChoice_MakePass(context.leading ? "没有可出的牌型" : "压不过，选择不要")
         : recommendations.front();
 }
 
 
 
 } // namespace pdk::game
+
+/* The C entry point; the body above stays in the namespace with the helpers it uses. */
+AiMoveChoice BasicAiStrategy_ChooseMove(const Cards* hand, const AiContext* context)
+{
+    return pdk::game::ChooseBasicMove(*hand, *context);
+}

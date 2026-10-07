@@ -2,7 +2,7 @@
 
 #include "TestHelpers.h"
 #include "TestWeakAiStrategy.h"
-#include "game/AiStrategy.h"
+#include "game/CppCompat.h"
 
 using namespace pdk;
 using tests::C;
@@ -262,11 +262,8 @@ TEST_CASE("ai lead uses proven safe singleton and keeps higher control cards") {
     });
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 10, 10);
     context.currentPlayerIndex = 1;
-    context.remainingCards = {10, static_cast<int>(hand.size()), 10};
-    context.passObservations[0] = game::PassObservation{
-        rules::HandPattern{PATTERN_SINGLE, RANK_QUEEN, 1},
-        10
-    };
+    game::SetRemainingCards(context, 10, static_cast<int>(hand.size()), 10);
+    game::SetPassObservation(context.passObservations[0], game::PassObservation{rules::HandPattern{PATTERN_SINGLE, RANK_QUEEN, 1}, 10});
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
 
@@ -286,11 +283,8 @@ TEST_CASE("ai urgent lead can still use high singleton despite safe singleton ob
     });
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 1, 1);
     context.currentPlayerIndex = 1;
-    context.remainingCards = {1, static_cast<int>(hand.size()), 8};
-    context.passObservations[2] = game::PassObservation{
-        rules::HandPattern{PATTERN_SINGLE, RANK_QUEEN, 1},
-        8
-    };
+    game::SetRemainingCards(context, 1, static_cast<int>(hand.size()), 8);
+    game::SetPassObservation(context.passObservations[2], game::PassObservation{rules::HandPattern{PATTERN_SINGLE, RANK_QUEEN, 1}, 8});
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
 
@@ -342,15 +336,9 @@ TEST_CASE("strong ai uses proven pass information for a safe singleton lead") {
     });
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 8, 8);
     context.currentPlayerIndex = 1;
-    context.remainingCards = {8, static_cast<int>(hand.size()), 8};
-    context.passObservations[0] = game::PassObservation{
-        rules::HandPattern{PATTERN_SINGLE, RANK_QUEEN, 1},
-        8
-    };
-    context.passObservations[2] = game::PassObservation{
-        rules::HandPattern{PATTERN_SINGLE, RANK_QUEEN, 1},
-        8
-    };
+    game::SetRemainingCards(context, 8, static_cast<int>(hand.size()), 8);
+    game::SetPassObservation(context.passObservations[0], game::PassObservation{rules::HandPattern{PATTERN_SINGLE, RANK_QUEEN, 1}, 8});
+    game::SetPassObservation(context.passObservations[2], game::PassObservation{rules::HandPattern{PATTERN_SINGLE, RANK_QUEEN, 1}, 8});
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
 
@@ -385,7 +373,7 @@ TEST_CASE("strong ai lead blocks a one-card opponent even when not next player")
         C(RANK_ACE)
     });
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 6, 1);
-    context.remainingCards = {static_cast<int>(hand.size()), 6, 1};
+    game::SetRemainingCards(context, static_cast<int>(hand.size()), 6, 1);
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
 
@@ -404,7 +392,7 @@ TEST_CASE("strong ai follow blocks a one-card opponent even when not next player
     game::AiContext context = FollowContext(previous, static_cast<int>(hand.size()));
     context.nextPlayerRemainingCards = 6;
     context.minOpponentRemainingCards = 1;
-    context.remainingCards = {static_cast<int>(hand.size()), 6, 1};
+    game::SetRemainingCards(context, static_cast<int>(hand.size()), 6, 1);
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
 
@@ -425,7 +413,7 @@ TEST_CASE("strong ai early lead prefers a multi-card plan") {
     game::AiContext context = LeadContext(static_cast<int>(hand.size()), 13, 13);
     context.currentPlayerIndex = 1;
     context.roundLeaderIndex = 1;
-    context.remainingCards = {13, static_cast<int>(hand.size()), 13};
+    game::SetRemainingCards(context, 13, static_cast<int>(hand.size()), 13);
 
     const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
 
