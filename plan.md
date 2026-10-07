@@ -770,7 +770,7 @@
 > | `src/` 纯 C（C17，双工具链共用 shim） | ✅ | `check_c_only.py`：`0 finding(s) in .c/.h, 0 remaining C++ file(s)` / **`src/ is pure C.`** / 退出码 0；MSVC `cl` 与 MinGW `gcc` 都编过 |
 > | 删除 `external/vc-ltl` 全套引用 | ✅ | `external/` 只剩 `cjson`、`doctest`；代码/CMake/CI/JSON 里**零**引用（仅剩文档中"已删除"的说明） |
 > | MinGW-w64 UCRT x64 主发布 / x86 | ✅ | CI 8 组合中 MinGW UCRT x64 为 `kind: mingw` 主发布（上传 MinIO）；两个架构的 exe 都经 `api-ms-win-crt-*` API set 直连系统 `ucrtbase.dll`，且**无** `msvcrt.dll`/`libstdc++`/`libgcc` 依赖 |
-> | 最低系统 Win10 | ✅ | `WINVER`/`_WIN32_WINNT = 0x0A00` **且** PE 头实测 `MajorOSystemVersion 10 / MajorSubsystemVersion 10`（原来还是 MinGW 默认的 4.0/5.2） |
+> | 最低系统 Win10 | ✅ | `WINVER`/`_WIN32_WINNT = 0x0A00` + 实际调用的 Win10 API（`IAudioClient3` 等）。**PE 版本字段保持工具链默认**——曾把它声明成 10.0，结果加载器直接拒绝该映像（0xC000007B），已回退，见 修订 32 |
 > | ctest 目标在 MSVC x64 与 MinGW x64 双绿 | ✅ | 三个工具链各 `100% tests passed out of 15`（目标数从 6 涨到 8 再到 15，见上） |
 > | CI 8 组合结构 | ✅ | 6× VS2026（x64/x86/arm64 × `/MD`、`/MT`）+ MinGW UCRT x64/x86 |
 > | MinGW x64 exe ≤ 679,424 B | ✅ | **423,936 B**，即预算的 **62.4%**（余量 255,488 B） |
@@ -786,7 +786,7 @@
 >   C++ 语法与禁用头，**而不是把代码弯成 linter 喜欢的样子**。
 > - `-static-libstdc++`/`-static-libgcc` 只留给 `scene_viewer`（`pao_de_kuai` 已是纯 C，该标志早已是空操作，
 >   移掉它是为了不让构建脚本说假话）。
-> - PE 声明最低系统 10.0（MinGW `-Wl,--major-subsystem-version,10`；MSVC `/SUBSYSTEM:WINDOWS,10.0`）。
+> - ~~PE 声明最低系统 10.0~~ **已回退**：这会把 exe 变成加载器拒绝的映像，见 修订 32。
 > - CI 增加 `check_c_only` 门禁（工具本身不合格即 `exit 1`），与既有的 shim 漂移检查同一作业。
 > - README / AGENTS 的"正在迁移"改成完成态，并写明 UCRT 直连的正确核验方式。
 >
@@ -795,6 +795,35 @@
 > 2. `tests/` 是 C++（doctest + `scene_viewer`），适配层在 `tests/support/` —— 测试允许 C++ 是既定策略。
 > 3. `GameState_Destroy` 不释放每座位的 `AiPlayer` 策略（移植时按原样保留的既有缺陷，树内无人触发）。
 > 4. 开始界面页脚/关于面板的致谢文案与基线不同 —— 修订 17 的有意决定。
+>
+>
+> **修订 32（S8b 的回归与修复——`pao_de_kuai.exe` 无法启动）**
+>
+> 用户在本地运行发布 exe 报 **"应用程序无法正常启动(0xc000007b)"**；x64 与 x86 都失败，
+> 而 `build-mingw-ucrt-x64-debug`（改动**之前**构建的）正常。
+>
+> **根因**：修订 31 里我"顺手改进"的那条——给 `pao_de_kuai` 加
+> `-Wl,--major-subsystem-version,10 --minor-subsystem-version,0 --major-os-version,10 --minor-os-version,0`
+> （MSVC 侧 `/SUBSYSTEM:WINDOWS,10.0`）**让加载器直接拒绝该映像**。
+> 实测：`objdump -p` 显示改后 `MajorOSystemVersion 10 / MajorSubsystemVersion 10`，改回工具链默认
+> （4.0 / 5.2）后 exe 立刻能起来（窗口标题 `极客版跑得快`）。x64 与 x86 均验证通过。
+>
+> **为什么整条测试链路没抓住**：ctest 跑的始终是 `scene_viewer.exe`——**15 个用例里没有一个启动过
+> 真正发布的 `pao_de_kuai.exe`**。所以一个加载器根本不接受的 exe，在"三链路 15/15 全绿"下看起来
+> 完全验证过了。这是验证覆盖的真实缺口，不是运气不好。
+>
+> **修复**：
+> 1. 回退那条链接选项；`WINVER`/`_WIN32_WINNT` + 实际用的 Win10 API 才是"最低系统"的真实约束，
+>    PE 里那个字段只是兼容性提示，**不值得为它冒险**。`CMakeLists.txt` 里留了注释写明这个坑，
+>    并写明"再动它之前必须先启动 `pao_de_kuai.exe`"。
+> 2. 新增 **`tools/check_launch.ps1`** 与 ctest 用例 **`pao_de_kuai_launch`**（第 16 个），
+>    启动真正发布的 exe、确认窗口起来了（标题含"跑得快"，可与加载器错误框区分）、再杀掉。
+>    0xC000007B 在进程创建时就返回，所以被拒绝的映像一秒内就死了，退出码直接说明问题。
+>    健康启动约 1 秒就能看到窗口，用例会提前退出（实测 3.2 秒）。
+> 3. 更正了 README/AGENTS/plan.md 里"PE 声明最低 Win10"那句话——它是错的，而且正是它把我引偏。
+>
+> 三链路 16/16 全绿；x64/x86 发布 exe 均实测可启动。
+>
 > 7. S8 收尾
 >
 > **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**

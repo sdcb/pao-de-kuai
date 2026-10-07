@@ -65,7 +65,7 @@ ctest --preset vs2026-release --output-on-failure
 
 `src/` 已**全量迁移为 C17**：里面没有任何 `.cpp`，`python tools/check_c_only.py` 会报 `src/ is pure C.`，并作为 CI 门禁在每次构建时校验。C++ 只保留在 `tests/`（doctest 单元测试与 `scene_viewer`），它们的 C++ 适配层位于 `tests/support/`。
 
-发布 exe 不依赖 `msvcrt.dll`、`libstdc++` 或 `libgcc`：CRT 经 `api-ms-win-crt-*` 这组 API set 直连系统 `ucrtbase.dll`；PE 头也把最低系统声明为 Win10（`MajorSubsystemVersion 10.0`），与 `WINVER`/`_WIN32_WINNT` 的实际要求一致。
+发布 exe 不依赖 `msvcrt.dll`、`libstdc++` 或 `libgcc`：CRT 经 `api-ms-win-crt-*` 这组 API set 直连系统 `ucrtbase.dll`。最低系统 Win10 由 `WINVER`/`_WIN32_WINNT` 与实际调用的 Win10 API 决定（PE 版本字段保持工具链默认：把它改高会让加载器拒绝映像，见 plan.md 修订 32）。
 
 ## 运行数据
 

@@ -7,7 +7,9 @@
 > **改造已完成**：`src/` 已经是**纯 C（C17）**——里面没有任何 `.cpp`，
 > `python tools/check_c_only.py` 报 `src/ is pure C.`，并且已接入 CI 门禁。
 > 工具链为**双工具链**：MinGW-w64 UCRT x64 是主发布构建（直连系统 `ucrtbase.dll`，
-> PE 声明最低 Win10），MSVC x64/x86/arm64 是 CI 验证组合；`external/vc-ltl` 已删除。
+> 最低系统 Win10 由 `WINVER`/`_WIN32_WINNT` 与所用 API 决定），MSVC x64/x86/arm64 是 CI 验证
+> 组合；`external/vc-ltl` 已删除。**不要给 `pao_de_kuai` 加 PE 子系统/OS 版本链接选项**——
+> 那会让加载器以 0xC000007B 拒绝映像（plan.md 修订 32），`pao_de_kuai_launch` 用例会抓它。
 > C++ 只存在于 `tests/`（doctest 测试与 `scene_viewer`），其 C++ 适配层在 `tests/support/`。
 > **改 `src/` 之前先读 [`docs/c-port-conventions.md`](docs/c-port-conventions.md) 与
 > [`plan.md`](plan.md)**：新代码不得再引入 C++ 或 `<memory>`/`<string>`/`<vector>` 这类头。

@@ -276,16 +276,16 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_link_options(scene_viewer PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
-# Say out loud what the binary needs.  WINVER/_WIN32_WINNT only decide which APIs compile; the PE
-# header's subsystem version is what Windows reads, and MinGW defaults it to 5.2 (XP-class) while
-# MSVC defaults to 6.0.  The project dropped Win8 support, so both now declare Win10, verifiable
-# with `objdump -p` / `dumpbin /headers`.
+# The PE header keeps the toolchain defaults.  Declaring a Windows 10 subsystem/OS version here
+# (MinGW `-Wl,--major-subsystem-version,10 --major-os-version,10`, MSVC `/SUBSYSTEM:WINDOWS,10.0`)
+# made the loader reject the executable outright with STATUS_INVALID_IMAGE_FORMAT (0xC000007B):
+# it starts, shows "应用程序无法正常启动(0xc000007b)" and dies.  MinGW's default (subsystem 5.2,
+# OS 4.0) and MSVC's (6.0) both load fine.  The Windows 10 requirement is real, but it is enforced
+# by WINVER/_WIN32_WINNT and by the APIs the code calls -- not by this field, which is only a
+# compatibility hint.  Do not "improve" it again without launching pao_de_kuai.exe:
+# scene_viewer is what the ctest suite runs, so a broken pao_de_kuai.exe passes every test.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_link_options(pao_de_kuai PRIVATE -municode
-        -Wl,--major-subsystem-version,10 -Wl,--minor-subsystem-version,0
-        -Wl,--major-os-version,10 -Wl,--minor-os-version,0)
-elseif(MSVC)
-    target_link_options(pao_de_kuai PRIVATE "/SUBSYSTEM:WINDOWS,10.0")
+    target_link_options(pao_de_kuai PRIVATE -municode)
 endif()
 
 if(PDK_BUILD_TESTS)
@@ -355,6 +355,12 @@ add_test(NAME ui_overlay_confirm_exit COMMAND scene_viewer --overlay confirm-exi
 add_test(NAME ui_overlay_about COMMAND scene_viewer --overlay about --screenshot ${CMAKE_BINARY_DIR}/ui-about.jpg --quality 75)
 add_test(NAME ui_overlay_return_menu COMMAND scene_viewer --overlay return-menu --screenshot ${CMAKE_BINARY_DIR}/ui-return-menu.jpg --quality 75)
 add_test(NAME ui_overlay_invalid COMMAND scene_viewer --overlay invalid --screenshot ${CMAKE_BINARY_DIR}/ui-invalid.jpg --quality 75)
+
+# The one test that runs the shipping executable.  Everything else runs scene_viewer, so a
+# pao_de_kuai.exe the loader refuses (e.g. a bad PE subsystem version) otherwise passes the whole
+# suite -- which happened once.
+add_test(NAME pao_de_kuai_launch COMMAND pwsh -NoProfile -File
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_launch.ps1" $<TARGET_FILE:pao_de_kuai>)
 
 # Each test gets its own working directory.  The app reads appsettings.json from the current
 # directory, and unit_tests' settings round-trip case WRITES one -- so while both ran in the build
