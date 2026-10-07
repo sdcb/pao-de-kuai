@@ -145,17 +145,18 @@ void GameScene::StartNextRound() {
 
 void GameScene::InitializeExternalAi() {
     if (mock_ || app_.ViewerMode()) {
-        game_.SetExternalAiControllers({});
+        game_.SetExternalAiControllers(nullptr, 0);
         return;
     }
 
-    auto controller = std::make_shared<game::LocalAiController>();
+    game::LocalAiController* controller = game::LocalAiController_Create();
     auto kindFor = [](const std::string& selection) {
-        return selection == "strong" ? game::LocalAiKind::Strong : game::LocalAiKind::Basic;
+        return selection == "strong" ? game::LOCAL_AI_STRONG : game::LOCAL_AI_BASIC;
     };
-    controller->SetStrategy(PLAYER_AI1, kindFor(app_.Settings().ai1));
-    controller->SetStrategy(PLAYER_AI2, kindFor(app_.Settings().ai2));
-    game_.SetExternalAiControllers({std::move(controller)});
+    game::LocalAiController_SetStrategy(controller, PLAYER_AI1, kindFor(app_.Settings().ai1));
+    game::LocalAiController_SetStrategy(controller, PLAYER_AI2, kindFor(app_.Settings().ai2));
+    /* GameState takes ownership from here. */
+    game_.SetExternalAiController(game::LocalAiController_Interface(controller));
 }
 
 void GameScene::Update(float dt) {

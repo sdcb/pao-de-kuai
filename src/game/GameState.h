@@ -58,6 +58,7 @@ enum class TalkKind {
 class GameState {
 public:
     GameState();
+    ~GameState();
 
     void StartNewRound(const std::string& playerName, unsigned seed = 0);
     void Update(float dt);
@@ -95,8 +96,10 @@ public:
     bool ApplyHint();
     bool SelectByHoverPattern(int handIndex);
     bool SelectBestPatternFromDraggedCards(const std::vector<int>& handIndices);
-    void SetExternalAiController(std::shared_ptr<ExternalAiController> controller);
-    void SetExternalAiControllers(std::vector<std::shared_ptr<ExternalAiController>> controllers);
+    /* Takes ownership of the controllers: GameState destroys them when it replaces
+     * them (or is destroyed itself).  At most PDK_AI_SEATS are kept, one per seat. */
+    void SetExternalAiController(ExternalAiController controller);
+    void SetExternalAiControllers(const ExternalAiController* controllers, int count);
     void SetLocalAiStrategy(rules::PlayerId player, AiStrategy strategy, bool takeOwnership);
     void SetRoundTraceEnabled(bool enabled);
     void SetRoundTraceRoot(std::string root);
@@ -131,7 +134,7 @@ private:
     void AppendRecord(TurnRecord record);
     void MaybeWriteRoundTrace();
     TurnDecisionTrace SyntheticTrace(const TurnRecord& record) const;
-    std::shared_ptr<ExternalAiController> AiControllerFor(rules::PlayerId player) const;
+    const ExternalAiController* AiControllerFor(rules::PlayerId player) const;
     bool ApplyExternalAiResult(const ExternalAiResult& result);
     bool ApplyLocalAiResult(const AiMoveChoice& choice, TurnDecisionSource source);
     void StartExternalAiTurn();
@@ -154,8 +157,14 @@ private:
     rules::PaoDeKuaiRules rules_;
     std::array<PlayerState, 3> players_;
     AiPlayer aiPlayers_[PDK_AI_SEATS];
-    std::vector<std::shared_ptr<ExternalAiController>> externalAiControllers_;
-    std::shared_ptr<ExternalAiController> activeExternalAi_;
+    /* Value-initialised in the class body, not just in the constructor: the destructor
+     * walks externalAiControllerCount_ entries, and an indeterminate count there made
+     * MSVC crash on destruction while MinGW happened to survive. */
+    ExternalAiController externalAiControllers_[PDK_AI_SEATS]{};
+    int externalAiControllerCount_{0};
+    /* A borrow of the same (vtable, user) pair as the owning slot above. */
+    ExternalAiController activeExternalAi_{};
+    bool hasActiveExternalAi_{false};
     rules::PlayerId currentPlayer_{PLAYER_HUMAN};
     rules::PlayerId lastMovePlayer_{PLAYER_HUMAN};
     rules::PlayerId trickLeader_{PLAYER_HUMAN};
@@ -164,8 +173,8 @@ private:
     std::optional<rules::PlayerId> nextRoundLeader_;
     rules::Cards lastCards_;
     rules::Cards playedCards_;
-    OptionalPassObservation passObservations_[PDK_AI_SEATS];
-    PassHistory passHistory_[PDK_AI_SEATS];
+    OptionalPassObservation passObservations_[PDK_AI_SEATS]{};
+    PassHistory passHistory_[PDK_AI_SEATS]{};
     int passCount_{0};
     bool roundOver_{true};
     bool autoplay_{false};

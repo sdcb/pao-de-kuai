@@ -364,7 +364,11 @@ GameState::GameState() {
     Str_CopyTo(players_[2].name, PDK_SEAT_NAME_CAP, "AI2");
     for (int i = 0; i < PDK_AI_SEATS; ++i) {
         AiPlayer_Init(&aiPlayers_[i]);
+        PassHistory_Clear(&passHistory_[i]);
     }
+    PassObservations_Clear(passObservations_, PDK_AI_SEATS);
+    externalAiControllerCount_ = 0;
+    hasActiveExternalAi_ = false;
     lastTalkIndices_.fill(-1);
 }
 
@@ -403,11 +407,9 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     turnRecords_.clear();
     nextTurnNo_ = 1;
     externalAiPending_ = false;
-    activeExternalAi_.reset();
-    for (const auto& controller : externalAiControllers_) {
-        if (controller) {
-            controller->Cancel();
-        }
+    hasActiveExternalAi_ = false;
+    for (int i = 0; i < externalAiControllerCount_; ++i) {
+        ExternalAiController_Cancel(&externalAiControllers_[i]);
     }
     toast_ = "新一局开始";
     startedAt_ = stats::NowTimeText();
@@ -819,11 +821,9 @@ void GameState::TestSetRound(
     lastRoundTracePath_.clear();
     roundSeed_ = 0;
     externalAiPending_ = false;
-    activeExternalAi_.reset();
-    for (const auto& controller : externalAiControllers_) {
-        if (controller) {
-            controller->Cancel();
-        }
+    hasActiveExternalAi_ = false;
+    for (int i = 0; i < externalAiControllerCount_; ++i) {
+        ExternalAiController_Cancel(&externalAiControllers_[i]);
     }
 }
 
@@ -1024,34 +1024,47 @@ TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
     return trace;
 }
 
-void GameState::SetExternalAiController(std::shared_ptr<ExternalAiController> controller) {
-    std::vector<std::shared_ptr<ExternalAiController>> controllers;
-    if (controller) {
-        controllers.push_back(std::move(controller));
+GameState::~GameState() {
+    for (int i = 0; i < externalAiControllerCount_; ++i) {
+        ExternalAiController_Cancel(&externalAiControllers_[i]);
+        ExternalAiController_Destroy(&externalAiControllers_[i]);
     }
-    SetExternalAiControllers(std::move(controllers));
+    externalAiControllerCount_ = 0;
 }
 
-void GameState::SetExternalAiControllers(std::vector<std::shared_ptr<ExternalAiController>> controllers) {
-    for (const auto& controller : externalAiControllers_) {
-        if (controller) {
-            controller->Cancel();
+void GameState::SetExternalAiController(ExternalAiController controller) {
+    if (controller.vtbl != NULL) {
+        SetExternalAiControllers(&controller, 1);
+    } else {
+        SetExternalAiControllers(NULL, 0);
+    }
+}
+
+void GameState::SetExternalAiControllers(const ExternalAiController* controllers, int count) {
+    for (int i = 0; i < externalAiControllerCount_; ++i) {
+        ExternalAiController_Cancel(&externalAiControllers_[i]);
+        ExternalAiController_Destroy(&externalAiControllers_[i]);
+    }
+    externalAiControllerCount_ = 0;
+    for (int i = 0; controllers != NULL && i < count && i < PDK_AI_SEATS; ++i) {
+        if (controllers[i].vtbl != NULL) {
+            externalAiControllers_[externalAiControllerCount_++] = controllers[i];
         }
     }
-    externalAiControllers_ = std::move(controllers);
     roundStrategies_[0] = HumanStrategyMetadata();
     roundStrategies_[1] = BasicStrategyMetadata();
     roundStrategies_[2] = BasicStrategyMetadata();
-    for (int i = 1; i < 3; ++i) {
+    for (int i = 1; i < PDK_AI_SEATS; ++i) {
         const rules::PlayerId player = rules::PlayerFromIndex(i);
-        for (const auto& controller : externalAiControllers_) {
-            if (controller && controller->CanHandle(player)) {
-                roundStrategies_[static_cast<std::size_t>(i)] = controller->MetadataFor(player);
+        for (int c = 0; c < externalAiControllerCount_; ++c) {
+            if (ExternalAiController_CanHandle(&externalAiControllers_[c], player)) {
+                roundStrategies_[static_cast<std::size_t>(i)] =
+                    ExternalAiController_MetadataFor(&externalAiControllers_[c], player);
                 break;
             }
         }
     }
-    activeExternalAi_.reset();
+    hasActiveExternalAi_ = false;
     externalAiPending_ = false;
 }
 
@@ -1069,13 +1082,13 @@ void GameState::SetRoundTraceRoot(std::string root) {
     roundTraceRoot_ = std::move(root);
 }
 
-std::shared_ptr<ExternalAiController> GameState::AiControllerFor(rules::PlayerId player) const {
-    for (const auto& controller : externalAiControllers_) {
-        if (controller && controller->CanHandle(player)) {
-            return controller;
+const ExternalAiController* GameState::AiControllerFor(rules::PlayerId player) const {
+    for (int i = 0; i < externalAiControllerCount_; ++i) {
+        if (ExternalAiController_CanHandle(&externalAiControllers_[i], player)) {
+            return &externalAiControllers_[i];
         }
     }
-    return {};
+    return nullptr;
 }
 
 void GameState::PlayLocalAiTurn(rules::PlayerId player) {
@@ -1140,46 +1153,47 @@ void GameState::StartExternalAiTurn() {
         return;
     }
 
-    std::shared_ptr<ExternalAiController> controller = AiControllerFor(currentPlayer_);
-    if (!controller) {
+    const ExternalAiController* controller = AiControllerFor(currentPlayer_);
+    ExternalAiRequest request;
+
+    if (controller == nullptr) {
         PlayLocalAiTurn(currentPlayer_);
         return;
     }
 
     externalAiPending_ = true;
-    activeExternalAi_ = controller;
-    controller->Start(ExternalAiRequest{
-        nextTurnNo_,
-        currentPlayer_,
-        playerName_,
-        Snapshot(),
-        MakeAiContext(currentPlayer_),
-        turnRecords_
-    });
+    activeExternalAi_ = *controller;
+    hasActiveExternalAi_ = true;
+    request.turnNo = nextTurnNo_;
+    request.player = currentPlayer_;
+    request.snapshot = Snapshot();
+    request.context = MakeAiContext(currentPlayer_);
+    ExternalAiController_Start(controller, &request);
 }
 
 bool GameState::TryCompleteExternalAiTurn() {
-    if (!activeExternalAi_) {
+    ExternalAiResult result;
+
+    if (!hasActiveExternalAi_) {
         externalAiPending_ = false;
         return false;
     }
-    std::optional<ExternalAiResult> result = activeExternalAi_->TryGetResult();
-    if (!result) {
+    if (!ExternalAiController_TryGetResult(&activeExternalAi_, &result)) {
         return false;
     }
     externalAiPending_ = false;
-    activeExternalAi_.reset();
-    if (!ApplyExternalAiResult(*result)) {
+    hasActiveExternalAi_ = false;
+    if (!ApplyExternalAiResult(result)) {
         PlayLocalAiTurn(currentPlayer_);
     }
     return true;
 }
 
 bool GameState::ApplyExternalAiResult(const ExternalAiResult& result) {
-    if (!result.ok || !result.localChoice) {
+    if (!result.ok || !result.hasLocalChoice) {
         return false;
     }
-    return ApplyLocalAiResult(*result.localChoice, result.source);
+    return ApplyLocalAiResult(result.localChoice, result.source);
 }
 
 bool GameState::ApplyLocalAiResult(const AiMoveChoice& choice, TurnDecisionSource source) {

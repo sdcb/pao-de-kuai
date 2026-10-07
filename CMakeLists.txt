@@ -173,7 +173,8 @@ set(PDK_CORE_SOURCES
     src/rules/Scoring.c
     src/game/BasicAiStrategy.cpp
     src/game/GameState.cpp
-    src/game/LocalAiController.cpp
+    src/game/ExternalAiController.c
+    src/game/LocalAiController.c
     src/game/RoundRecorder.cpp
     src/game/RoundTraceRecorder.cpp
     src/game/StrongAiStrategy.cpp

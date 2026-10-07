@@ -18,6 +18,9 @@
 #include <vector>
 
 #include "game/AiPlayer.h"
+#include "rules/CppCompat.h"
+#include "game/ExternalAiController.h"
+#include "game/LocalAiController.h"
 #include "game/Player.h"
 #include "game/StrategyMetadata.h"
 #include "game/TurnRecord.h"
@@ -48,6 +51,26 @@ using ::TURN_SOURCE_HUMAN;
 using ::TURN_SOURCE_LOCAL_AI;
 using ::TURN_SOURCE_SYSTEM;
 
+using ::LOCAL_AI_BASIC;
+using ::LOCAL_AI_STRONG;
+using ::ExternalAiController_CanHandle;
+using ::ExternalAiController_Cancel;
+using ::ExternalAiController_Destroy;
+using ::ExternalAiController_HasPending;
+using ::ExternalAiController_MetadataFor;
+using ::ExternalAiController_Start;
+using ::ExternalAiController_TryGetResult;
+
+using ::ExternalAiController;
+using ::ExternalAiControllerVtbl;
+using ::ExternalAiRequest;
+using ::ExternalAiResult;
+using ::LocalAiKind;
+using ::LocalAiController;
+using ::LocalAiController_Create;
+using ::LocalAiController_Interface;
+using ::LocalAiController_SetStrategy;
+using ::PDK_AI_ERROR_CAP;
 using ::PDK_AI_REASON_CAP;
 using ::PDK_AI_SEATS;
 using ::PDK_PASS_HISTORY_MAX;
@@ -154,8 +177,83 @@ public:
     StrategyMetadata Metadata() const override { return StrongStrategyMetadata(); }
 };
 
-/* Kept because call sites say game::AiStrategy; the C name is the interface itself. */
-using AiStrategyBase = AiStrategyClass;
+/*
+ * The old ExternalAiController abstract class.  The test double still subclasses it, so
+ * the facade bridges a C++ implementation onto the C vtable; Transfer hands ownership to
+ * the C side, which is how GameState takes its controllers.
+ */
+class ExternalAiControllerClass {
+public:
+    virtual ~ExternalAiControllerClass() = default;
+
+    virtual bool CanHandle(rules::PlayerId player) const = 0;
+    virtual StrategyMetadata MetadataFor(rules::PlayerId player) const
+    {
+        return UnknownStrategyMetadata();
+    }
+    virtual bool HasPending() const = 0;
+    virtual void Start(const ExternalAiRequest& request) = 0;
+    /* Writes into `out` and returns true when a result is ready. */
+    virtual bool TryGetResult(ExternalAiResult& out) = 0;
+    virtual void Cancel() = 0;
+};
+
+namespace detail {
+
+inline bool ExternalAiControllerClass_CanHandle(void* user, PlayerId player)
+{
+    return static_cast<ExternalAiControllerClass*>(user)->CanHandle(player);
+}
+
+inline StrategyMetadata ExternalAiControllerClass_MetadataFor(void* user, PlayerId player)
+{
+    return static_cast<ExternalAiControllerClass*>(user)->MetadataFor(player);
+}
+
+inline bool ExternalAiControllerClass_HasPending(void* user)
+{
+    return static_cast<ExternalAiControllerClass*>(user)->HasPending();
+}
+
+inline void ExternalAiControllerClass_Start(void* user, const ExternalAiRequest* request)
+{
+    static_cast<ExternalAiControllerClass*>(user)->Start(*request);
+}
+
+inline bool ExternalAiControllerClass_TryGetResult(void* user, ExternalAiResult* out)
+{
+    return static_cast<ExternalAiControllerClass*>(user)->TryGetResult(*out);
+}
+
+inline void ExternalAiControllerClass_Cancel(void* user)
+{
+    static_cast<ExternalAiControllerClass*>(user)->Cancel();
+}
+
+inline void ExternalAiControllerClass_Destroy(void* user)
+{
+    delete static_cast<ExternalAiControllerClass*>(user);
+}
+
+} // namespace detail
+
+/* Takes ownership of the controller; GameState destroys it. */
+inline ::ExternalAiController Transfer(ExternalAiControllerClass* controller)
+{
+    static const ExternalAiControllerVtbl vtbl = {
+        detail::ExternalAiControllerClass_CanHandle,
+        detail::ExternalAiControllerClass_MetadataFor,
+        detail::ExternalAiControllerClass_HasPending,
+        detail::ExternalAiControllerClass_Start,
+        detail::ExternalAiControllerClass_TryGetResult,
+        detail::ExternalAiControllerClass_Cancel,
+        detail::ExternalAiControllerClass_Destroy
+    };
+    ::ExternalAiController owned;
+    owned.vtbl = (controller != nullptr) ? &vtbl : NULL;
+    owned.user = controller;
+    return owned;
+}
 
 } // namespace pdk::game
 

@@ -604,12 +604,12 @@ SimSummary RunAutoplayRounds(std::array<game::AiStrategyClass*, 3> strategies, u
     return summary;
 }
 
-class MockExternalAiController final : public game::ExternalAiController {
+class MockExternalAiController final : public game::ExternalAiControllerClass {
 public:
     explicit MockExternalAiController(
         game::ExternalAiResult result,
         rules::PlayerId handledPlayer = PLAYER_AI1)
-        : result_(std::move(result)), handledPlayer_(handledPlayer) {}
+        : result_(result), handledPlayer_(handledPlayer) {}
 
     bool CanHandle(rules::PlayerId player) const override {
         return player == handledPlayer_;
@@ -619,18 +619,19 @@ public:
         return pending_;
     }
 
-    void Start(game::ExternalAiRequest request) override {
+    void Start(const game::ExternalAiRequest& request) override {
         startCount++;
-        lastRequest = std::move(request);
+        lastRequest = request;
         pending_ = true;
     }
 
-    std::optional<game::ExternalAiResult> TryGetResult() override {
+    bool TryGetResult(game::ExternalAiResult& out) override {
         if (!pending_) {
-            return std::nullopt;
+            return false;
         }
         pending_ = false;
-        return result_;
+        out = result_;
+        return true;
     }
 
     void Cancel() override {
@@ -928,14 +929,16 @@ TEST_CASE("turn order is counterclockwise so the left-hand player is upstream") 
 
 TEST_CASE("AI1 can use local async strong controller and records a local decision") {
     const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
-    auto controller = std::make_shared<game::LocalAiController>();
-    controller->SetStrategy(PLAYER_AI1, game::LocalAiKind::Strong);
-    const game::StrategyMetadata metadata = controller->MetadataFor(PLAYER_AI1);
+    game::LocalAiController* local = game::LocalAiController_Create();
+    game::LocalAiController_SetStrategy(local, PLAYER_AI1, game::LOCAL_AI_STRONG);
+    const game::ExternalAiController localIface = game::LocalAiController_Interface(local);
+    const game::StrategyMetadata metadata =
+        game::ExternalAiController_MetadataFor(&localIface, PLAYER_AI1);
     CHECK(std::string(metadata.strategy) == "strong");
     CHECK(std::string(metadata.strategyVersion) == "2.1");
 
     game::GameState state;
-    state.SetExternalAiController(controller);
+    state.SetExternalAiController(localIface);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::MakeCards({C(RANK_THREE)}),
@@ -965,10 +968,10 @@ TEST_CASE("AI1 can use local async strong controller and records a local decisio
 
 TEST_CASE("AI1 only legal move is recorded without calling the async controller") {
     const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
-    auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
+    auto* controller = new MockExternalAiController(game::ExternalAiResult{});
 
     game::GameState state;
-    state.SetExternalAiController(controller);
+    state.SetExternalAiController(game::Transfer(controller));
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::MakeCards({C(RANK_THREE)}),
@@ -988,10 +991,10 @@ TEST_CASE("AI1 only legal move is recorded without calling the async controller"
 
 TEST_CASE("local AI2 actions are recorded but not external controlled") {
     const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
-    auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
+    auto* controller = new MockExternalAiController(game::ExternalAiResult{});
 
     game::GameState state;
-    state.SetExternalAiController(controller);
+    state.SetExternalAiController(game::Transfer(controller));
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::MakeCards({C(RANK_THREE)}),
@@ -1011,12 +1014,12 @@ TEST_CASE("local AI2 actions are recorded but not external controlled") {
 
 TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
     const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
-    auto controller = std::make_shared<MockExternalAiController>(
+    auto* controller = new MockExternalAiController(
         game::ExternalAiResult{},
         PLAYER_AI2);
 
     game::GameState state;
-    state.SetExternalAiController(controller);
+    state.SetExternalAiController(game::Transfer(controller));
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::MakeCards({C(RANK_THREE)}),
@@ -1038,17 +1041,18 @@ TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
 
 TEST_CASE("AI2 can use local async basic controller through multi controller routing") {
     const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
-    auto otherController = std::make_shared<MockExternalAiController>(
+    auto* otherController = new MockExternalAiController(
         game::ExternalAiResult{},
         PLAYER_AI1);
-    auto localController = std::make_shared<game::LocalAiController>();
-    localController->SetStrategy(PLAYER_AI2, game::LocalAiKind::Basic);
+    game::LocalAiController* local = game::LocalAiController_Create();
+    game::LocalAiController_SetStrategy(local, PLAYER_AI2, game::LOCAL_AI_BASIC);
 
     game::GameState state;
-    state.SetExternalAiControllers({
-        otherController,
-        localController
-    });
+    const game::ExternalAiController controllers[2] = {
+        game::Transfer(otherController),
+        game::LocalAiController_Interface(local)
+    };
+    state.SetExternalAiControllers(controllers, 2);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::MakeCards({C(RANK_THREE)}),
@@ -1076,10 +1080,10 @@ TEST_CASE("AI2 can use local async basic controller through multi controller rou
 
 TEST_CASE("failed async AI result falls back to the built-in local strategy") {
     const auto fourLead = rules::IdentifyPattern(MakeCards({C(RANK_FOUR)})).pattern;
-    auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
+    auto* controller = new MockExternalAiController(game::ExternalAiResult{});
 
     game::GameState state;
-    state.SetExternalAiController(controller);
+    state.SetExternalAiController(game::Transfer(controller));
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::MakeCards({C(RANK_THREE)}),
