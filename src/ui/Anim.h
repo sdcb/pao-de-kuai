@@ -10,7 +10,7 @@
  *
  * `std::lround` is still avoided in favour of RoundToInt: UCRT does export
  * `lround`, but keeping one rounding implementation is a style and size rule
- * that outlived the VC-LTL requirement that originally forced it.
+ * that outlived the runtime it was originally written for.
  */
 
 #include <math.h>

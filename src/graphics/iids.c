@@ -18,10 +18,8 @@
 
 #include <windows.h>
 
-#include <wincodec.h>
-
 /*
- * <mmdeviceapi.h> and <audioclient.h> are deliberately NOT included here: MinGW's
+ * <mmdeviceapi.h>, <audioclient.h> and <wincodec.h> are deliberately NOT included here: MinGW's
  * copies use DEFINE_GUID (so INITGUID would define the WASAPI/MMDevice GUIDs) while
  * MSVC's only declare them, and including them on one toolchain only would put the
  * two builds in different places.  graphics/iids_gen.h defines all six instead, so

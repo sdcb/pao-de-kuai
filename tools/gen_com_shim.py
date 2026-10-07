@@ -272,6 +272,13 @@ EXTRA_GUID_SOURCES = [
         "IID_IAudioClient3",
         "IID_IAudioRenderClient",
     ]),
+    # graphics/D2DContext.c creates the WIC factory from C, where there is no __uuidof, so
+    # both the class id and the interface id have to be real definitions.  MSVC's
+    # <wincodec.h> only declares them.
+    ("wincodec.h", [
+        "CLSID_WICImagingFactory",
+        "IID_IWICImagingFactory",
+    ]),
 ]
 
 

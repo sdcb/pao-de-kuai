@@ -3,7 +3,7 @@
 #include "core/Geometry.h"
 #include "core/Overlay.h"
 #include "graphics/ComPtr.h"
-#include "graphics/D2DContext.h"
+#include "graphics/CppCompat.h"
 
 #include <string>
 #include <vector>

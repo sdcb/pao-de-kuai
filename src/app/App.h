@@ -5,7 +5,7 @@
 #include "core/Overlay.h"
 #include "core/SceneManager.h"
 #include "game/RoundRecorder.h"
-#include "graphics/D2DContext.h"
+#include "graphics/CppCompat.h"
 #include "graphics/SpriteAtlas.h"
 #include "stats/CppCompat.h"
 

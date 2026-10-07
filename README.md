@@ -16,7 +16,6 @@
 - IMM32（设置里的中文输入）
 - cJSON
 - doctest
-- VC-LTL
 - CMake
 
 ## 项目结构
@@ -62,7 +61,7 @@ ctest --preset vs2026-release --output-on-failure
 - `scene_viewer.exe`：测试/调试用场景查看器，可按参数打开指定场景并截图。
 - `unit_tests.exe`：规则、状态和基础 AI 单元测试。
 
-MSVC x64/x86 默认使用 `external/vc-ltl` 中的精简 VC-LTL 源码，在 build 目录生成运行库并将 CRT 链接到系统 `msvcrt.dll` 以减小 exe 体积；仓库不签入 VC-LTL `.lib` 产物，其他架构或缺少构建工具时会自动回退到普通 `/MT`。
+主发布工具链是 MinGW-w64 UCRT x64：直接链接系统 `ucrtbase.dll`，不静态链接 libstdc++/libgcc（`src/` 已是纯 C）。MSVC x64/x86/arm64 作为 CI 验证组合保留，默认 `/MT`。
 
 ## 运行数据
 
@@ -78,4 +77,3 @@ MIT License. See [LICENSE](LICENSE).
 
 - cJSON：MIT License，见 `external/cjson/LICENSE`。
 - doctest：MIT License，见 `external/doctest/LICENSE.txt`。
-- VC-LTL：Eclipse Public License 2.0，见 `external/vc-ltl/LICENSE`。

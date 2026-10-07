@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/Geometry.h"
-#include "graphics/D2DContext.h"
+#include "graphics/CppCompat.h"
 #include "ui/Anim.h"
 #include "ui/Icons.h"
 #include "ui/Theme.h"

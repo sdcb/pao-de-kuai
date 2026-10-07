@@ -203,7 +203,7 @@ set(PDK_APP_SOURCES
     src/audio/AudioDecoder.c
     src/audio/AudioEngine.c
     src/audio/SoundCatalog.c
-    src/graphics/D2DContext.cpp
+    src/graphics/D2DContext.c
     src/graphics/ProceduralTextures.c
     src/graphics/WicImageLoader.c
     src/graphics/iids.c

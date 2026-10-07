@@ -96,7 +96,7 @@ void StartScene::Render(graphics::RenderContext& context) {
     }
 
     graphics::TextStyle footer = Centered(Text(12.5f));
-    context.DrawTextUtf8("使用 cJSON / doctest (MIT) 与 VC-LTL (EPL-2.0)", {0.0f, 680.0f, 1280.0f, 24.0f}, footer, WithAlpha(theme::Faint, 0.9f));
+    context.DrawTextUtf8("使用 cJSON / doctest (MIT)", {0.0f, 680.0f, 1280.0f, 24.0f}, footer, WithAlpha(theme::Faint, 0.9f));
 }
 
 void StartScene::DrawTitle(graphics::RenderContext& context) {

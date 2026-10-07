@@ -1,6 +1,6 @@
 #pragma once
 
-#include "graphics/D2DContext.h"
+#include "graphics/CppCompat.h"
 
 #include <cstdint>
 
