@@ -276,6 +276,35 @@
 > - 进度：`src/` 剩 **24 个 `.cpp`**，`check_c_only.py` 残留 205 处；
 >   MinGW x64 exe **693,760 → 692,736 B**；依赖表仍是 22 个系统 DLL。
 >
+> **修订 17（S7a + S5b 完成记录，commit `79d3c86`、`063c08c`）——IME 与渲染上下文已纯 C**：
+> - `ImeInput` → `.c`：类只持 HWND + 使能位 + 上次 caret，无所有权；两个读取函数从
+>   `std::wstring&` 改成 `WStr`，用 `WinFile` 那套 Reserve-再写 的模式。App 的 4 个调用点零改动。
+> - **`D2DContext` → `.c`（这是 UI 层的枢纽，转完即解锁剩余 22 个文件）**：
+>   5 个 `std::map` 缓存 + `std::list` LRU → 定长数组 + 使用戳（一个梯度键本来分散在三个 map
+>   里共享一条 LRU 链，现在合并成一条带可空成员的表）；文本格式缓存同样有界，**C++ 版在满 64
+>   条时是整个清空**，现在改成淘汰最久未用的，界一样但不会把热格式也扔掉；
+>   `std::vector` 变换/透明度栈 → 定长数组 + 深度计数器（溢出忽略，和原来 `PopTransform`
+>   拒绝弹掉单位矩阵一致）；`initializer_list`/`span` → 指针 + 数量；`std::wstring` → `WStr`。
+>   `D2D1::*` 帮助函数全部改成直接填结构体，`Matrix3x2F::operator*` 按 `D2D1Matrix3x2FMultiply`
+>   重写。`TextStyle` 的 DWRITE 字段在 C 侧是 `int`、FontFamily 是一对常量——**MSVC 的 C 模式
+>   根本无法解析 `<dwrite.h>`**；C++ 侧的 DWRITE 类型与 `enum class FontFamily` 由
+>   `graphics/CppCompat.h` 保留并在边界转换。
+> - **新增 `graphics/D2DContext.c` 时才暴露的一类 shim 细节（值得记住）**：flat shim 镜像的是
+>   **COM 签名**，所以几何参数是**指针**而 C++ 内联包装收的是引用（`SetTransform`/`Clear`/
+>   `SetColor`/`Resize`/`PushAxisAlignedClip`/`FillRectangle`/`DrawRectangle`/`Fill|DrawRoundedRect`/
+>   `Fill|DrawEllipse`/`DrawBitmap`）；`Draw*` 形式还要一个 stroke style；`EndDraw` 要两个 tag 出参；
+>   `DrawText`/`DrawTextLayout` 要一个 options；几何 sink 是批量的 `AddLines`（**不是 `AddLine`**）；
+>   brush 派生接口的 `SetOpacity` 第一个参数声明为 `PDK_ID2D1Brush *`；另外 C 需要
+>   `&CLSID`/`&IID`/`&GUID_WICPixelFormat32bppPBGRA` 而 C++ 帮你隐式取址。
+> - 生成器新增 `CLSID_WICImagingFactory` / `IID_IWICImagingFactory`（C 里没有 `__uuidof`），
+>   因此 `iids.c` 不能再 include `<wincodec.h>`——和 WASAPI GUID 同一条"只定义一次"规则。
+> - **清掉 VC-LTL 残留引用**：About 面板与开始页页脚还在写"C++ …… VC-LTL"和 VC-LTL 许可，
+>   现在都是假的。**这两处字符串是唯一一处刻意偏离基线截图的内容改动**——布局/配色/阴影逐像素未变，
+>   而为了迁就"像素一致"的判据去留一句假署名是更糟的选择。README 去掉 VC-LTL 条目、构建段落与
+>   许可行，改为主发布工具链 MinGW UCRT x64 的说明。
+> - 进度：`src/` 剩 **22 个 `.cpp`**，`check_c_only.py` 残留 202 处；
+>   MinGW x64 exe **692,736 → 686,080 B**（距 679,424 还差 6.7 KB）。
+>
 >
 
 >
