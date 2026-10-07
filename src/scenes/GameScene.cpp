@@ -174,7 +174,7 @@ void GameScene::Update(float dt) {
     if (!handsSorted_) {
         dealElapsed_ += dt;
         while (dealSoundCount_ < DealSoundCount && dealElapsed_ >= static_cast<float>(dealSoundCount_ + 1) * DealCardInterval) {
-            app_.Audio().Play(audio::SoundId::DealCard);
+            app_.Audio().Play(SOUND_DEAL_CARD);
             dealSoundCount_++;
         }
         if (dealElapsed_ >= static_cast<float>(DealSoundCount) * DealCardInterval + 0.1f) {
@@ -184,7 +184,7 @@ void GameScene::Update(float dt) {
             game_.SortHands();
             handsSorted_ = true;
             sortAnimation_ = 1.0f;
-            app_.Audio().Play(audio::SoundId::Hint);
+            app_.Audio().Play(SOUND_HINT);
             actionButtonsDirty_ = true;
         }
     } else {
@@ -685,7 +685,7 @@ bool GameScene::OnMouseMove(float x, float y) {
 bool GameScene::OnMouseDown(float x, float y) {
     if (backButton_.HitTest(x, y)) {
         backButton_.pressT = 1.0f;
-        app_.Audio().Play(audio::SoundId::ButtonClick);
+        app_.Audio().Play(SOUND_BUTTON_CLICK);
         app_.PushOverlay(std::make_unique<overlays::ReturnToMenuOverlay>(app_));
         return true;
     }
@@ -712,7 +712,7 @@ bool GameScene::OnMouseDown(float x, float y) {
     }
     if (hit == 0) {
         game_.ToggleAutoplay();
-        app_.Audio().Play(audio::SoundId::ButtonClick);
+        app_.Audio().Play(SOUND_BUTTON_CLICK);
     } else if (hit == 1) {
         game_.PassHuman();
     } else if (hit == 2) {
@@ -743,14 +743,14 @@ bool GameScene::OnMouseUp(float x, float y) {
     if (InteractionReady()) {
         if (dragMoved_ && dragPath_.size() > 1) {
             if (game_.SelectBestPatternFromDraggedCards(dragPath_)) {
-                app_.Audio().Play(audio::SoundId::SelectCard);
+                app_.Audio().Play(SOUND_SELECT_CARD);
             } else {
-                app_.Audio().Play(audio::SoundId::InvalidMove);
+                app_.Audio().Play(SOUND_INVALID_MOVE);
             }
         } else if (dragStartCard_ >= 0) {
             const bool wasSelected = game_.SelectedIndices().contains(dragStartCard_);
             game_.TogglePlayerCard(dragStartCard_);
-            app_.Audio().Play(wasSelected ? audio::SoundId::DeselectCard : audio::SoundId::SelectCard);
+            app_.Audio().Play(wasSelected ? SOUND_DESELECT_CARD : SOUND_SELECT_CARD);
         }
         actionButtonsDirty_ = true;
     }
@@ -815,37 +815,37 @@ void GameScene::ConsumeEvents() {
         case game::GameEventType::RoundStarted:
             break;
         case game::GameEventType::CardsPlayed:
-            app_.Audio().Play(audio::SoundId::PlayCards);
+            app_.Audio().Play(SOUND_PLAY_CARDS);
             playAnimation_ = 1.0f;
             lastAnimatedPlayer_ = event.player;
             passTimers_[static_cast<std::size_t>(rules::PlayerIndex(event.player))] = 0.0f;
             break;
         case game::GameEventType::Passed:
-            app_.Audio().Play(audio::SoundId::Pass);
+            app_.Audio().Play(SOUND_PASS);
             passTimers_[static_cast<std::size_t>(rules::PlayerIndex(event.player))] = PassChipSeconds;
             break;
         case game::GameEventType::InvalidMove:
-            app_.Audio().Play(audio::SoundId::InvalidMove);
+            app_.Audio().Play(SOUND_INVALID_MOVE);
             break;
         case game::GameEventType::Hint:
-            app_.Audio().Play(audio::SoundId::Hint);
+            app_.Audio().Play(SOUND_HINT);
             break;
         case game::GameEventType::Bomb:
-            app_.Audio().Play(audio::SoundId::Bomb);
+            app_.Audio().Play(SOUND_BOMB);
             bombAnimation_ = 1.0f;
             break;
         case game::GameEventType::RoundEnded:
-            app_.Audio().Play(audio::SoundId::RoundEnd);
-            app_.Audio().Play(event.player == PLAYER_HUMAN ? audio::SoundId::Win : audio::SoundId::Lose);
+            app_.Audio().Play(SOUND_ROUND_END);
+            app_.Audio().Play(event.player == PLAYER_HUMAN ? SOUND_WIN : SOUND_LOSE);
             roundResultPending_ = true;
             roundResultDelay_ = 0.0f;
             break;
         case game::GameEventType::Talk:
             if (event.player != PLAYER_HUMAN) {
-                app_.Audio().Play(audio::SoundId::AiTalk);
+                app_.Audio().Play(SOUND_AI_TALK);
                 app_.PushOverlay(std::make_unique<overlays::TalkBubbleOverlay>(event.player, event.message));
             } else {
-                app_.Audio().Play(audio::SoundId::TurnPrompt);
+                app_.Audio().Play(SOUND_TURN_PROMPT);
             }
             break;
         case game::GameEventType::None:

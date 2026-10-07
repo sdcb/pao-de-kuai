@@ -180,10 +180,10 @@ bool RoundResultOverlay::OnMouseMove(float x, float y) {
 bool RoundResultOverlay::OnMouseDown(float x, float y) {
     const int hit = ButtonGroup::Hit(buttons_, x, y);
     if (hit == 0) {
-        app_.Audio().Play(audio::SoundId::Confirm);
+        app_.Audio().Play(SOUND_CONFIRM);
         app_.RestartCurrentGame();
     } else if (hit == 1) {
-        app_.Audio().Play(audio::SoundId::Cancel);
+        app_.Audio().Play(SOUND_CANCEL);
         app_.ShowStart();
     }
     return true;

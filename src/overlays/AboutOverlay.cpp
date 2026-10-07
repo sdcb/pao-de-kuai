@@ -65,7 +65,7 @@ bool AboutOverlay::OnMouseMove(float x, float y) {
 
 bool AboutOverlay::OnMouseDown(float x, float y) {
     if (ButtonGroup::Hit(buttons_, x, y) >= 0) {
-        app_.Audio().Play(audio::SoundId::Resume);
+        app_.Audio().Play(SOUND_RESUME);
         app_.CloseTopOverlay();
     }
     return true;

@@ -37,12 +37,12 @@ bool ConfirmExitDialog::OnMouseMove(float x, float y) {
 bool ConfirmExitDialog::OnMouseDown(float x, float y) {
     const int hit = ui::ButtonGroup::Hit(buttons_, x, y);
     if (hit == 0) {
-        app_.Audio().Play(audio::SoundId::Confirm);
+        app_.Audio().Play(SOUND_CONFIRM);
         app_.ConfirmExit();
         return true;
     }
     if (hit == 1) {
-        app_.Audio().Play(audio::SoundId::Cancel);
+        app_.Audio().Play(SOUND_CANCEL);
         app_.CloseTopOverlay();
         return true;
     }

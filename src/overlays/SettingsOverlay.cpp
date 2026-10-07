@@ -158,11 +158,11 @@ bool SettingsOverlay::OnMouseDown(float x, float y) {
         return true;
     }
     if (ai1_.OnMouseDown(x, y) || ai2_.OnMouseDown(x, y)) {
-        app_.Audio().Play(audio::SoundId::SelectCard);
+        app_.Audio().Play(SOUND_SELECT_CARD);
         return true;
     }
     if (trace_.OnMouseDown(x, y)) {
-        app_.Audio().Play(audio::SoundId::ButtonClick);
+        app_.Audio().Play(SOUND_BUTTON_CLICK);
         return true;
     }
     const int hit = ButtonGroup::Hit(buttons_, x, y);
@@ -179,7 +179,7 @@ bool SettingsOverlay::OnMouseUp(float x, float y) {
     (void)y;
     nameField_.OnMouseUp();
     if (volume_.OnMouseUp()) {
-        app_.Audio().Play(audio::SoundId::SelectCard);
+        app_.Audio().Play(SOUND_SELECT_CARD);
     }
     return true;
 }
@@ -233,13 +233,13 @@ void SettingsOverlay::Save() {
     app_.Settings() = draft_;
     app_.Audio().SetMasterVolume(draft_.masterVolume);
     app_.SaveSettings();
-    app_.Audio().Play(audio::SoundId::Confirm);
+    app_.Audio().Play(SOUND_CONFIRM);
     app_.CloseTopOverlay();
 }
 
 void SettingsOverlay::Cancel() {
     app_.Audio().SetMasterVolume(originalVolume_);
-    app_.Audio().Play(audio::SoundId::Cancel);
+    app_.Audio().Play(SOUND_CANCEL);
     app_.CloseTopOverlay();
 }
 

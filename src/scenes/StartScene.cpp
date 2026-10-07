@@ -158,7 +158,7 @@ bool StartScene::OnMouseDown(float x, float y) {
     if (hit < 0) {
         return false;
     }
-    app_.Audio().Play(audio::SoundId::ButtonClick);
+    app_.Audio().Play(SOUND_BUTTON_CLICK);
     if (hit == 0) {
         app_.StartGame();
     } else if (hit == 1) {

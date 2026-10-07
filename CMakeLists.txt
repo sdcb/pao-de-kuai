@@ -196,9 +196,9 @@ set(PDK_APP_SOURCES
     src/app/ImeInput.cpp
     src/app/Window.cpp
     src/app/WindowChrome.c
-    src/audio/AudioDecoder.cpp
-    src/audio/AudioEngine.cpp
-    src/audio/SoundCatalog.cpp
+    src/audio/AudioDecoder.c
+    src/audio/AudioEngine.c
+    src/audio/SoundCatalog.c
     src/graphics/D2DContext.cpp
     src/graphics/ProceduralTextures.cpp
     src/graphics/SpriteAtlas.cpp
@@ -286,6 +286,15 @@ if(PDK_BUILD_TESTS)
         target_sources(shim_layout PRIVATE tests/shim_layout/shim_layout_ref.c)
     endif()
 
+    # Decodes every embedded sound effect and checks the 44.1 kHz contract and the
+    # MP3 encoder-delay trim.  The WASAPI path itself still needs a human ear, but
+    # this covers everything up to the mixer on every toolchain and architecture.
+    add_executable(audio_decode
+        tests/audio_decode/AudioDecodeTest.c
+        src/resources/resources.rc
+    )
+    target_link_libraries(audio_decode PRIVATE pdk_app pdk_win32)
+
     add_executable(unit_tests
         tests/rules_tests/TestMain.cpp
         tests/rules_tests/RulesPatternTests.cpp
@@ -309,6 +318,7 @@ if(PDK_BUILD_TESTS)
 
     enable_testing()
     add_test(NAME shim_layout COMMAND shim_layout)
+    add_test(NAME audio_decode COMMAND audio_decode)
     add_test(NAME unit_tests COMMAND unit_tests)
     add_test(NAME ui_scene_start COMMAND scene_viewer --scene start --screenshot ${CMAKE_BINARY_DIR}/ui-start.jpg --quality 75)
     add_test(NAME ui_overlay_settings COMMAND scene_viewer --scene settings --screenshot ${CMAKE_BINARY_DIR}/ui-settings.jpg --quality 75)

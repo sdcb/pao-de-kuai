@@ -146,7 +146,7 @@ bool StatsScene::OnMouseMove(float x, float y) {
 
 bool StatsScene::OnMouseDown(float x, float y) {
     if (ButtonGroup::Hit(buttons_, x, y) >= 0) {
-        app_.Audio().Play(audio::SoundId::Cancel);
+        app_.Audio().Play(SOUND_CANCEL);
         app_.ShowStart();
         return true;
     }

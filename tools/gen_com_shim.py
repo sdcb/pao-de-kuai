@@ -256,6 +256,24 @@ EXTRA_GUID_NAMES = [
     "KSDATAFORMAT_SUBTYPE_IEEE_FLOAT",
 ]
 
+# The WASAPI and MMDevice GUIDs are the same story: MinGW's <mmdeviceapi.h> and
+# <audioclient.h> use DEFINE_GUID, MSVC's use `EXTERN_C const IID name;` only, so
+# a C translation unit that passes &IID_IAudioClient to Activate() has nothing to
+# link against.  Emitting them here (and not including those headers from iids.c)
+# keeps exactly one definition on both toolchains.
+EXTRA_GUID_SOURCES = [
+    ("mmdeviceapi.h", [
+        "CLSID_MMDeviceEnumerator",
+        "IID_IMMDeviceEnumerator",
+        "IID_IMMNotificationClient",
+    ]),
+    ("audioclient.h", [
+        "IID_IAudioClient",
+        "IID_IAudioClient3",
+        "IID_IAudioRenderClient",
+    ]),
+]
+
 
 def guid_text_to_parts(text):
     """'00000001-0000-0010-8000-00aa00389b71' -> DEFINE_GUID argument list."""
@@ -416,6 +434,15 @@ def main():
         ks_path = os.path.join(inc, ks_name)
         if os.path.isfile(ks_path):
             guids.update(index_guidstructs(sp.load_header(ks_path)))
+    for header, names in EXTRA_GUID_SOURCES:
+        header_path = os.path.join(inc, header)
+        if not os.path.isfile(header_path):
+            die("missing %s, which owns %s" % (header, ", ".join(names)))
+        found = index_guids(sp.load_header(header_path))
+        for name in names:
+            if name not in found:
+                die("%s has no DEFINE_GUID for %s" % (header, name))
+            guids[name] = found[name]
     wanted = set()
     for name in owned_d2d:
         wanted.add("IID_" + name)
@@ -423,6 +450,8 @@ def main():
         wanted.add("IID_" + name)
     wanted.discard("IID_IUnknown")
     wanted |= set(EXTRA_GUID_NAMES)
+    for _header, names in EXTRA_GUID_SOURCES:
+        wanted |= set(names)
     iid_parts = [BANNER]
     iid_parts.append(
         "#ifndef PDK_SRC_GRAPHICS_IIDS_GEN_H\n#define PDK_SRC_GRAPHICS_IIDS_GEN_H\n")

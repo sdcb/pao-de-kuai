@@ -1,17 +1,35 @@
 #pragma once
 
-#include <cstdint>
-#include <span>
-#include <vector>
+/*
+ * Media Foundation mp3 -> float PCM decoding.
+ *
+ * Pure C.  AudioData owns a growable float buffer (Init/Free/Append) instead of a
+ * std::vector, and the input is a plain byte span instead of std::span.
+ */
 
-namespace pdk::audio {
+#include <stdbool.h>
+#include <stdint.h>
 
-// Mono float samples at the source sample rate.
-struct AudioData {
-    std::uint32_t sampleRate{44100};
-    std::vector<float> samples;
-};
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-bool DecodeMp3ToPcm(std::span<const std::uint8_t> bytes, AudioData& out);
+/* Mono float samples at the source sample rate. */
+typedef struct AudioData {
+    uint32_t sampleRate;
+    float *samples;
+    int count;
+    int capacity;
+} AudioData;
 
-} // namespace pdk::audio
+void AudioData_Init(AudioData *data);
+void AudioData_Free(AudioData *data);
+bool AudioData_Append(AudioData *data, const float *samples, int count);
+
+/* Decodes a whole mp3 held in memory into `out`, which is left empty on failure.
+ * `out` must be initialised (AudioData_Init / zeroed). */
+bool DecodeMp3ToPcm(const uint8_t *bytes, int size, AudioData *out);
+
+#ifdef __cplusplus
+}
+#endif

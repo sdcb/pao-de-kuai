@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app/ImeInput.h"
-#include "audio/AudioEngine.h"
+#include "audio/CppCompat.h"
 #include "core/Overlay.h"
 #include "core/SceneManager.h"
 #include "game/RoundRecorder.h"

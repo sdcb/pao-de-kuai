@@ -283,7 +283,7 @@ void App::RequestClose() {
         return;
     }
     PushOverlay(std::make_unique<overlays::ConfirmExitDialog>(*this));
-    audio_.Play(audio::SoundId::Pause);
+    audio_.Play(SOUND_PAUSE);
 }
 
 void App::ConfirmExit() {

@@ -37,12 +37,12 @@ bool ReturnToMenuOverlay::OnMouseMove(float x, float y) {
 bool ReturnToMenuOverlay::OnMouseDown(float x, float y) {
     const int hit = ui::ButtonGroup::Hit(buttons_, x, y);
     if (hit == 0) {
-        app_.Audio().Play(audio::SoundId::Cancel);
+        app_.Audio().Play(SOUND_CANCEL);
         app_.ShowStart();
         return true;
     }
     if (hit == 1) {
-        app_.Audio().Play(audio::SoundId::Resume);
+        app_.Audio().Play(SOUND_RESUME);
         app_.CloseTopOverlay();
         return true;
     }

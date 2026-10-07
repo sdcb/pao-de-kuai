@@ -24,7 +24,7 @@ void LoadingScene::Update(float dt) {
         progress_ = 0.80f;
         if (target_ == LoadingTarget::Game) {
             app_.LoadGameResources();
-            app_.Audio().Play(audio::SoundId::RoundStart);
+            app_.Audio().Play(SOUND_ROUND_START);
         }
         loaded_ = true;
         progress_ = 1.0f;
