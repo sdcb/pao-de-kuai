@@ -683,6 +683,36 @@
 >   `ui-game-play` 0.228、`ui-result` 0.457；`ui-game-deal` 4.674，落在它自己底噪的波动带内——
 >   该场景的底噪在多次运行中实测在 0.9~4.3 之间，因为发牌动画快到"差一帧"就能移动大量像素）。
 > - `check_c_only.py` 残留 88 处，其中 74 处是 9 个门面（S8 删除）。
+>
+>
+> **S8 精确清单（把 9 个门面的真实去向逐个查清后修订，替代上面那份粗版）**
+>
+> 关键发现：**测试是永久 C++（doctest），而它们只用 3 个门面**，而且这 3 个自成闭包：
+> `tests/**` 里 `#include` 的门面只有
+> `game/CppCompat.h`、`rules/CppCompat.h`、`stats/CppCompat.h`
+> （`AiStrategyTests`/`GameStateTests`/`TestHelpers.h`/`TestWeakAiStrategy.h` 用 game+rules，
+> `RulesPatternTests`/`ScoringTests`/`StatsTests` 用 rules/stats）。
+> 门面之间的依赖图：`game → {rules, stats}`、`stats → rules`、`rules → 无`；
+> 而 `core → graphics`、`ui → {graphics, rules}`、`app`/`audio`/`graphics`/`resources` 无依赖。
+> 也就是说 **{game, rules, stats} 这组不牵到另外 6 个**。
+>
+> 因此 S8 的正确做法是：
+> 1. **把 `src/{game,rules,stats}/CppCompat.h` 移到 `tests/support/` 下同名的子目录**，
+>    并把 `tests/support` 加进测试目标的 include 路径——这样测试里的
+>    `#include "game/CppCompat.h"` **一个字都不用改**。它们从此是**测试设施**，不再是 `src/` 的一部分。
+> 2. **删除** `src/{app,audio,core,graphics,resources,ui}/CppCompat.h`（6 个，无人引用）。
+> 3. `graphics/ComPtr.h`（8 条 finding）**不能删**：`tests/scene_viewer/SceneViewer.cpp` 还在用——
+>    同样**移到 `tests/support/graphics/`** ✅。`graphics/TextRenderer.h`（3 条）**无人 include，直接删**。
+> 4. `scenes/GameLayout.h` 里 `namespace pdk::scenes::layout` 那座桥**现在已无使用者**
+>    （所有场景本轮都已转 C），删除该块。
+> 5. `rules/Card.h` 的 `Cards` 成员垫片**必须保留**：测试里有 **139 处**用到
+>    `.size()/.push_back()/.begin()` 这类 vector 形状的 API。它是 C 结构定义的一部分、无法外移，
+>    所以就作为**一条有据可查的例外**留在 `tools/check_c_only.py` 的白名单里，
+>    并在 whitelist 旁写明"只为永久 C++ 的测试存在"。
+>    目标是让 `check_c_only.py` 的残留**降到只剩这一条**，而不是假装它是 0。
+> 6. CI 接入 `check_c_only.py`（它本来就在不合格时 `exit 1`，加一个 step 即可）。
+> 7. 按目标摘 `-static-libstdc++`（`pao_de_kuai` 摘，`scene_viewer`/`unit_tests` 保留）。
+> 8. 量最终体积、跑 `verify_all.ps1 -CompareScreenshots`、更新 README/AGENTS 的最终状态。
 > 7. S8 收尾
 >
 > **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**
