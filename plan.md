@@ -713,6 +713,26 @@
 > 6. CI 接入 `check_c_only.py`（它本来就在不合格时 `exit 1`，加一个 step 即可）。
 > 7. 按目标摘 `-static-libstdc++`（`pao_de_kuai` 摘，`scene_viewer`/`unit_tests` 保留）。
 > 8. 量最终体积、跑 `verify_all.ps1 -CompareScreenshots`、更新 README/AGENTS 的最终状态。
+>
+>
+> **发布二进制的实际依赖与"最低系统"声明（实测，S8 要补齐第二项）**
+>
+> 1. **UCRT 直连已成立，但要按正确形式核验。** `objdump -p` 看 MinGW x64 release exe 的导入表：
+>    没有 `msvcrt.dll`、没有 `libstdc++-6.dll`、没有 `libgcc_s_*.dll`；CRT 全部经
+>    **`api-ms-win-crt-{convert,environment,heap,locale,math,private,runtime,stdio,string,time,utility}-l1-1-0.dll`**
+>    这组 API set 导入——这正是 MinGW-w64 UCRT 表达"直连系统 UCRT"的方式，加载器把它们解析到
+>    `ucrtbase.dll`。**所以不要用"导入表里是否有字面量 ucrtbase.dll"来判断**，那会误判为失败。
+>    其余依赖都是预期内的系统组件（`d2d1`/`DWrite`/`KERNEL32`/`USER32`/`ole32`/`SHLWAPI`/`IMM32`/
+>    `MFPlat`/`MFReadWrite`/`AVRT`/`dwmapi`）。
+>    （对照：MSVC `/MT` 构建把 CRT 静态链进去了，所以它不导入 UCRT——那是 CI 验证组合，不是发布物。）
+> 2. **PE 头仍然声明 XP 级兼容：`MajorSubsystemVersion 5.2` / `MinorSubsystemVersion 2`、
+>    `MajorOSystemVersion 4`。** `WINVER=0x0A00` 只影响**编译期可用的 API**，不影响 PE 里声明的
+>    最低系统。MSVC 那边是 6.00。既然本项目的定位明确是"最低 Win10"，让二进制**声明**与实际要求一致
+>    才诚实，S8 补：
+>    - MinGW：给 `pao_de_kuai` 加 `-Wl,--major-subsystem-version,10 -Wl,--minor-subsystem-version,0`；
+>    - MSVC：`/SUBSYSTEM:WINDOWS,10.0`（`target_link_options` 里按编译器分支）。
+>    CI 跑在 Win10 内核（Server 2019/2022 或 Win10/11）上，不会因此跑不起来；
+>    而这也正是"放弃 Win8 兼容"应有的、可被 `dumpbin`/`objdump` 验证的形式。
 > 7. S8 收尾
 >
 > **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**
