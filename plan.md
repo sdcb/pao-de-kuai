@@ -622,6 +622,32 @@
 > - `LegalMoves()`（每回合物化最多 2^16 个元素、只读 `.size()`）→ `CountLegalMoves()`，同样枚举/校验、不再分配。
 > - 拖拽选牌改为迭代中记录"首个最大值"而不是缓冲 ≤65535 个候选：**同样的平局判定**（严格大于才替换），
 >   仍按牌面身份回溯到手牌索引，结果一致且无需固定候选缓冲。
+>
+>
+> **修订 28（S7f 完成记录，commit `720830b`）——`GameScene` 纯 C，只剩 4 个 C++ 文件**
+> - `scenes/GameScene.{h,cpp}` → `.{h,c}`（1353 行新 C）。它与另外 5 个场景同一套形状；
+>   内部助手（`CardRect`/`CardRectFor`/`AiCardRectFor`/`HitPlayerCard`/`InteractionReady`）改为 `static`。
+> - **`RestartRound` 槽必须接上**：`App::RestartCurrentGame` 就是通过这个槽问"当前场景是不是牌局"的，
+>   而 `GameScene` 是唯一回答 true 的场景。
+> - 它**按值持有自己的 `GameState`**（原本就是 `game::GameState game_` 成员，不是 App 传下来的），
+>   所以 C 版直接内嵌 C 的 `GameState` 结构。
+> - 四个 `std::vector` → 定长数组，容量沿用状态机那套界（三人 48 张一轮封顶手牌 `CARDS_MAX`）；
+>   `toastText_` → 字符缓冲。
+> - `AppApi.h` 增 `App_GameResourcesReady`/`App_Recorder`（返回 C 的 `RoundRecorder *`）/`App_ViewerMode`。
+> - 进度：`src/` 从 5 → **4 个 `.cpp`**（`StrongAiStrategy` 1321、`App` 399、`Window` 158、`WinMain` 19）；
+>   `check_c_only.py` 残留 97 处；MinGW x64 exe 633,856 → **622,080 B（余量 57,344 B）**。
+> - 三链路 15/15 全绿。截图对照（`compare_screenshots.py --floor`）：
+>   `ui-game-deal` 与基线差 3.404，而**它自己的底噪是 3.761**（即差值小于自身噪声）；
+>   `ui-game-play` 0.227（底噪 0.053）、`ui-start` 0.366、`ui-settings` 0.333、`ui-result` 0.454。
+>   `ui-game-play` 是端到端最能说明问题的一张：牌型标签"AI1 · 连对 7"、`不要` 按钮按
+>   `CanCurrentPlayerPass` 置灰、各家剩牌数与选中抬牌，全部来自 C 的状态机与场景。
+>
+> **提交纪律教训（两次同类失误，已修）**：`git add <file>` 之后 `git commit` 提交的是**整个索引**，
+> 不只有刚 add 的那个文件——所以我"只改 plan.md"的提交把子代理已经 `git rm` 暂存的
+> `GameScene.cpp` 删除一起带走了，**留下一个编不过的中间提交**（违反了"每阶段独立可构建"）。
+> 已用 `git reset -q <parent>` 回退这两个提交重新组织：`720830b` 是自包含且可构建的转换提交，
+> 文档另成一个提交。**规则**：有子代理在跑时，提交前先 `git status` 看清索引里有什么，
+> 不要用 `git add -A`，也不要在别人暂存过东西之后直接 `git commit`。
 > 7. S8 收尾
 >
 > **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**
