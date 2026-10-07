@@ -761,6 +761,40 @@
 >   `-static-libstdc++` 现在已经是**空操作**——体积达标不再依赖 S8 摘它。
 > - 三链路 15/15 全绿；截图与基线差值仍在历史区间（`ui-start` 0.327、`ui-settings` 0.326、
 >   `ui-game-play` 0.214、`ui-result` 0.456；`ui-game-deal` 4.915，其自身底噪在 0.9~4.3 间波动）。
+>
+>
+> **修订 31（S8 完成记录，commit `18e0bc4`、`304e120`）——收尾完成，逐条验收如下**
+>
+> | plan.md 的验收项 | 结果 | 证据 |
+> |---|---|---|
+> | `src/` 纯 C（C17，双工具链共用 shim） | ✅ | `check_c_only.py`：`0 finding(s) in .c/.h, 0 remaining C++ file(s)` / **`src/ is pure C.`** / 退出码 0；MSVC `cl` 与 MinGW `gcc` 都编过 |
+> | 删除 `external/vc-ltl` 全套引用 | ✅ | `external/` 只剩 `cjson`、`doctest`；代码/CMake/CI/JSON 里**零**引用（仅剩文档中"已删除"的说明） |
+> | MinGW-w64 UCRT x64 主发布 / x86 | ✅ | CI 8 组合中 MinGW UCRT x64 为 `kind: mingw` 主发布（上传 MinIO）；两个架构的 exe 都经 `api-ms-win-crt-*` API set 直连系统 `ucrtbase.dll`，且**无** `msvcrt.dll`/`libstdc++`/`libgcc` 依赖 |
+> | 最低系统 Win10 | ✅ | `WINVER`/`_WIN32_WINNT = 0x0A00` **且** PE 头实测 `MajorOSystemVersion 10 / MajorSubsystemVersion 10`（原来还是 MinGW 默认的 4.0/5.2） |
+> | ctest 目标在 MSVC x64 与 MinGW x64 双绿 | ✅ | 三个工具链各 `100% tests passed out of 15`（目标数从 6 涨到 8 再到 15，见上） |
+> | CI 8 组合结构 | ✅ | 6× VS2026（x64/x86/arm64 × `/MD`、`/MT`）+ MinGW UCRT x64/x86 |
+> | MinGW x64 exe ≤ 679,424 B | ✅ | **423,936 B**，即预算的 **62.4%**（余量 255,488 B） |
+> | 5 张截图与基线肉眼无差异 | ✅\* | 实测均值：`ui-start` 0.344、`ui-settings` 0.353、`ui-game-play` 0.229、`ui-result` 0.454；`ui-game-deal` 4.325 而**其自身底噪 4.429**（差值小于本机噪声）。\*唯一**有意**差异是修订 17 已记录的那条被修正的致谢文案——那里写着"迁就像素一致去留一句假署名是更糟的选择" |
+>
+> **本次收尾做的事**：
+> - 门面去向：`{game,rules,stats}` 三个（测试实际使用的闭包）**移到 `tests/support/` 同名子目录**，
+>   加一条 include 路径即可让测试里 139 处引用一字不改；另外 6 个门面 + 死文件 `TextRenderer.h` 删除；
+>   `ComPtr.h` 同样移入 `tests/support/graphics/`（`scene_viewer` 是**永久 C++**）。
+> - **修掉检查器自身的假阳性**：`rules/Card.h` 的成员垫片必须保留（测试用 139 处 vector 形状 API，
+>   而它是 C 结构定义的一部分无法外移），但工具原来会报它里面那句 `static_cast`——而 `#ifdef __cplusplus`
+>   里的代码按定义只进 C++ 编译器。现在工具会跳过白名单文件里 `#ifdef __cplusplus` 区段内的
+>   C++ 语法与禁用头，**而不是把代码弯成 linter 喜欢的样子**。
+> - `-static-libstdc++`/`-static-libgcc` 只留给 `scene_viewer`（`pao_de_kuai` 已是纯 C，该标志早已是空操作，
+>   移掉它是为了不让构建脚本说假话）。
+> - PE 声明最低系统 10.0（MinGW `-Wl,--major-subsystem-version,10`；MSVC `/SUBSYSTEM:WINDOWS,10.0`）。
+> - CI 增加 `check_c_only` 门禁（工具本身不合格即 `exit 1`），与既有的 shim 漂移检查同一作业。
+> - README / AGENTS 的"正在迁移"改成完成态，并写明 UCRT 直连的正确核验方式。
+>
+> **遗留的、有据可查的例外（不是未完成项）**：
+> 1. `rules/Card.h` 的 `#ifdef __cplusplus` 成员垫片 —— 只为永久 C++ 的测试存在，留在检查器白名单里。
+> 2. `tests/` 是 C++（doctest + `scene_viewer`），适配层在 `tests/support/` —— 测试允许 C++ 是既定策略。
+> 3. `GameState_Destroy` 不释放每座位的 `AiPlayer` 策略（移植时按原样保留的既有缺陷，树内无人触发）。
+> 4. 开始界面页脚/关于面板的致谢文案与基线不同 —— 修订 17 的有意决定。
 > 7. S8 收尾
 >
 > **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**
