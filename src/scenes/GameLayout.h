@@ -4,10 +4,7 @@
  * The game table's fixed 1280x720 geometry.  Pure C now, so the converted GameScene and the talk
  * bubble overlay can share it.
  *
- * The names became GameLayout_* because C has no namespaces; the `namespace pdk::scenes::layout`
- * block at the bottom keeps the twelve not-yet-converted C++ call sites compiling, and disappears
- * with the last of them.  This is the same temporary shim rule as rules/Card.h's member block --
- * do not add to it.
+ * The names are GameLayout_* because C has no namespaces.
  */
 
 #include "core/Geometry.h"
@@ -62,24 +59,3 @@ static inline Point GameLayout_AvatarCenter(PlayerId player)
 
     return Point_Make(avatar.x + avatar.width * 0.5f, avatar.y + avatar.height * 0.5f);
 }
-
-#ifdef __cplusplus
-/* ---- TEMPORARY C++ shim: delete with the last C++ scene ---- */
-namespace pdk::scenes::layout {
-
-inline const Rect Table = GAME_LAYOUT_TABLE;
-inline const Rect Ai1Plate = GAME_LAYOUT_AI1_PLATE;
-inline const Rect Ai2Plate = GAME_LAYOUT_AI2_PLATE;
-inline const Rect PlayerPlate = GAME_LAYOUT_PLAYER_PLATE;
-inline constexpr float AvatarSize = (float)GAME_LAYOUT_AVATAR_SIZE;
-inline constexpr float AiCardHeight = (float)GAME_LAYOUT_AI_CARD_HEIGHT;
-inline constexpr float HandBottom = (float)GAME_LAYOUT_HAND_BOTTOM;
-inline constexpr float SelectedLift = (float)GAME_LAYOUT_SELECTED_LIFT;
-
-inline Rect PlateFor(PlayerId player) { return GameLayout_PlateFor(player); }
-inline Rect AvatarRect(PlayerId player) { return GameLayout_AvatarRect(player); }
-inline Rect AiInfoArea(PlayerId player) { return GameLayout_AiInfoArea(player); }
-inline Point AvatarCenter(PlayerId player) { return GameLayout_AvatarCenter(player); }
-
-} // namespace pdk::scenes::layout
-#endif

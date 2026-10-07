@@ -263,6 +263,12 @@ add_executable(scene_viewer
 )
 target_link_libraries(scene_viewer PRIVATE pdk_app)
 
+# The permanent C++ tests (the doctest suite and the scene viewer) are the only C++ left in the
+# repository, and the C++ shims they use live in tests/support so that src/ is pure C.  Adding this
+# include directory is what lets their existing `#include "game/CppCompat.h"` style paths keep
+# working unchanged.
+target_include_directories(scene_viewer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/support")
+
 foreach(target pao_de_kuai scene_viewer)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_link_options(${target} PRIVATE -static-libstdc++ -static-libgcc)
@@ -307,6 +313,7 @@ if(PDK_BUILD_TESTS)
         tests/rules_tests/StatsTests.cpp
     )
     target_link_libraries(unit_tests PRIVATE pdk_core doctest::doctest pdk_win32)
+target_include_directories(unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/support")
     target_compile_definitions(unit_tests PRIVATE
         DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
         PDK_ENABLE_TEST_HOOKS

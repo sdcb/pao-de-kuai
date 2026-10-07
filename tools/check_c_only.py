@@ -108,6 +108,35 @@ def strip_comments_and_strings(text):
     return "".join(out)
 
 
+def cplusplus_guard_lines(code):
+    """Line numbers that only a C++ compiler ever sees.
+
+    Code inside `#ifdef __cplusplus` is by definition not part of the C translation unit, so C++
+    syntax there is not a finding.  Without this the check reported `static_cast` in the
+    `Cards` member shim in rules/Card.h -- which is exactly the code that block exists for.
+    """
+    guarded = set()
+    stack = []
+    open_guards = 0
+    for number, line in enumerate(code.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            if re.match(r"#\s*(ifdef|ifndef)\s+__cplusplus\b", stripped) or \
+               re.match(r"#\s*if\s+.*\b__cplusplus\b", stripped):
+                stack.append(True)
+                open_guards += 1
+            elif re.match(r"#\s*if\b", stripped):
+                stack.append(False)
+            elif re.match(r"#\s*elif\b", stripped):
+                pass
+            elif re.match(r"#\s*endif\b", stripped) and stack:
+                if stack.pop():
+                    open_guards -= 1
+        if open_guards > 0:
+            guarded.add(number)
+    return guarded
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--report", action="store_true",
@@ -128,14 +157,20 @@ def main():
             with open(path, encoding="utf-8", errors="replace") as fh:
                 raw = fh.read()
             code = strip_comments_and_strings(raw)
+            guarded = (cplusplus_guard_lines(code)
+                       if rel.replace("/", os.sep) in ALLOWED_IFDEF_FILES else set())
             hits = []
             for pattern, label in RE_CPP_SYNTAX:
                 found = pattern.search(code)
                 if found:
                     line = code.count("\n", 0, found.start()) + 1
+                    if line in guarded:
+                        continue
                     hits.append("C++ %s (line %d)" % (label, line))
             for m in RE_BANNED_INCLUDE.finditer(code):
                 line = code.count("\n", 0, m.start()) + 1
+                if line in guarded:
+                    continue
                 hits.append("banned include <%s> (line %d)" % (m.group(1), line))
             if rel.replace("/", os.sep) not in ALLOWED_IFDEF_FILES:
                 for m in RE_COMPILER_BRANCH.finditer(code):
