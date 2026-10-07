@@ -54,6 +54,21 @@
 >    graphics → audio → UI/场景/app（此时才把 `Scene`/`Overlay` vtable 化）。
 >    `docs/c-port-conventions.md` 是后续每一步的唯一约定来源。
 >
+> **修订 6 追加（S1 完成记录，commit `c8a52a4`）**：
+> - 已 C 化：`core/Str.c`（含新增 `StrList`）、`core/WinFile.c`、`core/Tween.c`、
+>   `core/Timer.c`、`core/Geometry.h`、`ui/Anim.h`；删除 `core/StringUtil.*`。
+> - **新增 `src/core/CppCompat.h`（临时，路线 B）**：把新 C core 适配回
+>   `std::string` 风格的旧调用点，避免同一批调用点改两遍。文件头列出了仍依赖它的
+>   10 个 `.cpp`，S8 必须随最后一个 C++ 文件一起删除。`tools/check_c_only.py` 目前会
+>   把它算作 `std::` 残留，这是预期的。
+> - **顺带做掉的必要重命名**：`core::Point/Rect/...` 等 251 处、`ui::RoundToInt` 等 4 处
+>   去掉命名空间限定（C 里本来就没有命名空间，早晚都要改）；
+>   `Rect::Contains` → `Rect_Contains`、`EaseOutBack(t,o)` → `EaseOutBackWith(t,o)`、
+>   `ViewTransform{}` → `ViewTransform_Identity()`；
+>   `D2DContext::ViewTransform()` 改名为 `View()`（访问器名与类型名冲突）。
+> - 进度：`src/` 还有 **48 个 `.cpp`**，`check_c_only.py` 报 293 处 `/std::/` 类残留。
+> - 体积（仍混编）：MinGW x64 758,272 B、MSVC /MT x64 798,208 B。
+>
 >
 
 >
