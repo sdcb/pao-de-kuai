@@ -540,6 +540,38 @@
 >   confirm-exit/about/tip/invalid/talk/return-menu/result-win，全部 exit 0；
 >   `ui-settings` 与 `ui-result` 肉眼一致。
 > - `check_c_only.py` 残留 146 → **137** 处。
+>
+>
+> **修订 26（S7e 完成记录，commit `bf86e1a`）——`GameState` 纯 C，且截图判据从"肉眼看"变成"量出来"**
+> - `game/GameState.{h,cpp}` → `.{h,c}`（2105 行新 C）。`std::array`/`std::optional`/`std::set`/
+>   `std::vector`/`std::string` → 定长数组 + count/flag，容量按规则允许的最坏情况定而非取整数。
+>   `game/CppCompat.h` 补了 **35 方法的 inline C++ 门面**，所以**测试与 GameScene 一行未改**——
+>   `unit_tests`（69 用例 / 447 断言，绝大多数压在这个文件上）原样通过，这就是证明。
+> - `src/` 从 6 → **5 个 `.cpp`**（只剩 `GameScene`/`StrongAiStrategy`/`App`/`Window`/`WinMain`）；
+>   MinGW x64 exe 658,432 → **633,856 B（余量 45,568 B）**。
+> - **新增 `tools/compare_screenshots.py`**：逐图给出平均绝对差、最大通道差、明显不同像素占比，
+>   并**按场景**测噪声底（同一 binary 渲染同一场景两次）——菜单这类静态场景底噪 0.02，
+>   而发牌动画本身就有 4.3 的底噪，所以"和基线差多少"必须跟**该场景自己的底噪**比。
+>   之前我是拿每轮的新截图和**记忆里上一轮的截图**比，于是某轮引入的内容变化会变成"新常态"，
+>   永远没跟真正的基线比过。量出来立刻抓到三件事：
+>   1. **设置截图根本不是渲染差异**：`unit_tests` 的设置往返用例会**写** `appsettings.json`，
+>      而 ctest 给所有测试同一个工作目录（构建目录），UI 测试也从那里**读**它——于是先跑
+>      `unit_tests` 就把文件重置成默认值，设置截图变成 基础/关，而基线是 强力/开。
+>      **截图比对依赖于测试执行顺序，那就不叫检查**，CI 里同样不稳。已给 `unit_tests` 和 12 个 UI
+>      用例**各自独立的工作目录**，UI 目录用固定的 `tests/fixtures/appsettings.json` 播种。
+>      `ui-settings` 平均差 3.211/2.18% → **0.337/0.30%**。
+>      注意 `.gitignore` 里裸的 `appsettings.json` 模式**把 fixture 也忽略了**——已改成
+>      根锚定 `/appsettings.json`，运行时文件仍不入库、fixture 成为源码。
+>   2. **S7c 引入的真回归**：结算面板原本画 `"本局得分  " + Signed(score)` 一整串，
+>      C 版只剩数字，**标签静默消失**。已用 `Str_Append` 复原（正是 C++ `core::AppendNumber`
+>      编译成的东西）。我第一次修还把偏移量硬编码成 +8 去打一个 14 字节的中文标签，把它改坏了——
+>      **这个测量同样没放过它**（差值不降）。
+>   3. 剩下的差异是**动画相位**，而且可以被量出来是相位：`ui-game-deal` 与基线差 4.78，
+>      而它自己的底噪是 4.33（同量级）；`ui-result`/`ui-settings` 为 0.45/0.34，放大对照后
+>      内容完全一致（同样的标题、同样的"本局得分 +18"、同样的配色），只是被模态入场动画
+>      平移了一帧。唯一的**有意**内容差异（开始界面页脚那条被修正的致谢文案，修订 17）在
+>      diff 掩码里正好落在那一行的位置。
+> - 三链路 15/15 全绿。
 > 7. S8 收尾
 >
 > **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**

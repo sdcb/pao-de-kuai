@@ -168,7 +168,11 @@ C vtable 做 `sizeof`/`offsetof` 静态断言，并在两套工具链上校验 v
 
 `rules_tests` 运行 `tests/rules_tests/` 下的 doctest 用例，仍产出单个 `unit_tests.exe`。
 
-UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到指定场景或覆盖层，更新/渲染固定帧数，然后通过 WIC 保存 JPEG。这些是渲染冒烟测试，不做像素差异比对。
+UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到指定场景或覆盖层，更新/渲染固定帧数，然后通过 WIC 保存 JPEG。
+
+判据是"与 `build-baseline/` 肉眼无差异"，而 `python tools/compare_screenshots.py <build-dir>` 把它变成可测量的：逐图给平均绝对差/最大通道差/明显不同像素占比，并**按场景**测噪声底（同一 binary 渲染同一场景两次）。**必须跟该场景自己的底噪比**——静态菜单底噪约 0.02，发牌动画本身就有约 4.3，拿两者同一个阈值判断会既藏真回归又造出假回归。截图**逐次运行并不可复现**，字节数漂移不是回归证据。
+
+**测试工作目录是分开的，不要合并回去。** `unit_tests` 的设置往返用例会写 `appsettings.json`，而 UI 截图要从工作目录读它；两者共用一个目录时，先跑谁决定截图长什么样。现在 `unit_tests` 跑在 `unit-test-cwd/`，UI 用例跑在 `ui-test-cwd/`（由 `tests/fixtures/appsettings.json` 播种，该 fixture 必须入库）。
 
 截图模式下 Direct2D 渲染到离屏 WIC 位图（`RenderContext::Initialize(hwnd, true)`），不依赖窗口是否可见；窗口被遮挡或显示器休眠时，HWND 渲染目标会跳过 Present，`BitBlt` 只能截到黑屏。会在 2～3 秒内自动消失的覆盖层（`invalid`、`talk`）和 `loading` 场景会提前截图。
 
