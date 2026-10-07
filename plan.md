@@ -338,6 +338,27 @@
 > - 进度：`src/` 剩 **20 个 `.cpp`**，`check_c_only.py` 残留 194 处；
 >   MinGW x64 exe **686,080 → 683,520 B**（距 679,424 只差 **4.1 KB**）。
 >
+> **修订 20（S5f 完成记录，commit `2beca01`）——控件库已纯 C，体积逼近目标**：
+> - `Widgets` → `.c`：按钮/面板/胶囊/头像/印章/房间背景/模态动画全部纯 C。
+>   `std::string text` → Button 上定长缓冲、绘制函数收调用方 C 字符串；
+>   `ButtonStyle`/`Anchor` → `uint8_t` + `UI_BUTTON_*`/`UI_ANCHOR_*`（C 才能 switch）。
+> - **本轮最关键的是聚合初始化**：覆盖层按位置构造按钮
+>   （`{{rect}, "退出游戏", ui::ButtonStyle::Danger}`），C++ 里被省略的成员会取花括号初值
+>   （`fontSize{19.0f}`、`visible{true}`、`visibleT{1.0f}`）。给 Button 加构造函数会让它变成
+>   非聚合、11 处全崩；但留成裸 C 结构又会把 `visible` 静默清零——**按钮直接不可见**。
+>   所以 Button **故意没有构造函数**，那 11 处改调 `ui::MakeButton(rect, text, style)`，
+>   由 `Button_Init` 提供同一套默认值。`PanelStyle`/`ChipStyle` 没有任何按位置聚合初始化的
+>   地方，所以照惯例用 `#ifdef __cplusplus` 构造函数调用各自的 `*_Init`（默认值唯一来源）。
+> - 门面保持所有调用点不变：`ButtonGroup` 是对 `(Button*, count)` 的门面结构，
+>   `DrawPanel`/`DrawChip`/`DrawHairline`/`DrawOrnamentCorners`/`DrawRadialGlow` 承载 C 没有的
+>   默认实参，`AvatarLabel` 仍返回 `std::string`。GameScene 里直接调用的
+>   `button.Update/Draw/HitTest/UpdateHover` 改成 C 函数。
+> - **自己踩的坑（值得记住）**：头注释里写了 `UI_BUTTON_*/UI_ANCHOR_*`，那个 `*/` **提前闭合了
+>   块注释**，把后面的说明文字变成了代码——569 个编译错误。描述通配符时要把斜杠分开写。
+> - 进度：`src/` 剩 **19 个 `.cpp`**，`check_c_only.py` 残留 190 处；
+>   **MinGW x64 exe 683,520 → 680,960 B，距 679,424 只差 1,536 B**。
+>   S8 摘掉 `-static-libstdc++`/`-static-libgcc`（等最后一个 C++ 文件消失）的收益远大于这 1.5 KB。
+>
 >
 
 >
