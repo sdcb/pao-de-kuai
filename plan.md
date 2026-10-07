@@ -456,6 +456,32 @@
 >   `-static-libstdc++`/`-static-libgcc` 一举确定。
 > - 进度：`src/` 仍剩 **18 个 `.cpp`**，`check_c_only.py` 残留 177 处。三链路 8/8 全绿，
 >   `ui-result` 肉眼一致（它同时覆盖 `Scene_Render`、结算覆盖层和新增 `Expired` 槽的对话气泡，
+>
+> **修订 23（S7b 完成记录，commit `503cb54`）——6 个覆盖层转 C，体积回到目标内**：
+> - `InvalidMoveToast` / `TalkBubbleOverlay` / `TipOverlay` / `ConfirmExitDialog` /
+>   `ReturnToMenuOverlay` / `AboutOverlay` → `.c`，直接实现 `OverlayVtbl`。
+>   `src/` 从 18 → **12 个 C++ 文件**；MinGW x64 exe 679,936 → **674,816 B**，
+>   即 S7a 超出的 512 B 已回收，**还剩 4,608 B 余量**——正是那次提交预告的结果。
+> - 每个覆盖层的状态结构私有于自己的 `.c`，头文件只暴露 `<Name>_New(...)`（分配 + 填 vtable +
+>   返回拥有句柄），`Destroy` 槽负责释放。这正是 `core::Transfer(new X)` 做的事，App 的拥有权语义不变。
+>   vtable 用 **C99 指定初始化器**——只写有意义的槽、其余为 NULL，比 13 个按位置的条目好审得多，
+>   也正是内联包装能把"未实现"和"返回 false"当成同一件事的原因。
+> - 需要驱动 App 的 3 个覆盖层要一条从 C 到 App 的路。它们只需要 4 个操作，于是
+>   `app/AppApi.h` 是一个**极小的 `extern "C"` ABI**（`App_PlaySound`/`App_CloseTopOverlay`/
+>   `App_ConfirmExit`/`App_ShowStart`，定义在 `App.cpp`），覆盖层持不透明的 `void *app`。
+>   先转 App 意味着一次动三个文件；这样还能一次一个，头文件里也写明了 App 变 C 后它即删除。
+> - **前置**：`scenes/GameLayout.h` 也是 C 了——它原本还是 `constexpr` +
+>   `namespace pdk::scenes::layout`，而对话气泡需要座次板和头像几何。名字改为 `GameLayout_*`，
+>   带一个记录在案的 `#ifdef __cplusplus` 块保住 `GameScene.cpp` 里 11 处 `layout::` 调用点。
+>   **给后续转换的提醒**：`PLAYER_HUMAN`/`PLAYER_AI1`/`PLAYER_AI2` 在 `rules/Scoring.h`，
+>   **不在** `rules/Card.h`——只包含后者会报未声明。
+> - 新增共享助手，按类型归属放置而不是每个文件各写一份：`Point_Make`/`Rect_Make`
+>   （`core/Geometry.h`，对应 C 无法移植地写出的花括号初始化）、`ColorF_Make`(`ui/Theme.h`)、
+>   `GradientStop_Make`(`graphics/D2DContext.h`)、`ClampF`(`ui/Anim.h`)、
+>   `TextStyle_Label`/`Centered`/`Kai`（按它们替代的 C++ 门面函数命名）、`Button_Make`(`ui/Widgets.h`)。
+> - `AboutOverlay` 的署名段落原本是捕获累加 `y` 的 lambda；C 里改成显式 `CreditsCursor` 交给助手，
+>   顺带让"累加值"不可能被第二个调用点写错。
+> - `check_c_only.py` 残留 177 → **146** 处。
 >   是验证新分派最好的单张图）。
 >
 >
