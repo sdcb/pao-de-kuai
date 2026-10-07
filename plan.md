@@ -88,6 +88,23 @@
 > - 进度：`src/` 剩 **41 个 `.cpp`**，`check_c_only.py` 报 275 处残留。体积：MinGW x64 753,152 B、
 >   MSVC /MT x64 800,256 B（仍链 libstdc++）。
 >
+> **修订 8（S3 + S4a 完成记录，commit `f2c781f` / `db5c1b1`）**：
+> - **S3 `src/stats/` 纯 C**：`AppSettings` 用 `char playerName[64]` 等定长缓冲；
+>   `RoundRecord` 是定长值类型；`DailyStat` 用 Init/Free/Append 管理可增长的 rounds
+>   数组；`StatStore` 是定长 root + 自由函数；`LocalDateTime` 的 chrono+strftime 换成
+>   `GetLocalTime` + `Str_AppendPaddedNumber`（C 层里没有 snprintf）。
+>   **兼容性直接实测过**：把仓库里由旧代码写的 `appsettings.json` 读进来再写出去，
+>   170 字节**逐字节相同**；手工造一天数据写出的 `stat/yyyyMMdd.json` 与文档 schema
+>   完全一致，重读和月/历史聚合都对。
+> - **S4a `src/resources/` 纯 C**：`ByteBuffer`（malloc + size）替代
+>   `std::vector<std::uint8_t>`；`GetCardAtlasInfo()` 返回指针而不是引用；
+>   `IconAtlasData.cpp` 因为只有一行 include 被直接删除。
+> - 两个模块各有一个临时门面：`src/stats/CppCompat.h`、`src/resources/CppCompat.h`。
+> - 进度：`src/` 剩 **36 个 `.cpp`**（原 53），`check_c_only.py` 残留 267 处（原 313）。
+>   体积：MinGW x64 747,008 B、MSVC /MT x64 772,608 B。
+> - **`game/`（7 个 `.cpp`，约 3,500 行）与 `graphics/`（5 个）、`ui+scenes+overlays+app`（21 个）
+>   仍在后面**；体积达标必须等这些全部转完、去掉 `-static-libstdc++` 之后才可能实现。
+>
 >
 
 >
