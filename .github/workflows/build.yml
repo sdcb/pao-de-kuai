@@ -197,7 +197,10 @@ jobs:
           $gcc = Get-ChildItem -Path $root -Recurse -Filter gcc.exe |
                  Where-Object { $_.DirectoryName -like "*\bin" } | Select-Object -First 1
           if (-not $gcc) { throw "No bin/gcc.exe found under $root after extraction" }
-          "MINGW_BIN=$($gcc.DirectoryName)" >> $env:GITHUB_ENV
+          # MINGW_BIN is deliberately NOT exported here.  The next step flattens the archive and
+          # then resolves it from what is actually on disk; exporting it here would leave a path
+          # that the flatten has already moved away, and gcc then fails *silently* (its assembler
+          # cannot find libwinpthread-1.dll) -- which is exactly how the x86 job failed.
 
       - name: Add MinGW bin to PATH and smoke check
         if: ${{ matrix.kind == 'mingw' }}
@@ -211,9 +214,9 @@ jobs:
           # looks for $PDK_MINGW_ROOT/bin/gcc.exe, and the documented local layout is
           # <root>/bin as well.  Flatten it here, in the step that runs on every MinGW job, so a
           # fresh extraction and a cache restore both end up the same shape.  Without this the
-          # smoke check below still passes (it searches recursively and exports MINGW_BIN) while
-          # `cmake --preset` fails with "The CMAKE_C_COMPILER ... is not a full path to an existing
-          # compiler tool" -- which is exactly how this job failed.
+          # smoke check below still passed (it resolves gcc by searching recursively) while
+          # `cmake --preset` failed with "The CMAKE_C_COMPILER ... is not a full path to an
+          # existing compiler tool" -- which is exactly how this job failed.
           if (-not (Test-Path (Join-Path $root "bin\gcc.exe"))) {
             $inner = Get-ChildItem -Path $root -Directory -Force | Select-Object -First 1
             if ($inner) {
@@ -225,13 +228,15 @@ jobs:
             throw "No $root\bin\gcc.exe after flattening the toolchain archive"
           }
 
-          if ([string]::IsNullOrWhiteSpace($env:MINGW_BIN)) {
-            $gcc = Get-ChildItem -Path $root -Recurse -Filter gcc.exe |
-                   Where-Object { $_.DirectoryName -like "*\bin" } | Select-Object -First 1
-            if (-not $gcc) { throw "No bin/gcc.exe found under $root (restored from cache)" }
-            "MINGW_BIN=$($gcc.DirectoryName)" >> $env:GITHUB_ENV
-            $env:MINGW_BIN = $gcc.DirectoryName
-          }
+          # Resolve MINGW_BIN from disk every time, AFTER the flatten above.  A value inherited from
+          # the install step predates the flatten and points at a directory that no longer exists;
+          # with that on PATH instead of <root>/bin, gcc's assembler cannot find
+          # libwinpthread-1.dll and gcc exits 1 printing nothing at all.
+          $gcc = Get-ChildItem -Path $root -Recurse -Filter gcc.exe |
+                 Where-Object { $_.DirectoryName -like "*\bin" } | Select-Object -First 1
+          if (-not $gcc) { throw "No bin/gcc.exe found under $root" }
+          $env:MINGW_BIN = $gcc.DirectoryName
+          "MINGW_BIN=$($gcc.DirectoryName)" >> $env:GITHUB_ENV
           # <root>/bin must be on PATH: gcc spawns <root>/<triple>/bin/as.exe,
           # which needs libwinpthread-1.dll from <root>/bin.  Without it the
           # assembler exits 0xC0000135 and gcc prints *no* diagnostics at all.
