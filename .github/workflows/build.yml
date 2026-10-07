@@ -205,6 +205,26 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $root = "${{ steps.resolve.outputs.root }}"
+
+          # The niXman archive holds a single top-level directory (mingw64/ or mingw32/), but
+          # everything downstream expects <root> itself to BE that directory: CMakePresets.json
+          # looks for $PDK_MINGW_ROOT/bin/gcc.exe, and the documented local layout is
+          # <root>/bin as well.  Flatten it here, in the step that runs on every MinGW job, so a
+          # fresh extraction and a cache restore both end up the same shape.  Without this the
+          # smoke check below still passes (it searches recursively and exports MINGW_BIN) while
+          # `cmake --preset` fails with "The CMAKE_C_COMPILER ... is not a full path to an existing
+          # compiler tool" -- which is exactly how this job failed.
+          if (-not (Test-Path (Join-Path $root "bin\gcc.exe"))) {
+            $inner = Get-ChildItem -Path $root -Directory -Force | Select-Object -First 1
+            if ($inner) {
+              Get-ChildItem -Path $inner.FullName -Force | Move-Item -Destination $root -Force
+              Remove-Item -Recurse -Force $inner.FullName
+            }
+          }
+          if (-not (Test-Path (Join-Path $root "bin\gcc.exe"))) {
+            throw "No $root\bin\gcc.exe after flattening the toolchain archive"
+          }
+
           if ([string]::IsNullOrWhiteSpace($env:MINGW_BIN)) {
             $gcc = Get-ChildItem -Path $root -Recurse -Filter gcc.exe |
                    Where-Object { $_.DirectoryName -like "*\bin" } | Select-Object -First 1
