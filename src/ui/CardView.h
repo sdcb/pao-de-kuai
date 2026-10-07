@@ -3,7 +3,7 @@
 #include "core/Geometry.h"
 #include "graphics/D2DContext.h"
 #include "graphics/SpriteAtlas.h"
-#include "rules/Card.h"
+#include "rules/CppCompat.h"
 #include "ui/Theme.h"
 
 namespace pdk::ui {

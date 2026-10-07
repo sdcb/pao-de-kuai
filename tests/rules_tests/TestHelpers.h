@@ -1,13 +1,13 @@
 #pragma once
 
 #include "game/AiStrategy.h"
-#include "rules/Card.h"
+#include "rules/CppCompat.h"
 
 #include <algorithm>
 
 namespace pdk::tests {
 
-inline rules::Card C(rules::Rank rank, rules::Suit suit = rules::Suit::Spades) {
+inline rules::Card C(rules::Rank rank, rules::Suit suit = SUIT_SPADES) {
     return {rank, suit};
 }
 

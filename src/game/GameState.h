@@ -4,7 +4,7 @@
 #include "game/ExternalAiController.h"
 #include "game/Player.h"
 #include "game/RoundTraceRecorder.h"
-#include "rules/PaoDeKuaiRules.h"
+#include "rules/CppCompat.h"
 #include "stats/DailyStat.h"
 
 #include <array>
@@ -30,7 +30,7 @@ enum class GameEventType {
 
 struct GameEvent {
     GameEventType type{GameEventType::None};
-    rules::PlayerId player{rules::PlayerId::Player};
+    rules::PlayerId player{PLAYER_HUMAN};
     std::string message;
     rules::Cards cards;
 };
@@ -62,7 +62,7 @@ public:
     void Update(float dt);
 
     bool IsRoundOver() const { return roundOver_; }
-    bool IsHumanTurn() const { return currentPlayer_ == rules::PlayerId::Player && !roundOver_; }
+    bool IsHumanTurn() const { return currentPlayer_ == PLAYER_HUMAN && !roundOver_; }
     rules::PlayerId CurrentPlayer() const { return currentPlayer_; }
     const std::array<PlayerState, 3>& Players() const { return players_; }
     const rules::Cards& LastCards() const { return lastCards_; }
@@ -155,10 +155,10 @@ private:
     std::array<AiPlayer, 3> aiPlayers_;
     std::vector<std::shared_ptr<ExternalAiController>> externalAiControllers_;
     std::shared_ptr<ExternalAiController> activeExternalAi_;
-    rules::PlayerId currentPlayer_{rules::PlayerId::Player};
-    rules::PlayerId lastMovePlayer_{rules::PlayerId::Player};
-    rules::PlayerId trickLeader_{rules::PlayerId::Player};
-    rules::PlayerId roundLeader_{rules::PlayerId::Player};
+    rules::PlayerId currentPlayer_{PLAYER_HUMAN};
+    rules::PlayerId lastMovePlayer_{PLAYER_HUMAN};
+    rules::PlayerId trickLeader_{PLAYER_HUMAN};
+    rules::PlayerId roundLeader_{PLAYER_HUMAN};
     std::optional<rules::HandPattern> lastPattern_;
     std::optional<rules::PlayerId> nextRoundLeader_;
     rules::Cards lastCards_;
@@ -179,7 +179,7 @@ private:
     std::vector<GameEvent> events_;
     std::string toast_;
     std::string talkText_;
-    rules::PlayerId talkPlayer_{rules::PlayerId::Ai1};
+    rules::PlayerId talkPlayer_{PLAYER_AI1};
     stats::RoundRecord lastRoundRecord_;
     std::array<int, static_cast<std::size_t>(TalkKind::Count)> lastTalkIndices_{};
     std::vector<TurnRecord> turnRecords_;

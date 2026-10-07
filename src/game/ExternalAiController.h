@@ -10,7 +10,7 @@ namespace pdk::game {
 
 struct ExternalAiRequest {
     int turnNo{0};
-    rules::PlayerId player{rules::PlayerId::Ai1};
+    rules::PlayerId player{PLAYER_AI1};
     std::string humanName;
     TurnSnapshot snapshot;
     AiContext context;

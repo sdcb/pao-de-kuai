@@ -9,29 +9,29 @@ using tests::C;
 TEST_CASE("drag selection picks best lead pattern from dragged cards and ignores previous move") {
     game::GameState state;
     const auto previousStraight = rules::IdentifyPattern({
-        C(rules::Rank::Ten),
-        C(rules::Rank::Jack),
-        C(rules::Rank::Queen),
-        C(rules::Rank::King),
-        C(rules::Rank::Ace)
+        C(RANK_TEN),
+        C(RANK_JACK),
+        C(RANK_QUEEN),
+        C(RANK_KING),
+        C(RANK_ACE)
     }).pattern;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three),
-                C(rules::Rank::Four),
-                C(rules::Rank::Five),
-                C(rules::Rank::Six),
-                C(rules::Rank::Seven),
-                C(rules::Rank::Nine),
-                C(rules::Rank::Nine, rules::Suit::Hearts)
+                C(RANK_THREE),
+                C(RANK_FOUR),
+                C(RANK_FIVE),
+                C(RANK_SIX),
+                C(RANK_SEVEN),
+                C(RANK_NINE),
+                C(RANK_NINE, SUIT_HEARTS)
             },
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         previousStraight,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     CHECK(state.SelectBestPatternFromDraggedCards({6, 5, 4, 3, 2, 1, 0}));
     CHECK(state.SelectedIndices().size() == 5);
@@ -44,19 +44,19 @@ TEST_CASE("drag selection chooses four dragged bomb cards before a smaller pair"
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three),
-                C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds),
-                C(rules::Rank::Three, rules::Suit::Clubs),
-                C(rules::Rank::Nine),
-                C(rules::Rank::Nine, rules::Suit::Hearts)
+                C(RANK_THREE),
+                C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS),
+                C(RANK_THREE, SUIT_CLUBS),
+                C(RANK_NINE),
+                C(RANK_NINE, SUIT_HEARTS)
             },
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     CHECK(state.SelectBestPatternFromDraggedCards({0, 1, 2, 3}));
     CHECK(state.SelectedIndices().size() == 4);
@@ -73,25 +73,25 @@ TEST_CASE("drag selection can choose the longest plane from dragged cards") {
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three),
-                C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds),
-                C(rules::Rank::Four),
-                C(rules::Rank::Four, rules::Suit::Hearts),
-                C(rules::Rank::Four, rules::Suit::Diamonds),
-                C(rules::Rank::Five),
-                C(rules::Rank::Six),
-                C(rules::Rank::Seven),
-                C(rules::Rank::Eight),
-                C(rules::Rank::Nine),
-                C(rules::Rank::Nine, rules::Suit::Hearts)
+                C(RANK_THREE),
+                C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS),
+                C(RANK_FOUR),
+                C(RANK_FOUR, SUIT_HEARTS),
+                C(RANK_FOUR, SUIT_DIAMONDS),
+                C(RANK_FIVE),
+                C(RANK_SIX),
+                C(RANK_SEVEN),
+                C(RANK_EIGHT),
+                C(RANK_NINE),
+                C(RANK_NINE, SUIT_HEARTS)
             },
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     CHECK(state.SelectBestPatternFromDraggedCards({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}));
     CHECK(state.SelectedIndices().size() == 10);
@@ -107,17 +107,17 @@ TEST_CASE("drag selection can choose triple and plane cores without kickers") {
     tripleState.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three),
-                C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds),
-                C(rules::Rank::Nine)
+                C(RANK_THREE),
+                C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS),
+                C(RANK_NINE)
             },
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     CHECK(tripleState.SelectBestPatternFromDraggedCards({0, 1, 2}));
     CHECK(tripleState.SelectedIndices().size() == 3);
@@ -129,20 +129,20 @@ TEST_CASE("drag selection can choose triple and plane cores without kickers") {
     planeState.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three),
-                C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds),
-                C(rules::Rank::Four),
-                C(rules::Rank::Four, rules::Suit::Hearts),
-                C(rules::Rank::Four, rules::Suit::Diamonds),
-                C(rules::Rank::Nine)
+                C(RANK_THREE),
+                C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS),
+                C(RANK_FOUR),
+                C(RANK_FOUR, SUIT_HEARTS),
+                C(RANK_FOUR, SUIT_DIAMONDS),
+                C(RANK_NINE)
             },
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     CHECK(planeState.SelectBestPatternFromDraggedCards({0, 1, 2, 3, 4, 5}));
     CHECK(planeState.SelectedIndices().size() == 6);
@@ -157,17 +157,17 @@ TEST_CASE("drag selection toggles off when the chosen group is already selected"
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three),
-                C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds),
-                C(rules::Rank::Nine)
+                C(RANK_THREE),
+                C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS),
+                C(RANK_NINE)
             },
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     REQUIRE(state.SelectBestPatternFromDraggedCards({0, 1, 2}));
     REQUIRE(state.SelectedIndices().size() == 3);
@@ -182,18 +182,18 @@ TEST_CASE("drag selection completes triple core as triple with two") {
     tripleTwoFromSinglesState.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three),
-                C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds),
-                C(rules::Rank::Seven),
-                C(rules::Rank::Nine)
+                C(RANK_THREE),
+                C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS),
+                C(RANK_SEVEN),
+                C(RANK_NINE)
             },
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     REQUIRE(tripleTwoFromSinglesState.SelectBestPatternFromDraggedCards({0, 1, 2}));
     REQUIRE(tripleTwoFromSinglesState.SelectBestPatternFromDraggedCards({3}));
@@ -211,19 +211,19 @@ TEST_CASE("drag selection completes triple core as triple with two") {
     tripleTwoState.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Four),
-                C(rules::Rank::Four, rules::Suit::Hearts),
-                C(rules::Rank::Four, rules::Suit::Diamonds),
-                C(rules::Rank::Seven),
-                C(rules::Rank::Nine),
-                C(rules::Rank::Jack)
+                C(RANK_FOUR),
+                C(RANK_FOUR, SUIT_HEARTS),
+                C(RANK_FOUR, SUIT_DIAMONDS),
+                C(RANK_SEVEN),
+                C(RANK_NINE),
+                C(RANK_JACK)
             },
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     REQUIRE(tripleTwoState.SelectBestPatternFromDraggedCards({0, 1, 2}));
     REQUIRE(tripleTwoState.SelectBestPatternFromDraggedCards({3, 4}));
@@ -240,22 +240,22 @@ TEST_CASE("drag selection adds wings to an existing plane core") {
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three),
-                C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds),
-                C(rules::Rank::Four),
-                C(rules::Rank::Four, rules::Suit::Hearts),
-                C(rules::Rank::Four, rules::Suit::Diamonds),
-                C(rules::Rank::Seven),
-                C(rules::Rank::Nine),
-                C(rules::Rank::Jack)
+                C(RANK_THREE),
+                C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS),
+                C(RANK_FOUR),
+                C(RANK_FOUR, SUIT_HEARTS),
+                C(RANK_FOUR, SUIT_DIAMONDS),
+                C(RANK_SEVEN),
+                C(RANK_NINE),
+                C(RANK_JACK)
             },
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     REQUIRE(state.SelectBestPatternFromDraggedCards({0, 1, 2, 3, 4, 5}));
     REQUIRE(state.SelectBestPatternFromDraggedCards({6, 7}));

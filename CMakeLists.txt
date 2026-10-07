@@ -164,13 +164,13 @@ set(PDK_CORE_SOURCES
     src/core/Timer.c
     src/core/Tween.c
     src/core/WinFile.c
-    src/rules/Card.cpp
-    src/rules/Deck.cpp
-    src/rules/HandPattern.cpp
-    src/rules/MoveValidator.cpp
-    src/rules/PaoDeKuaiRules.cpp
-    src/rules/RuleText.cpp
-    src/rules/Scoring.cpp
+    src/rules/Card.c
+    src/rules/Deck.c
+    src/rules/HandPattern.c
+    src/rules/MoveValidator.c
+    src/rules/PaoDeKuaiRules.c
+    src/rules/RuleText.c
+    src/rules/Scoring.c
     src/game/AiStrategy.cpp
     src/game/GameState.cpp
     src/game/LocalAiController.cpp

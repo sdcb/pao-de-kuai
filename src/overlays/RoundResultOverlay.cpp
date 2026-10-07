@@ -41,7 +41,7 @@ void RoundResultOverlay::Update(float dt) {
 }
 
 void RoundResultOverlay::Render(graphics::RenderContext& context) {
-    const bool win = record_.winner == rules::PlayerId::Player;
+    const bool win = record_.winner == PLAYER_HUMAN;
     BeginModal(context, Panel, elapsed_);
     DrawPanel(context, Panel);
     if (win) {
@@ -86,7 +86,7 @@ void RoundResultOverlay::Render(graphics::RenderContext& context) {
     }
     if (record_.spring.enabled) {
         std::string text = "关圆鸡 × ";
-        core::AppendNumber(text, record_.spring.losers.size());
+        core::AppendNumber(text, record_.spring.loserCount);
         badges.push_back(text);
     }
     if (!badges.empty()) {

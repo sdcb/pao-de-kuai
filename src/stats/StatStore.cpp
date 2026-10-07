@@ -52,16 +52,16 @@ std::array<int, 3> ScoresFromJson(const cJSON* object) {
 
 rules::PlayerId PlayerFromKey(const char* key) {
     if (!key) {
-        return rules::PlayerId::Player;
+        return PLAYER_HUMAN;
     }
     const std::string value = key;
     if (value == "ai1") {
-        return rules::PlayerId::Ai1;
+        return PLAYER_AI1;
     }
     if (value == "ai2") {
-        return rules::PlayerId::Ai2;
+        return PLAYER_AI2;
     }
-    return rules::PlayerId::Player;
+    return PLAYER_HUMAN;
 }
 
 cJSON* RoundToJson(const RoundRecord& round) {
@@ -142,7 +142,9 @@ RoundRecord RoundFromJson(const cJSON* object) {
             const cJSON* item = nullptr;
             cJSON_ArrayForEach(item, losers) {
                 if (cJSON_IsString(item)) {
-                    round.spring.losers.push_back(PlayerFromKey(item->valuestring));
+                    if (round.spring.loserCount < 3) {
+                        round.spring.losers[round.spring.loserCount++] = PlayerFromKey(item->valuestring);
+                    }
                 }
             }
         }
@@ -157,7 +159,7 @@ void Accumulate(StatSummary& summary, const DailyStat& day) {
             summary.scores[i] += round.scores[i];
         }
         summary.bombs += static_cast<int>(round.bombs.size());
-        summary.springLosers += static_cast<int>(round.spring.losers.size());
+        summary.springLosers += round.spring.loserCount;
         if (round.scores[0] > summary.bestSingleRoundPlayerScore) {
             summary.bestSingleRoundPlayerScore = round.scores[0];
         }

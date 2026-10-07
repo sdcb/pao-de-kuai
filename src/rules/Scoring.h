@@ -1,45 +1,54 @@
 #pragma once
 
-#include <array>
-#include <string>
-#include <vector>
+#include "rules/Card.h"
 
-namespace pdk::rules {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-enum class PlayerId {
-    Player = 0,
-    Ai1 = 1,
-    Ai2 = 2
+enum {
+    PLAYER_HUMAN = 0,
+    PLAYER_AI1 = 1,
+    PLAYER_AI2 = 2
 };
 
-struct BombScoreEvent {
-    PlayerId by{PlayerId::Player};
-    int score{20};
-    // True when a bigger bomb was played on top of this one before the trick
-    // ended: a beaten bomb scores nothing.
-    bool beaten{false};
-};
+/* A 48-card deck holds at most eleven four-of-a-kind groups (3..K), so a fixed
+ * array is enough and keeps scoring allocation free. */
+enum { BOMB_EVENTS_MAX = 12 };
 
-struct SpringInfo {
-    bool enabled{false};
-    std::vector<PlayerId> losers;
-};
+typedef struct BombScoreEvent {
+    PlayerId by;
+    int score;
+    /* True when a bigger bomb was played on top of this one before the trick
+     * ended: a beaten bomb scores nothing. */
+    bool beaten;
+} BombScoreEvent;
 
-struct RoundScoreInput {
-    PlayerId winner{PlayerId::Player};
-    std::array<int, 3> remainingCards{0, 0, 0};
-    std::array<bool, 3> hasPlayedCards{false, false, false};
-    std::vector<BombScoreEvent> bombs;
-};
+typedef struct SpringInfo {
+    bool enabled;
+    PlayerId losers[3];
+    int loserCount;
+} SpringInfo;
 
-struct RoundScoreResult {
-    std::array<int, 3> scores{0, 0, 0};
+typedef struct RoundScoreInput {
+    PlayerId winner;
+    int remainingCards[3];
+    bool hasPlayedCards[3];
+    BombScoreEvent bombs[BOMB_EVENTS_MAX];
+    int bombCount;
+} RoundScoreInput;
+
+typedef struct RoundScoreResult {
+    int scores[3];
     SpringInfo spring;
-};
+} RoundScoreResult;
 
 int PlayerIndex(PlayerId player);
 PlayerId PlayerFromIndex(int index);
-std::string PlayerKey(PlayerId player);
-RoundScoreResult CalculateRoundScore(const RoundScoreInput& input);
+/* Returns a string literal ("player" / "ai1" / "ai2"), so nothing to free. */
+const char *PlayerKey(PlayerId player);
+RoundScoreResult CalculateRoundScore(const RoundScoreInput *input);
 
-} // namespace pdk::rules
+#ifdef __cplusplus
+}
+#endif

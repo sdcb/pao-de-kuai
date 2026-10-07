@@ -243,16 +243,16 @@ void App::ShowViewerScene(const std::string& scene, const std::string& overlay, 
     } else if (overlay == "invalid") {
         PushOverlay(std::make_unique<overlays::InvalidMoveToast>("牌型或点数压不过上家"));
     } else if (overlay == "talk") {
-        PushOverlay(std::make_unique<overlays::TalkBubbleOverlay>(rules::PlayerId::Ai1, "哇，李姐你太强了！"));
+        PushOverlay(std::make_unique<overlays::TalkBubbleOverlay>(PLAYER_AI1, "哇，李姐你太强了！"));
     } else if (overlay == "return-menu") {
         PushOverlay(std::make_unique<overlays::ReturnToMenuOverlay>(*this));
     } else if (overlay == "result-win") {
         stats::RoundRecord record;
-        record.winner = rules::PlayerId::Player;
+        record.winner = PLAYER_HUMAN;
         record.playerName = settings_.playerName;
         record.scores = {18, -8, -10};
         record.remainingCards = {0, 8, 10};
-        record.bombs = {rules::BombScoreEvent{rules::PlayerId::Player, 20}};
+        record.bombs = {rules::BombScoreEvent{PLAYER_HUMAN, 20}};
         PushOverlay(std::make_unique<overlays::RoundResultOverlay>(*this, record));
     }
 }

@@ -72,15 +72,15 @@ std::string PlayerDisplayName(const std::array<PlayerState, 3>& players, rules::
 
 int DragPatternTieBreaker(rules::PatternType type) {
     switch (type) {
-    case rules::PatternType::Straight: return 7000;
-    case rules::PatternType::Plane: return 6500;
-    case rules::PatternType::ConsecutivePairs: return 6000;
-    case rules::PatternType::TripleWithPair: return 5000;
-    case rules::PatternType::Bomb: return 4000;
-    case rules::PatternType::TripleWithOne: return 3000;
-    case rules::PatternType::Pair: return 2000;
-    case rules::PatternType::Single: return 1000;
-    case rules::PatternType::Invalid: break;
+    case PATTERN_STRAIGHT: return 7000;
+    case PATTERN_PLANE: return 6500;
+    case PATTERN_CONSECUTIVE_PAIRS: return 6000;
+    case PATTERN_TRIPLE_WITH_PAIR: return 5000;
+    case PATTERN_BOMB: return 4000;
+    case PATTERN_TRIPLE_WITH_ONE: return 3000;
+    case PATTERN_PAIR: return 2000;
+    case PATTERN_SINGLE: return 1000;
+    case PATTERN_INVALID: break;
     }
     return 0;
 }
@@ -102,7 +102,7 @@ bool IsConsecutiveRanks(const std::vector<rules::Rank>& ranks) {
             return false;
         }
     }
-    return ranks.back() != rules::Rank::Two;
+    return ranks.back() != RANK_TWO;
 }
 
 rules::Rank MaxRank(const std::vector<rules::Rank>& ranks) {
@@ -115,7 +115,7 @@ std::optional<rules::HandPattern> IdentifyDragOnlyPattern(const rules::Cards& ca
     const int total = static_cast<int>(cards.size());
     const auto counts = CountRanks(cards);
     if (total == 3 && counts.size() == 1) {
-        return rules::HandPattern{rules::PatternType::TripleWithOne, cards.front().rank, total, 1, true};
+        return rules::HandPattern{PATTERN_TRIPLE_WITH_ONE, cards.front().rank, total, 1, true};
     }
 
     if (total < 6 || total % 3 != 0) {
@@ -125,7 +125,7 @@ std::optional<rules::HandPattern> IdentifyDragOnlyPattern(const rules::Cards& ca
     std::vector<rules::Rank> tripleRanks;
     tripleRanks.reserve(counts.size());
     for (const auto& [rank, count] : counts) {
-        if (rank == rules::Rank::Two || count != 3) {
+        if (rank == RANK_TWO || count != 3) {
             return std::nullopt;
         }
         tripleRanks.push_back(rank);
@@ -137,7 +137,7 @@ std::optional<rules::HandPattern> IdentifyDragOnlyPattern(const rules::Cards& ca
         return std::nullopt;
     }
     return rules::HandPattern{
-        rules::PatternType::Plane,
+        PATTERN_PLANE,
         MaxRank(tripleRanks),
         total,
         static_cast<int>(tripleRanks.size()),
@@ -146,17 +146,17 @@ std::optional<rules::HandPattern> IdentifyDragOnlyPattern(const rules::Cards& ca
 }
 
 std::string DragPatternDescription(const rules::HandPattern& pattern) {
-    if (pattern.type == rules::PatternType::TripleWithOne && pattern.cardCount == 3) {
+    if (pattern.type == PATTERN_TRIPLE_WITH_ONE && pattern.cardCount == 3) {
         return "三张 " + rules::RankName(pattern.mainRank);
     }
-    if (pattern.type == rules::PatternType::Plane && pattern.cardCount == pattern.groupCount * 3) {
+    if (pattern.type == PATTERN_PLANE && pattern.cardCount == pattern.groupCount * 3) {
         return "飞机主体 " + rules::RankName(pattern.mainRank);
     }
     return rules::PatternDescription(pattern);
 }
 
 bool IsAi(rules::PlayerId player) {
-    return player != rules::PlayerId::Player;
+    return player != PLAYER_HUMAN;
 }
 
 bool IsForceTalk(TalkKind kind) {
@@ -282,16 +282,16 @@ const std::vector<std::string>& TalkPool(TalkKind kind) {
 }
 
 std::optional<TalkKind> HumanGoodTalkKind(const rules::HandPattern& pattern) {
-    if (pattern.type == rules::PatternType::Bomb) {
+    if (pattern.type == PATTERN_BOMB) {
         return TalkKind::HumanGoodBomb;
     }
-    if (pattern.type == rules::PatternType::Plane) {
+    if (pattern.type == PATTERN_PLANE) {
         return TalkKind::HumanGoodPlane;
     }
-    if (pattern.type == rules::PatternType::Straight && pattern.cardCount >= 7) {
+    if (pattern.type == PATTERN_STRAIGHT && pattern.cardCount >= 7) {
         return TalkKind::HumanGoodStraight;
     }
-    if (pattern.type == rules::PatternType::ConsecutivePairs && pattern.cardCount >= 6) {
+    if (pattern.type == PATTERN_CONSECUTIVE_PAIRS && pattern.cardCount >= 6) {
         return TalkKind::HumanGoodConsecutivePairs;
     }
     return std::nullopt;
@@ -327,16 +327,16 @@ std::optional<TalkKind> RoundEndGoodTalkKind(const rules::Cards& hand) {
     std::vector<rules::Rank> pairRanks;
     bool hasBomb = false;
     for (const auto& [rank, count] : counts) {
-        if (rank != rules::Rank::Two) {
+        if (rank != RANK_TWO) {
             straightRanks.push_back(rank);
         }
-        if (rank != rules::Rank::Two && count >= 2) {
+        if (rank != RANK_TWO && count >= 2) {
             pairRanks.push_back(rank);
         }
-        if (rank != rules::Rank::Two && count >= 3) {
+        if (rank != RANK_TWO && count >= 3) {
             tripleRanks.push_back(rank);
         }
-        if (count >= 4 && rank != rules::Rank::Ace && rank != rules::Rank::Two) {
+        if (count >= 4 && rank != RANK_ACE && rank != RANK_TWO) {
             hasBomb = true;
         }
     }
@@ -449,7 +449,7 @@ void GameState::Update(float dt) {
         return;
     }
 
-    const bool aiControlled = currentPlayer_ != rules::PlayerId::Player || autoplay_;
+    const bool aiControlled = currentPlayer_ != PLAYER_HUMAN || autoplay_;
     if (!aiControlled) {
         return;
     }
@@ -517,14 +517,14 @@ bool GameState::PlaySelected() {
         : rules_.ValidateFollowMove(cards, *lastPattern_, handSize);
     if (!validation.ok) {
         toast_ = validation.reason;
-        AddEvent(GameEvent{GameEventType::InvalidMove, rules::PlayerId::Player, validation.reason, cards});
+        AddEvent(GameEvent{GameEventType::InvalidMove, PLAYER_HUMAN, validation.reason, cards});
         return false;
     }
     const TurnSnapshot before = Snapshot();
-    PlayCards(rules::PlayerId::Player, cards, validation.pattern);
+    PlayCards(PLAYER_HUMAN, cards, validation.pattern);
     TurnRecord record = BuildTurnRecord(
         before,
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         TurnDecisionSource::Human,
         TurnDecisionReason::NormalChoice,
         ActionFromCards(cards),
@@ -545,12 +545,12 @@ bool GameState::PassHuman() {
         return false;
     }
     const TurnSnapshot before = Snapshot();
-    if (!Pass(rules::PlayerId::Player)) {
+    if (!Pass(PLAYER_HUMAN)) {
         return false;
     }
     TurnRecord record = BuildTurnRecord(
         before,
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         TurnDecisionSource::Human,
         TurnDecisionReason::CannotBeat,
         ActionFromCards({}, true),
@@ -568,16 +568,16 @@ bool GameState::ApplyHint() {
     if (!IsHumanTurn()) {
         return false;
     }
-    AiMoveChoice choice = aiPlayers_[0].ChooseMove(players_[0].hand, MakeAiContext(rules::PlayerId::Player));
+    AiMoveChoice choice = aiPlayers_[0].ChooseMove(players_[0].hand, MakeAiContext(PLAYER_HUMAN));
     if (choice.pass) {
         if (!CurrentPlayerLeads()) {
             const TurnSnapshot before = Snapshot();
-            if (!Pass(rules::PlayerId::Player)) {
+            if (!Pass(PLAYER_HUMAN)) {
                 return false;
             }
             TurnRecord record = BuildTurnRecord(
                 before,
-                rules::PlayerId::Player,
+                PLAYER_HUMAN,
                 TurnDecisionSource::Human,
                 TurnDecisionReason::CannotBeat,
                 ActionFromCards({}, true),
@@ -591,7 +591,7 @@ bool GameState::ApplyHint() {
             return true;
         }
         toast_ = choice.reason;
-        AddEvent(GameEvent{GameEventType::Hint, rules::PlayerId::Player, choice.reason, {}});
+        AddEvent(GameEvent{GameEventType::Hint, PLAYER_HUMAN, choice.reason, {}});
         return false;
     }
 
@@ -618,7 +618,7 @@ bool GameState::ApplyHint() {
         hintIndices_ = std::move(recommendedHints);
         toast_ = "已按 AI 逻辑选中推荐牌";
     }
-    AddEvent(GameEvent{GameEventType::Hint, rules::PlayerId::Player, choice.reason, choice.cards});
+    AddEvent(GameEvent{GameEventType::Hint, PLAYER_HUMAN, choice.reason, choice.cards});
     return true;
 }
 
@@ -828,7 +828,7 @@ bool GameState::CurrentPlayerLeads() const {
 }
 
 bool GameState::CanCurrentPlayerPass() const {
-    return IsHumanTurn() && !CurrentPlayerLeads() && !HasPlayableFollow(rules::PlayerId::Player);
+    return IsHumanTurn() && !CurrentPlayerLeads() && !HasPlayableFollow(PLAYER_HUMAN);
 }
 
 AiContext GameState::MakeAiContext(rules::PlayerId player) const {
@@ -943,7 +943,7 @@ TurnRecord GameState::BuildTurnRecord(
             strategy = RulesStrategyMetadata();
         } else if (source == TurnDecisionSource::Human) {
             strategy = HumanStrategyMetadata();
-        } else if (source == TurnDecisionSource::LocalAi && actor == rules::PlayerId::Player) {
+        } else if (source == TurnDecisionSource::LocalAi && actor == PLAYER_HUMAN) {
             strategy = aiPlayers_[Index(actor)].Metadata();
         } else {
             strategy = roundStrategies_[static_cast<std::size_t>(Index(actor))];
@@ -1218,13 +1218,13 @@ bool GameState::ApplyLocalAiResult(const AiMoveChoice& choice, TurnDecisionSourc
 }
 
 float GameState::NextThinkDelay() {
-    return currentPlayer_ == rules::PlayerId::Player ? 0.35f : 0.75f;
+    return currentPlayer_ == PLAYER_HUMAN ? 0.35f : 0.75f;
 }
 
 void GameState::AdvanceTurn() {
     currentPlayer_ = NextPlayer(currentPlayer_);
-    if (currentPlayer_ == rules::PlayerId::Player) {
-        AddEvent(GameEvent{GameEventType::Talk, rules::PlayerId::Player, "轮到你", {}});
+    if (currentPlayer_ == PLAYER_HUMAN) {
+        AddEvent(GameEvent{GameEventType::Talk, PLAYER_HUMAN, "轮到你", {}});
     }
 }
 
@@ -1234,7 +1234,7 @@ void GameState::RecordPassObservation(rules::PlayerId player, const rules::HandP
     passHistory_[static_cast<std::size_t>(index)].push_back(observation);
     std::optional<PassObservation>& existing = passObservations_[static_cast<std::size_t>(index)];
 
-    if (existing && existing->pattern.type == rules::PatternType::Single && pattern.type == rules::PatternType::Single) {
+    if (existing && existing->pattern.type == PATTERN_SINGLE && pattern.type == PATTERN_SINGLE) {
         // For singles, a lower failed-to-beat rank is stronger information:
         // failing to beat Q proves K/A/2 are unavailable, while failing to beat K
         // still leaves open the possibility that the player has a K.
@@ -1244,7 +1244,7 @@ void GameState::RecordPassObservation(rules::PlayerId player, const rules::HandP
         return;
     }
 
-    if (existing && existing->pattern.type == rules::PatternType::Single && pattern.type != rules::PatternType::Single) {
+    if (existing && existing->pattern.type == PATTERN_SINGLE && pattern.type != PATTERN_SINGLE) {
         return;
     }
 
@@ -1254,7 +1254,7 @@ void GameState::RecordPassObservation(rules::PlayerId player, const rules::HandP
 void GameState::PlayCards(rules::PlayerId player, const rules::Cards& cards, const rules::HandPattern& pattern, int disruptionPenalty) {
     const bool wasFollowing = !CurrentPlayerLeads();
     // A bomb played on top of a standing bomb beats it: the beaten bomb no longer scores.
-    const bool beatsBomb = wasFollowing && lastPattern_ && lastPattern_->type == rules::PatternType::Bomb;
+    const bool beatsBomb = wasFollowing && lastPattern_ && lastPattern_->type == PATTERN_BOMB;
     RemoveCardsFromHand(player, cards);
     players_[Index(player)].hasPlayedCards = true;
     playedCards_.insert(playedCards_.end(), cards.begin(), cards.end());
@@ -1270,7 +1270,7 @@ void GameState::PlayCards(rules::PlayerId player, const rules::Cards& cards, con
     toast_ = message;
     AddEvent(GameEvent{GameEventType::CardsPlayed, player, message, cards});
 
-    if (pattern.type == rules::PatternType::Bomb) {
+    if (pattern.type == PATTERN_BOMB) {
         if (beatsBomb && standingBombIndex_ && *standingBombIndex_ < bombs_.size()) {
             bombs_[*standingBombIndex_].beaten = true;
         }
@@ -1279,9 +1279,9 @@ void GameState::PlayCards(rules::PlayerId player, const rules::Cards& cards, con
         AddEvent(GameEvent{GameEventType::Bomb, player, "炸弹 +20", cards});
     }
 
-    if (player == rules::PlayerId::Player) {
+    if (player == PLAYER_HUMAN) {
         MaybeTalkAboutHumanMove(pattern);
-    } else if (pattern.type == rules::PatternType::Bomb) {
+    } else if (pattern.type == PATTERN_BOMB) {
         MaybeTalk(player, TalkKind::BombPlay, true);
     } else if (wasFollowing && disruptionPenalty >= 320) {
         MaybeTalk(player, TalkKind::ForcedBreakGoodHand, true);
@@ -1346,7 +1346,16 @@ void GameState::FinishRound(rules::PlayerId winner) {
     nextRoundLeader_ = winner;
     rules::RoundScoreInput input;
     input.winner = winner;
-    input.bombs = bombs_;
+    /* RoundScoreInput.bombs is a fixed array now (plan.md 2): copy the recorded
+     * bombs in, dropping any beyond BOMB_EVENTS_MAX, which cannot happen with a
+     * 48-card deck. */
+    input.bombCount = 0;
+    for (const rules::BombScoreEvent& bomb : bombs_) {
+        if (input.bombCount >= BOMB_EVENTS_MAX) {
+            break;
+        }
+        input.bombs[input.bombCount++] = bomb;
+    }
     for (int i = 0; i < 3; ++i) {
         input.remainingCards[i] = static_cast<int>(players_[i].hand.size());
         input.hasPlayedCards[i] = players_[i].hasPlayedCards;
@@ -1358,14 +1367,14 @@ void GameState::FinishRound(rules::PlayerId winner) {
         stats::NowTimeText(),
         winner,
         playerName_,
-        score.scores,
-        input.remainingCards,
+        {score.scores[0], score.scores[1], score.scores[2]},
+        {input.remainingCards[0], input.remainingCards[1], input.remainingCards[2]},
         bombs_,
         score.spring
     };
 
     toast_.clear();
-    toast_ += winner == rules::PlayerId::Player ? "胜利" : "失败";
+    toast_ += winner == PLAYER_HUMAN ? "胜利" : "失败";
     toast_ += "  本局分: 玩家 ";
     core::AppendNumber(toast_, score.scores[0]);
     toast_ += " AI1 ";
@@ -1394,7 +1403,7 @@ void GameState::AddEvent(GameEvent event) {
 
 void GameState::MaybeTalk(rules::PlayerId player, TalkKind kind, bool force) {
     // Key reactions should be heard even if a recent ordinary line started the cooldown.
-    if (player == rules::PlayerId::Player || (!force && !IsForceTalk(kind) && talkCooldown_ > 0.0f)) {
+    if (player == PLAYER_HUMAN || (!force && !IsForceTalk(kind) && talkCooldown_ > 0.0f)) {
         return;
     }
     talkPlayer_ = player;
@@ -1409,7 +1418,7 @@ void GameState::MaybeTalkAboutHumanMove(const rules::HandPattern& pattern) {
         return;
     }
 
-    const rules::PlayerId speaker = (std::rand() % 2) == 0 ? rules::PlayerId::Ai1 : rules::PlayerId::Ai2;
+    const rules::PlayerId speaker = (std::rand() % 2) == 0 ? PLAYER_AI1 : PLAYER_AI2;
     MaybeTalk(speaker, *kind, true);
 }
 
@@ -1421,7 +1430,7 @@ void GameState::MaybeTalkAboutRoundEndGoodHands(rules::PlayerId winner) {
     };
 
     std::optional<Candidate> best;
-    for (rules::PlayerId player : {rules::PlayerId::Ai1, rules::PlayerId::Ai2}) {
+    for (rules::PlayerId player : {PLAYER_AI1, PLAYER_AI2}) {
         if (player == winner) {
             continue;
         }

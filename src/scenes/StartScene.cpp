@@ -23,11 +23,11 @@ constexpr float MenuGap = 14.0f;
 
 // 10 J Q K A: the top straight, a quiet nod to the rules on the title screen.
 constexpr std::array<rules::Card, 5> FanCards{{
-    {rules::Rank::Ten, rules::Suit::Hearts},
-    {rules::Rank::Jack, rules::Suit::Clubs},
-    {rules::Rank::Queen, rules::Suit::Diamonds},
-    {rules::Rank::King, rules::Suit::Spades},
-    {rules::Rank::Ace, rules::Suit::Hearts}}};
+    {RANK_TEN, SUIT_HEARTS},
+    {RANK_JACK, SUIT_CLUBS},
+    {RANK_QUEEN, SUIT_DIAMONDS},
+    {RANK_KING, SUIT_SPADES},
+    {RANK_ACE, SUIT_HEARTS}}};
 
 } // namespace
 

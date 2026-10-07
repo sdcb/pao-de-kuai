@@ -14,7 +14,7 @@ struct RoundTrace {
     unsigned seed{0};
     std::string playerName;
     std::string startedAt;
-    rules::PlayerId roundLeader{rules::PlayerId::Player};
+    rules::PlayerId roundLeader{PLAYER_HUMAN};
     std::array<PlayerState, 3> initialPlayers;
     std::array<StrategyMetadata, 3> strategies;
     std::vector<TurnRecord> turns;

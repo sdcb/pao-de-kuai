@@ -2,22 +2,24 @@
 
 #include "rules/HandPattern.h"
 
-#include <string>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace pdk::rules {
+typedef struct MoveValidation {
+    bool ok;
+    HandPattern pattern;
+    char reason[PATTERN_REASON_CAP];
+} MoveValidation;
 
-struct MoveValidation {
-    bool ok{false};
-    HandPattern pattern{};
-    std::string reason;
-};
+/* `handSizeBeforePlay` is the hand size before the play; -1 means unknown. */
+MoveValidation ValidateLead(const Cards *cards, int handSizeBeforePlay);
+MoveValidation ValidateFollow(const Cards *cards, const HandPattern *previous,
+                              int handSizeBeforePlay);
+bool CanBeat(const HandPattern *candidate, const HandPattern *previous);
+bool HasAnyFollowMove(const Cards *hand, const HandPattern *previous,
+                      int handSizeBeforePlay);
 
-MoveValidation ValidateLead(const Cards& cards, int handSizeBeforePlay = -1);
-MoveValidation ValidateFollow(
-    const Cards& cards,
-    const HandPattern& previous,
-    int handSizeBeforePlay = -1);
-bool CanBeat(const HandPattern& candidate, const HandPattern& previous);
-bool HasAnyFollowMove(const Cards& hand, const HandPattern& previous, int handSizeBeforePlay = -1);
-
-} // namespace pdk::rules
+#ifdef __cplusplus
+}
+#endif

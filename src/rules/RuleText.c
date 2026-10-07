@@ -1,8 +1,7 @@
 #include "rules/RuleText.h"
 
-namespace pdk::rules {
-
-std::string_view SharedGameRulesText() {
+const char *SharedGameRulesText(void)
+{
     return
         "目标：先把手牌跑完。\n"
         "三家各 16 张。\n"
@@ -18,11 +17,10 @@ std::string_view SharedGameRulesText() {
         "要得起必须出，不能不要。";
 }
 
-std::string_view HumanHelpText() {
+const char *HumanHelpText(void)
+{
     return
         "计分：赢家获得两家有效剩余牌数，剩一张不扣分；关圆鸡每人扣 32。\n"
         "炸弹立即 +20，另外两家各 -10，结算也会展示且不参与春天翻倍。\n"
         "托管会用基础 AI 代替玩家行动，可随时取消。";
 }
-
-} // namespace pdk::rules

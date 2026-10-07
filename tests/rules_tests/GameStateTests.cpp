@@ -24,7 +24,7 @@ namespace {
 std::vector<std::string> TalkMessages(const game::GameState& state) {
     std::vector<std::string> messages;
     for (const game::GameEvent& event : state.Events()) {
-        if (event.type == game::GameEventType::Talk && event.player != rules::PlayerId::Player) {
+        if (event.type == game::GameEventType::Talk && event.player != PLAYER_HUMAN) {
             messages.push_back(event.message);
         }
     }
@@ -112,13 +112,13 @@ std::optional<rules::PlayerId> ListLeaderLossesFor() {
     }
     const std::string name(value);
     if (name == "P" || name == "Player") {
-        return rules::PlayerId::Player;
+        return PLAYER_HUMAN;
     }
     if (name == "A1" || name == "Ai1") {
-        return rules::PlayerId::Ai1;
+        return PLAYER_AI1;
     }
     if (name == "A2" || name == "Ai2") {
-        return rules::PlayerId::Ai2;
+        return PLAYER_AI2;
     }
     return std::nullopt;
 }
@@ -157,13 +157,13 @@ std::optional<rules::PlayerId> AiCompareForcedLeader() {
     }
     const std::string name(value);
     if (name == "P" || name == "Player") {
-        return rules::PlayerId::Player;
+        return PLAYER_HUMAN;
     }
     if (name == "A1" || name == "Ai1") {
-        return rules::PlayerId::Ai1;
+        return PLAYER_AI1;
     }
     if (name == "A2" || name == "Ai2") {
-        return rules::PlayerId::Ai2;
+        return PLAYER_AI2;
     }
     return std::nullopt;
 }
@@ -191,13 +191,13 @@ void RecordSimPassObservation(
     game::PassObservation observation{pattern, remainingCards};
     history[static_cast<std::size_t>(rules::PlayerIndex(player))].push_back(observation);
 
-    if (existing && existing->pattern.type == rules::PatternType::Single && pattern.type == rules::PatternType::Single) {
+    if (existing && existing->pattern.type == PATTERN_SINGLE && pattern.type == PATTERN_SINGLE) {
         if (rules::RankValue(pattern.mainRank) < rules::RankValue(existing->pattern.mainRank)) {
             existing = observation;
         }
         return;
     }
-    if (existing && existing->pattern.type == rules::PatternType::Single && pattern.type != rules::PatternType::Single) {
+    if (existing && existing->pattern.type == PATTERN_SINGLE && pattern.type != PATTERN_SINGLE) {
         return;
     }
     existing = observation;
@@ -254,15 +254,15 @@ game::AiContext MakeSimContext(
 }
 
 struct SimRoundResult {
-    rules::PlayerId winner{rules::PlayerId::Player};
-    rules::PlayerId leader{rules::PlayerId::Player};
+    rules::PlayerId winner{PLAYER_HUMAN};
+    rules::PlayerId leader{PLAYER_HUMAN};
 };
 
 std::string SimPlayerName(rules::PlayerId player) {
     switch (player) {
-    case rules::PlayerId::Player: return "P";
-    case rules::PlayerId::Ai1: return "A1";
-    case rules::PlayerId::Ai2: return "A2";
+    case PLAYER_HUMAN: return "P";
+    case PLAYER_AI1: return "A1";
+    case PLAYER_AI2: return "A2";
     }
     return "?";
 }
@@ -388,7 +388,7 @@ SimRoundResult RunSimRound(
     }
 
     FAIL("simulated round did not finish");
-    return SimRoundResult{rules::PlayerId::Player, leader};
+    return SimRoundResult{PLAYER_HUMAN, leader};
 }
 
 struct SimSummary {
@@ -557,8 +557,8 @@ SimSummary RunAutoplayRounds(std::array<game::AiStrategy*, 3> strategies, unsign
         }
         if (ListAi1LeaderLosses() &&
             round >= listLossesFrom &&
-            result.leader == rules::PlayerId::Ai1 &&
-            result.winner != rules::PlayerId::Ai1 &&
+            result.leader == PLAYER_AI1 &&
+            result.winner != PLAYER_AI1 &&
             listedAi1LeaderLosses < 24) {
             std::cout << "AI1 leader loss round=" << round
                 << " seed=" << seedBase + static_cast<unsigned>(round)
@@ -568,7 +568,7 @@ SimSummary RunAutoplayRounds(std::array<game::AiStrategy*, 3> strategies, unsign
         if (listedLeader &&
             round >= listLossesFrom &&
             result.leader == *listedLeader &&
-            result.winner != rules::PlayerId::Ai1 &&
+            result.winner != PLAYER_AI1 &&
             listedLeaderLosses < 24) {
             std::cout << "AI1 loss leader=" << SimPlayerName(*listedLeader)
                 << " round=" << round
@@ -602,7 +602,7 @@ class MockExternalAiController final : public game::ExternalAiController {
 public:
     explicit MockExternalAiController(
         game::ExternalAiResult result,
-        rules::PlayerId handledPlayer = rules::PlayerId::Ai1)
+        rules::PlayerId handledPlayer = PLAYER_AI1)
         : result_(std::move(result)), handledPlayer_(handledPlayer) {}
 
     bool CanHandle(rules::PlayerId player) const override {
@@ -636,7 +636,7 @@ public:
 
 private:
     game::ExternalAiResult result_;
-    rules::PlayerId handledPlayer_{rules::PlayerId::Ai1};
+    rules::PlayerId handledPlayer_{PLAYER_AI1};
     bool pending_{false};
 };
 
@@ -663,9 +663,9 @@ TEST_CASE("game state can finish a full three player autoplay round") {
 
     CHECK(state.IsRoundOver());
     const stats::RoundRecord& record = state.LastRoundRecord();
-    CHECK((record.winner == rules::PlayerId::Player ||
-           record.winner == rules::PlayerId::Ai1 ||
-           record.winner == rules::PlayerId::Ai2));
+    CHECK((record.winner == PLAYER_HUMAN ||
+           record.winner == PLAYER_AI1 ||
+           record.winner == PLAYER_AI2));
     CHECK(record.remainingCards[rules::PlayerIndex(record.winner)] == 0);
     CHECK(record.scores[0] + record.scores[1] + record.scores[2] == 0);
 }
@@ -680,13 +680,13 @@ TEST_CASE("round trace writes json with human move state when enabled") {
     state.SetRoundTraceRoot(root.string());
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three, rules::Suit::Spades)},
-            rules::Cards{C(rules::Rank::Four, rules::Suit::Spades)},
-            rules::Cards{C(rules::Rank::Five, rules::Suit::Spades)}
+            rules::Cards{C(RANK_THREE, SUIT_SPADES)},
+            rules::Cards{C(RANK_FOUR, SUIT_SPADES)},
+            rules::Cards{C(RANK_FIVE, SUIT_SPADES)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.TogglePlayerCard(0);
     REQUIRE(state.PlaySelected());
@@ -754,7 +754,7 @@ TEST_CASE("disabled strong ai beats basic over 1000 autoplay rounds" * doctest::
         << ") A1=(" << summary.winsByLeader[1][0] << ", " << summary.winsByLeader[1][1] << ", " << summary.winsByLeader[1][2]
         << ") A2=(" << summary.winsByLeader[2][0] << ", " << summary.winsByLeader[2][1] << ", " << summary.winsByLeader[2][2] << ")");
     CHECK(wins[0] + wins[1] + wins[2] == roundCount);
-    CHECK(wins[rules::PlayerIndex(rules::PlayerId::Ai1)] >= minStrongWins);
+    CHECK(wins[rules::PlayerIndex(PLAYER_AI1)] >= minStrongWins);
 }
 
 TEST_CASE("disabled strong baseline timing diagnostics over rotated 30 rounds" * doctest::skip(!RunStrongBaselineDiagnostics())) {
@@ -793,8 +793,8 @@ TEST_CASE("disabled compare strong ai decisions against basic seeds" * doctest::
             forcedLeader,
             strongTracePtr);
 
-        const bool basicAi1Win = basic.winner == rules::PlayerId::Ai1;
-        const bool strongAi1Win = strong.winner == rules::PlayerId::Ai1;
+        const bool basicAi1Win = basic.winner == PLAYER_AI1;
+        const bool strongAi1Win = strong.winner == PLAYER_AI1;
         if (basicAi1Win && !strongAi1Win) {
             strongRegressions++;
             if (strongRegressions <= 12) {
@@ -837,7 +837,7 @@ TEST_CASE("first round starts from the spade three holder") {
     state.StartNewRound("Tester", 20260606u);
 
     const rules::PlayerId starter = state.CurrentPlayer();
-    CHECK(HasCard(state.Players()[rules::PlayerIndex(starter)].hand, C(rules::Rank::Three, rules::Suit::Spades)));
+    CHECK(HasCard(state.Players()[rules::PlayerIndex(starter)].hand, C(RANK_THREE, SUIT_SPADES)));
     REQUIRE_FALSE(state.Events().empty());
     CHECK(state.Events().front().type == game::GameEventType::RoundStarted);
     CHECK(state.Events().front().player == starter);
@@ -845,49 +845,49 @@ TEST_CASE("first round starts from the spade three holder") {
 }
 
 TEST_CASE("next round starts from previous winner and later winner overrides it") {
-    const unsigned nonPlayerSeed = SeedWhereFirstLeaderIsNot(rules::PlayerId::Player);
-    const unsigned nonAi1Seed = SeedWhereFirstLeaderIsNot(rules::PlayerId::Ai1);
+    const unsigned nonPlayerSeed = SeedWhereFirstLeaderIsNot(PLAYER_HUMAN);
+    const unsigned nonAi1Seed = SeedWhereFirstLeaderIsNot(PLAYER_AI1);
     REQUIRE(nonPlayerSeed != 0);
     REQUIRE(nonAi1Seed != 0);
 
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Four)},
-            rules::Cards{C(rules::Rank::Five)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_FOUR)},
+            rules::Cards{C(RANK_FIVE)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.TogglePlayerCard(0);
     REQUIRE(state.PlaySelected());
     REQUIRE(state.IsRoundOver());
-    CHECK(state.LastRoundRecord().winner == rules::PlayerId::Player);
+    CHECK(state.LastRoundRecord().winner == PLAYER_HUMAN);
 
     state.StartNewRound("Tester", nonPlayerSeed);
-    CHECK(state.CurrentPlayer() == rules::PlayerId::Player);
+    CHECK(state.CurrentPlayer() == PLAYER_HUMAN);
     REQUIRE_FALSE(state.Events().empty());
     CHECK(state.Events().back().type == game::GameEventType::RoundStarted);
     CHECK(state.Events().back().message == "上局赢家先出");
 
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Four)},
-            rules::Cards{C(rules::Rank::Five)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_FOUR)},
+            rules::Cards{C(RANK_FIVE)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     state.Update(1.0f);
     REQUIRE(state.IsRoundOver());
-    CHECK(state.LastRoundRecord().winner == rules::PlayerId::Ai1);
+    CHECK(state.LastRoundRecord().winner == PLAYER_AI1);
 
     state.StartNewRound("Tester", nonAi1Seed);
-    CHECK(state.CurrentPlayer() == rules::PlayerId::Ai1);
+    CHECK(state.CurrentPlayer() == PLAYER_AI1);
     REQUIRE_FALSE(state.Events().empty());
     CHECK(state.Events().back().type == game::GameEventType::RoundStarted);
     CHECK(state.Events().back().message == "上局赢家先出");
@@ -908,23 +908,23 @@ TEST_CASE("turn order is counterclockwise so the left-hand player is upstream") 
     bool foundAi2Start = false;
     for (unsigned seed = 1; seed < 300 && !foundAi2Start; ++seed) {
         state.StartNewRound("Tester", seed);
-        if (state.CurrentPlayer() == rules::PlayerId::Ai2) {
+        if (state.CurrentPlayer() == PLAYER_AI2) {
             foundAi2Start = true;
         }
     }
     REQUIRE(foundAi2Start);
 
     state.Update(0.2f);
-    CHECK(state.CurrentPlayer() == rules::PlayerId::Ai2);
+    CHECK(state.CurrentPlayer() == PLAYER_AI2);
     state.Update(1.0f);
-    CHECK(state.CurrentPlayer() == rules::PlayerId::Ai1);
+    CHECK(state.CurrentPlayer() == PLAYER_AI1);
 }
 
 TEST_CASE("AI1 can use local async strong controller and records a local decision") {
-    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
     auto controller = std::make_shared<game::LocalAiController>();
-    controller->SetStrategy(rules::PlayerId::Ai1, game::LocalAiKind::Strong);
-    const game::StrategyMetadata metadata = controller->MetadataFor(rules::PlayerId::Ai1);
+    controller->SetStrategy(PLAYER_AI1, game::LocalAiKind::Strong);
+    const game::StrategyMetadata metadata = controller->MetadataFor(PLAYER_AI1);
     CHECK(metadata.strategy == "strong");
     CHECK(metadata.strategyVersion == "2.1");
 
@@ -932,13 +932,13 @@ TEST_CASE("AI1 can use local async strong controller and records a local decisio
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Five), C(rules::Rank::Six)},
-            rules::Cards{C(rules::Rank::Seven)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_FIVE), C(RANK_SIX)},
+            rules::Cards{C(RANK_SEVEN)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         fourLead,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.Update(1.0f);
     CHECK(state.ExternalAiPending());
@@ -947,31 +947,31 @@ TEST_CASE("AI1 can use local async strong controller and records a local decisio
     CHECK_FALSE(state.ExternalAiPending());
     REQUIRE(state.TurnRecords().size() == 1);
     const game::TurnRecord& record = state.TurnRecords().back();
-    CHECK(record.actor == rules::PlayerId::Ai1);
+    CHECK(record.actor == PLAYER_AI1);
     CHECK(record.source == game::TurnDecisionSource::LocalAi);
     CHECK(record.strategy.strategy == "strong");
     CHECK(record.strategy.strategyVersion == "2.1");
     CHECK(record.accepted);
     CHECK(record.finalAction.action == "play");
     REQUIRE_FALSE(state.LastCards().empty());
-    CHECK(rules::RankValue(state.LastCards().front().rank) > rules::RankValue(rules::Rank::Four));
+    CHECK(rules::RankValue(state.LastCards().front().rank) > rules::RankValue(RANK_FOUR));
 }
 
 TEST_CASE("AI1 only legal move is recorded without calling the async controller") {
-    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
     auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
 
     game::GameState state;
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Five)},
-            rules::Cards{C(rules::Rank::Seven)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_FIVE)},
+            rules::Cards{C(RANK_SEVEN)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         fourLead,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.Update(1.0f);
     CHECK(controller->startCount == 0);
@@ -981,62 +981,62 @@ TEST_CASE("AI1 only legal move is recorded without calling the async controller"
 }
 
 TEST_CASE("local AI2 actions are recorded but not external controlled") {
-    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
     auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
 
     game::GameState state;
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Six)},
-            rules::Cards{C(rules::Rank::Five)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_SIX)},
+            rules::Cards{C(RANK_FIVE)}
         },
-        rules::PlayerId::Ai2,
+        PLAYER_AI2,
         fourLead,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.Update(1.0f);
     CHECK(controller->startCount == 0);
     REQUIRE(state.TurnRecords().size() == 1);
-    CHECK(state.TurnRecords().back().actor == rules::PlayerId::Ai2);
+    CHECK(state.TurnRecords().back().actor == PLAYER_AI2);
     CHECK(state.TurnRecords().back().source == game::TurnDecisionSource::LocalAi);
 }
 
 TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
-    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
     auto controller = std::make_shared<MockExternalAiController>(
         game::ExternalAiResult{},
-        rules::PlayerId::Ai2);
+        PLAYER_AI2);
 
     game::GameState state;
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Six)},
-            rules::Cards{C(rules::Rank::Five)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_SIX)},
+            rules::Cards{C(RANK_FIVE)}
         },
-        rules::PlayerId::Ai2,
+        PLAYER_AI2,
         fourLead,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.Update(1.0f);
     CHECK(controller->startCount == 0);
     REQUIRE(state.TurnRecords().size() == 1);
     const game::TurnRecord& record = state.TurnRecords().back();
-    CHECK(record.actor == rules::PlayerId::Ai2);
+    CHECK(record.actor == PLAYER_AI2);
     CHECK(record.reason == game::TurnDecisionReason::OnlyLegalMove);
     CHECK_FALSE(record.trace.reasoningContent.empty());
 }
 
 TEST_CASE("AI2 can use local async basic controller through multi controller routing") {
-    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
     auto otherController = std::make_shared<MockExternalAiController>(
         game::ExternalAiResult{},
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
     auto localController = std::make_shared<game::LocalAiController>();
-    localController->SetStrategy(rules::PlayerId::Ai2, game::LocalAiKind::Basic);
+    localController->SetStrategy(PLAYER_AI2, game::LocalAiKind::Basic);
 
     game::GameState state;
     state.SetExternalAiControllers({
@@ -1045,13 +1045,13 @@ TEST_CASE("AI2 can use local async basic controller through multi controller rou
     });
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Seven)},
-            rules::Cards{C(rules::Rank::Five), C(rules::Rank::Six)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_SEVEN)},
+            rules::Cards{C(RANK_FIVE), C(RANK_SIX)}
         },
-        rules::PlayerId::Ai2,
+        PLAYER_AI2,
         fourLead,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.Update(1.0f);
     CHECK(state.ExternalAiPending());
@@ -1061,28 +1061,28 @@ TEST_CASE("AI2 can use local async basic controller through multi controller rou
     CHECK_FALSE(state.ExternalAiPending());
     REQUIRE(state.TurnRecords().size() == 1);
     const game::TurnRecord& record = state.TurnRecords().back();
-    CHECK(record.actor == rules::PlayerId::Ai2);
+    CHECK(record.actor == PLAYER_AI2);
     CHECK(record.source == game::TurnDecisionSource::LocalAi);
     CHECK(record.accepted);
     REQUIRE_FALSE(state.LastCards().empty());
-    CHECK(rules::RankValue(state.LastCards().front().rank) > rules::RankValue(rules::Rank::Four));
+    CHECK(rules::RankValue(state.LastCards().front().rank) > rules::RankValue(RANK_FOUR));
 }
 
 TEST_CASE("failed async AI result falls back to the built-in local strategy") {
-    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
     auto controller = std::make_shared<MockExternalAiController>(game::ExternalAiResult{});
 
     game::GameState state;
     state.SetExternalAiController(controller);
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Five), C(rules::Rank::Six)},
-            rules::Cards{C(rules::Rank::Seven)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_FIVE), C(RANK_SIX)},
+            rules::Cards{C(RANK_SEVEN)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         fourLead,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.Update(1.0f);
     CHECK(controller->startCount == 1);
@@ -1096,35 +1096,35 @@ TEST_CASE("failed async AI result falls back to the built-in local strategy") {
 }
 
 TEST_CASE("hint passes directly when player cannot beat and pass is blocked when player can beat") {
-    const auto aceLead = rules::IdentifyPattern({C(rules::Rank::Ace)}).pattern;
+    const auto aceLead = rules::IdentifyPattern({C(RANK_ACE)}).pattern;
     game::GameState cannotBeat;
     cannotBeat.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::King)},
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Four)}
+            rules::Cards{C(RANK_KING)},
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_FOUR)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         aceLead,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     CHECK(cannotBeat.CanCurrentPlayerPass());
     CHECK(cannotBeat.ApplyHint());
     REQUIRE_FALSE(cannotBeat.Events().empty());
     CHECK(cannotBeat.Events().back().type == game::GameEventType::Passed);
-    CHECK(cannotBeat.CurrentPlayer() == rules::PlayerId::Ai2);
+    CHECK(cannotBeat.CurrentPlayer() == PLAYER_AI2);
 
-    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
     game::GameState canBeat;
     canBeat.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Five)},
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Six)}
+            rules::Cards{C(RANK_FIVE)},
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_SIX)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         fourLead,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     CHECK_FALSE(canBeat.CanCurrentPlayerPass());
     CHECK_FALSE(canBeat.PassHuman());
@@ -1133,17 +1133,17 @@ TEST_CASE("hint passes directly when player cannot beat and pass is blocked when
 }
 
 TEST_CASE("hint switches to recommendation or toggles it off when already selected") {
-    const auto fourLead = rules::IdentifyPattern({C(rules::Rank::Four)}).pattern;
+    const auto fourLead = rules::IdentifyPattern({C(RANK_FOUR)}).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three), C(rules::Rank::Five)},
-            rules::Cards{C(rules::Rank::Six)},
-            rules::Cards{C(rules::Rank::Seven)}
+            rules::Cards{C(RANK_THREE), C(RANK_FIVE)},
+            rules::Cards{C(RANK_SIX)},
+            rules::Cards{C(RANK_SEVEN)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         fourLead,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     state.TogglePlayerCard(0);
     REQUIRE(state.SelectedIndices().contains(0));
@@ -1161,28 +1161,28 @@ TEST_CASE("hint switches to recommendation or toggles it off when already select
 
 TEST_CASE("hint follows triple with two using five cards") {
     const auto previous = rules::IdentifyPattern({
-        C(rules::Rank::Three),
-        C(rules::Rank::Three, rules::Suit::Hearts),
-        C(rules::Rank::Three, rules::Suit::Diamonds),
-        C(rules::Rank::Seven),
-        C(rules::Rank::Eight)
+        C(RANK_THREE),
+        C(RANK_THREE, SUIT_HEARTS),
+        C(RANK_THREE, SUIT_DIAMONDS),
+        C(RANK_SEVEN),
+        C(RANK_EIGHT)
     }).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Four),
-                C(rules::Rank::Four, rules::Suit::Hearts),
-                C(rules::Rank::Four, rules::Suit::Diamonds),
-                C(rules::Rank::Five),
-                C(rules::Rank::Six)
+                C(RANK_FOUR),
+                C(RANK_FOUR, SUIT_HEARTS),
+                C(RANK_FOUR, SUIT_DIAMONDS),
+                C(RANK_FIVE),
+                C(RANK_SIX)
             },
-            rules::Cards{C(rules::Rank::Eight)},
-            rules::Cards{C(rules::Rank::Nine)}
+            rules::Cards{C(RANK_EIGHT)},
+            rules::Cards{C(RANK_NINE)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         previous,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     REQUIRE(state.ApplyHint());
     CHECK(state.SelectedIndices().size() == 5);
@@ -1190,55 +1190,55 @@ TEST_CASE("hint follows triple with two using five cards") {
     const game::GameEvent& event = state.Events().back();
     CHECK(event.type == game::GameEventType::Hint);
     CHECK(event.cards.size() == 5);
-    CHECK(CountRank(event.cards, rules::Rank::Four) == 3);
+    CHECK(CountRank(event.cards, RANK_FOUR) == 3);
 }
 
 TEST_CASE("upstream AI follows with high singleton when player has reported single") {
-    const auto previous = rules::IdentifyPattern({C(rules::Rank::Seven)}).pattern;
+    const auto previous = rules::IdentifyPattern({C(RANK_SEVEN)}).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Eight), C(rules::Rank::King)},
-            rules::Cards{C(rules::Rank::Four)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_EIGHT), C(RANK_KING)},
+            rules::Cards{C(RANK_FOUR)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         previous,
-        rules::PlayerId::Ai2);
+        PLAYER_AI2);
 
     state.Update(1.0f);
 
     REQUIRE(state.LastCards().size() == 1);
-    CHECK(state.LastCards().front().rank == rules::Rank::King);
-    CHECK(state.CurrentPlayer() == rules::PlayerId::Player);
+    CHECK(state.LastCards().front().rank == RANK_KING);
+    CHECK(state.CurrentPlayer() == PLAYER_HUMAN);
 }
 
 TEST_CASE("game state tracks played cards and clears observations for a fresh test round") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three), C(rules::Rank::Four)},
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_THREE), C(RANK_FOUR)},
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.TogglePlayerCard(0);
     REQUIRE(state.PlaySelected());
     REQUIRE(state.PlayedCards().size() == 1);
-    CHECK(state.PlayedCards().front().rank == rules::Rank::Three);
+    CHECK(state.PlayedCards().front().rank == RANK_THREE);
 
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     CHECK(state.PlayedCards().empty());
     for (const auto& observation : state.PassObservations()) {
@@ -1247,97 +1247,97 @@ TEST_CASE("game state tracks played cards and clears observations for a fresh te
 }
 
 TEST_CASE("game state records pass observations from mandatory-play rule") {
-    const auto queenLead = rules::IdentifyPattern({C(rules::Rank::Queen)}).pattern;
+    const auto queenLead = rules::IdentifyPattern({C(RANK_QUEEN)}).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Jack)},
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Four)}
+            rules::Cards{C(RANK_JACK)},
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_FOUR)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         queenLead,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     REQUIRE(state.PassHuman());
-    const auto& observation = state.PassObservations()[rules::PlayerIndex(rules::PlayerId::Player)];
+    const auto& observation = state.PassObservations()[rules::PlayerIndex(PLAYER_HUMAN)];
     REQUIRE(observation.has_value());
-    CHECK(observation->pattern.type == rules::PatternType::Single);
-    CHECK(observation->pattern.mainRank == rules::Rank::Queen);
+    CHECK(observation->pattern.type == PATTERN_SINGLE);
+    CHECK(observation->pattern.mainRank == RANK_QUEEN);
     CHECK(observation->remainingCards == 1);
 }
 
 TEST_CASE("ai pass observations survive the relaunch lead") {
-    const auto queenLead = rules::IdentifyPattern({C(rules::Rank::Queen)}).pattern;
+    const auto queenLead = rules::IdentifyPattern({C(RANK_QUEEN)}).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Ace)},
-            rules::Cards{C(rules::Rank::Jack)},
-            rules::Cards{C(rules::Rank::Ten)}
+            rules::Cards{C(RANK_ACE)},
+            rules::Cards{C(RANK_JACK)},
+            rules::Cards{C(RANK_TEN)}
         },
-        rules::PlayerId::Ai2,
+        PLAYER_AI2,
         queenLead,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.Update(1.0f);
     state.Update(1.0f);
 
-    CHECK(state.CurrentPlayer() == rules::PlayerId::Player);
+    CHECK(state.CurrentPlayer() == PLAYER_HUMAN);
     CHECK_FALSE(state.LastPattern().has_value());
-    const auto& ai1Observation = state.PassObservations()[rules::PlayerIndex(rules::PlayerId::Ai1)];
-    const auto& ai2Observation = state.PassObservations()[rules::PlayerIndex(rules::PlayerId::Ai2)];
+    const auto& ai1Observation = state.PassObservations()[rules::PlayerIndex(PLAYER_AI1)];
+    const auto& ai2Observation = state.PassObservations()[rules::PlayerIndex(PLAYER_AI2)];
     REQUIRE(ai1Observation.has_value());
     REQUIRE(ai2Observation.has_value());
-    CHECK(ai1Observation->pattern.mainRank == rules::Rank::Queen);
-    CHECK(ai2Observation->pattern.mainRank == rules::Rank::Queen);
+    CHECK(ai1Observation->pattern.mainRank == RANK_QUEEN);
+    CHECK(ai2Observation->pattern.mainRank == RANK_QUEEN);
 }
 
 TEST_CASE("ai bomb talk ignores existing normal talk cooldown") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Three), C(rules::Rank::Four), C(rules::Rank::Five), C(rules::Rank::Seven), C(rules::Rank::Nine)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_THREE), C(RANK_FOUR), C(RANK_FIVE), C(RANK_SEVEN), C(RANK_NINE)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
     state.Update(1.0f);
     REQUIRE_FALSE(TalkMessages(state).empty());
 
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Ace)},
+            rules::Cards{C(RANK_ACE)},
             rules::Cards{
-                C(rules::Rank::Three),
-                C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds),
-                C(rules::Rank::Three, rules::Suit::Clubs)
+                C(RANK_THREE),
+                C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS),
+                C(RANK_THREE, SUIT_CLUBS)
             },
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
     state.Update(1.0f);
 
     CHECK(HasTalkContaining(state, "炸"));
 }
 
 TEST_CASE("ai talks when forced to break a good group") {
-    const auto previous = rules::IdentifyPattern({C(rules::Rank::Ace)}).pattern;
+    const auto previous = rules::IdentifyPattern({C(RANK_ACE)}).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::Two), C(rules::Rank::Two, rules::Suit::Hearts)},
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_TWO), C(RANK_TWO, SUIT_HEARTS)},
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         previous,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.Update(1.0f);
 
@@ -1346,19 +1346,19 @@ TEST_CASE("ai talks when forced to break a good group") {
 
 TEST_CASE("ai reacts when it cannot beat a seven card move") {
     const auto previous = rules::IdentifyPattern({
-        C(rules::Rank::Three), C(rules::Rank::Four), C(rules::Rank::Five), C(rules::Rank::Six),
-        C(rules::Rank::Seven), C(rules::Rank::Eight), C(rules::Rank::Nine)
+        C(RANK_THREE), C(RANK_FOUR), C(RANK_FIVE), C(RANK_SIX),
+        C(RANK_SEVEN), C(RANK_EIGHT), C(RANK_NINE)
     }).pattern;
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
-            rules::Cards{C(rules::Rank::King)},
-            rules::Cards{C(rules::Rank::Ace)}
+            rules::Cards{C(RANK_THREE)},
+            rules::Cards{C(RANK_KING)},
+            rules::Cards{C(RANK_ACE)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         previous,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     state.Update(1.0f);
 
@@ -1369,16 +1369,16 @@ TEST_CASE("ai taunts when it plays seven or more cards") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Two)},
+            rules::Cards{C(RANK_TWO)},
             rules::Cards{
-                C(rules::Rank::Three), C(rules::Rank::Four), C(rules::Rank::Five), C(rules::Rank::Six),
-                C(rules::Rank::Seven), C(rules::Rank::Eight), C(rules::Rank::Nine)
+                C(RANK_THREE), C(RANK_FOUR), C(RANK_FIVE), C(RANK_SIX),
+                C(RANK_SEVEN), C(RANK_EIGHT), C(RANK_NINE)
             },
-            rules::Cards{C(rules::Rank::Ace)}
+            rules::Cards{C(RANK_ACE)}
         },
-        rules::PlayerId::Ai1,
+        PLAYER_AI1,
         std::nullopt,
-        rules::PlayerId::Ai1);
+        PLAYER_AI1);
 
     state.Update(1.0f);
 
@@ -1391,15 +1391,15 @@ TEST_CASE("ai comments on human good moves and avoids immediate repeated wording
         state.TestSetRound(
             std::array<rules::Cards, 3>{
                 rules::Cards{
-                    C(rules::Rank::Three), C(rules::Rank::Four), C(rules::Rank::Five), C(rules::Rank::Six),
-                    C(rules::Rank::Seven), C(rules::Rank::Eight), C(rules::Rank::Nine)
+                    C(RANK_THREE), C(RANK_FOUR), C(RANK_FIVE), C(RANK_SIX),
+                    C(RANK_SEVEN), C(RANK_EIGHT), C(RANK_NINE)
                 },
-                rules::Cards{C(rules::Rank::Ace)},
-                rules::Cards{C(rules::Rank::King)}
+                rules::Cards{C(RANK_ACE)},
+                rules::Cards{C(RANK_KING)}
             },
-            rules::PlayerId::Player,
+            PLAYER_HUMAN,
             std::nullopt,
-            rules::PlayerId::Player);
+            PLAYER_HUMAN);
         for (int i = 0; i < 7; ++i) {
             state.TogglePlayerCard(i);
         }
@@ -1421,16 +1421,16 @@ TEST_CASE("round end talk prefers leftover plane") {
     game::GameState state;
     state.TestSetRound(
         std::array<rules::Cards, 3>{
-            rules::Cards{C(rules::Rank::Three)},
+            rules::Cards{C(RANK_THREE)},
             rules::Cards{
-                C(rules::Rank::Four), C(rules::Rank::Four, rules::Suit::Hearts), C(rules::Rank::Four, rules::Suit::Diamonds),
-                C(rules::Rank::Five), C(rules::Rank::Five, rules::Suit::Hearts), C(rules::Rank::Five, rules::Suit::Diamonds)
+                C(RANK_FOUR), C(RANK_FOUR, SUIT_HEARTS), C(RANK_FOUR, SUIT_DIAMONDS),
+                C(RANK_FIVE), C(RANK_FIVE, SUIT_HEARTS), C(RANK_FIVE, SUIT_DIAMONDS)
             },
-            rules::Cards{C(rules::Rank::King)}
+            rules::Cards{C(RANK_KING)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
     state.TogglePlayerCard(0);
     REQUIRE(state.PlaySelected());
 
@@ -1442,33 +1442,33 @@ TEST_CASE("a bomb beaten by a bigger bomb scores nothing in game state") {
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three), C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds), C(rules::Rank::Three, rules::Suit::Clubs),
-                C(rules::Rank::Four)
+                C(RANK_THREE), C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS), C(RANK_THREE, SUIT_CLUBS),
+                C(RANK_FOUR)
             },
-            rules::Cards{C(rules::Rank::Seven), C(rules::Rank::Eight)},
+            rules::Cards{C(RANK_SEVEN), C(RANK_EIGHT)},
             rules::Cards{
-                C(rules::Rank::Four, rules::Suit::Hearts), C(rules::Rank::Four, rules::Suit::Diamonds),
-                C(rules::Rank::Four, rules::Suit::Clubs), C(rules::Rank::Four, rules::Suit::Spades),
-                C(rules::Rank::Five), C(rules::Rank::Six)
+                C(RANK_FOUR, SUIT_HEARTS), C(RANK_FOUR, SUIT_DIAMONDS),
+                C(RANK_FOUR, SUIT_CLUBS), C(RANK_FOUR, SUIT_SPADES),
+                C(RANK_FIVE), C(RANK_SIX)
             }
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     for (int i = 0; i < 4; ++i) {
         state.TogglePlayerCard(i);
     }
     REQUIRE(state.PlaySelected());
-    REQUIRE(state.CurrentPlayer() == rules::PlayerId::Ai2);
+    REQUIRE(state.CurrentPlayer() == PLAYER_AI2);
 
     // AI2 must beat the bomb with its bigger bomb, which suppresses the first one.
     state.Update(1.0f);
     REQUIRE(state.BombEvents().size() == 2);
-    CHECK(state.BombEvents()[0].by == rules::PlayerId::Player);
+    CHECK(state.BombEvents()[0].by == PLAYER_HUMAN);
     CHECK(state.BombEvents()[0].beaten);
-    CHECK(state.BombEvents()[1].by == rules::PlayerId::Ai2);
+    CHECK(state.BombEvents()[1].by == PLAYER_AI2);
     CHECK_FALSE(state.BombEvents()[1].beaten);
 
     for (int i = 0; i < 40 && !state.IsRoundOver(); ++i) {
@@ -1480,7 +1480,7 @@ TEST_CASE("a bomb beaten by a bigger bomb scores nothing in game state") {
     REQUIRE(state.IsRoundOver());
 
     const stats::RoundRecord& record = state.LastRoundRecord();
-    CHECK(record.winner == rules::PlayerId::Ai1);
+    CHECK(record.winner == PLAYER_AI1);
     CHECK(record.bombs.size() == 2);
     CHECK(record.bombs[0].beaten);
     CHECK_FALSE(record.bombs[1].beaten);
@@ -1493,17 +1493,17 @@ TEST_CASE("a bomb led in a separate trick still scores after another bomb was be
     state.TestSetRound(
         std::array<rules::Cards, 3>{
             rules::Cards{
-                C(rules::Rank::Three), C(rules::Rank::Three, rules::Suit::Hearts),
-                C(rules::Rank::Three, rules::Suit::Diamonds), C(rules::Rank::Three, rules::Suit::Clubs),
-                C(rules::Rank::Five), C(rules::Rank::Five, rules::Suit::Hearts),
-                C(rules::Rank::Five, rules::Suit::Diamonds), C(rules::Rank::Five, rules::Suit::Clubs)
+                C(RANK_THREE), C(RANK_THREE, SUIT_HEARTS),
+                C(RANK_THREE, SUIT_DIAMONDS), C(RANK_THREE, SUIT_CLUBS),
+                C(RANK_FIVE), C(RANK_FIVE, SUIT_HEARTS),
+                C(RANK_FIVE, SUIT_DIAMONDS), C(RANK_FIVE, SUIT_CLUBS)
             },
-            rules::Cards{C(rules::Rank::Eight), C(rules::Rank::Nine)},
-            rules::Cards{C(rules::Rank::Six), C(rules::Rank::Seven)}
+            rules::Cards{C(RANK_EIGHT), C(RANK_NINE)},
+            rules::Cards{C(RANK_SIX), C(RANK_SEVEN)}
         },
-        rules::PlayerId::Player,
+        PLAYER_HUMAN,
         std::nullopt,
-        rules::PlayerId::Player);
+        PLAYER_HUMAN);
 
     for (int i = 0; i < 4; ++i) {
         state.TogglePlayerCard(i);
@@ -1512,7 +1512,7 @@ TEST_CASE("a bomb led in a separate trick still scores after another bomb was be
 
     state.Update(1.0f);
     state.Update(1.0f);
-    REQUIRE(state.CurrentPlayer() == rules::PlayerId::Player);
+    REQUIRE(state.CurrentPlayer() == PLAYER_HUMAN);
 
     // Second bomb is led in a fresh trick, so the first trick ending must not mark it beaten.
     for (int i = 0; i < 4; ++i) {
@@ -1522,7 +1522,7 @@ TEST_CASE("a bomb led in a separate trick still scores after another bomb was be
     REQUIRE(state.IsRoundOver());
 
     const stats::RoundRecord& record = state.LastRoundRecord();
-    CHECK(record.winner == rules::PlayerId::Player);
+    CHECK(record.winner == PLAYER_HUMAN);
     REQUIRE(record.bombs.size() == 2);
     CHECK_FALSE(record.bombs[0].beaten);
     CHECK_FALSE(record.bombs[1].beaten);

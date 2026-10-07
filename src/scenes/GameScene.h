@@ -83,7 +83,7 @@ private:
     float roundResultDelay_{0.0f};
     std::string toastText_;
     float toastAge_{0.0f};
-    rules::PlayerId lastAnimatedPlayer_{rules::PlayerId::Player};
+    rules::PlayerId lastAnimatedPlayer_{PLAYER_HUMAN};
 };
 
 } // namespace pdk::scenes

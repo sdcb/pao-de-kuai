@@ -39,7 +39,7 @@ void TalkBubbleOverlay::Render(graphics::RenderContext& context) {
     const Rect plate = scenes::layout::PlateFor(player_);
     const Point avatar = scenes::layout::AvatarCenter(player_);
     const float top = plate.y + plate.height + 10.0f + TailHeight;
-    const float x = player_ == rules::PlayerId::Ai1 ? plate.x + 8.0f : plate.x + plate.width - 8.0f - width;
+    const float x = player_ == PLAYER_AI1 ? plate.x + 8.0f : plate.x + plate.width - 8.0f - width;
     const Rect bubble{x, top, width, height};
     const float tailX = std::clamp(avatar.x, bubble.x + 22.0f, bubble.x + bubble.width - 22.0f);
 

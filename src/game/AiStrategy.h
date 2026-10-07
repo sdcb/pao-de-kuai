@@ -1,7 +1,7 @@
 #pragma once
 
 #include "game/StrategyMetadata.h"
-#include "rules/MoveValidator.h"
+#include "rules/CppCompat.h"
 
 #include <array>
 #include <optional>

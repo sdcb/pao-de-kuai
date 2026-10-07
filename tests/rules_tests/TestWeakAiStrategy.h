@@ -47,8 +47,8 @@ public:
         }
 
         std::sort(choices.begin(), choices.end(), [](const game::AiMoveChoice& lhs, const game::AiMoveChoice& rhs) {
-            const bool lhsBomb = lhs.pattern.type == rules::PatternType::Bomb;
-            const bool rhsBomb = rhs.pattern.type == rules::PatternType::Bomb;
+            const bool lhsBomb = lhs.pattern.type == PATTERN_BOMB;
+            const bool rhsBomb = rhs.pattern.type == PATTERN_BOMB;
             if (lhsBomb != rhsBomb) {
                 return !lhsBomb;
             }
@@ -70,15 +70,15 @@ public:
 private:
     static int PatternOrder(rules::PatternType type) {
         switch (type) {
-        case rules::PatternType::Single: return 0;
-        case rules::PatternType::Pair: return 1;
-        case rules::PatternType::TripleWithOne: return 2;
-        case rules::PatternType::TripleWithPair: return 3;
-        case rules::PatternType::ConsecutivePairs: return 4;
-        case rules::PatternType::Straight: return 5;
-        case rules::PatternType::Plane: return 6;
-        case rules::PatternType::Bomb: return 7;
-        case rules::PatternType::Invalid: return 8;
+        case PATTERN_SINGLE: return 0;
+        case PATTERN_PAIR: return 1;
+        case PATTERN_TRIPLE_WITH_ONE: return 2;
+        case PATTERN_TRIPLE_WITH_PAIR: return 3;
+        case PATTERN_CONSECUTIVE_PAIRS: return 4;
+        case PATTERN_STRAIGHT: return 5;
+        case PATTERN_PLANE: return 6;
+        case PATTERN_BOMB: return 7;
+        case PATTERN_INVALID: return 8;
         }
         return 8;
     }

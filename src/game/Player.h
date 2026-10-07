@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rules/Card.h"
+#include "rules/CppCompat.h"
 
 #include <string>
 

@@ -1,9 +1,8 @@
 #pragma once
 
 #include "game/StrategyMetadata.h"
-#include "rules/Card.h"
-#include "rules/HandPattern.h"
-#include "rules/Scoring.h"
+#include "rules/CppCompat.h"
+#include "rules/CppCompat.h"
 
 #include <array>
 #include <optional>
@@ -33,8 +32,8 @@ struct TurnSnapshot {
     std::array<rules::Cards, 3> hands;
     rules::Cards lastCards;
     std::optional<rules::HandPattern> lastPattern;
-    rules::PlayerId lastMovePlayer{rules::PlayerId::Player};
-    rules::PlayerId currentPlayer{rules::PlayerId::Player};
+    rules::PlayerId lastMovePlayer{PLAYER_HUMAN};
+    rules::PlayerId currentPlayer{PLAYER_HUMAN};
     int passCount{0};
 };
 
@@ -45,7 +44,7 @@ struct TurnDecisionTrace {
 
 struct TurnRecord {
     int turnNo{0};
-    rules::PlayerId actor{rules::PlayerId::Player};
+    rules::PlayerId actor{PLAYER_HUMAN};
     TurnDecisionSource source{TurnDecisionSource::LocalAi};
     TurnDecisionReason reason{TurnDecisionReason::NormalChoice};
     TurnSnapshot before;

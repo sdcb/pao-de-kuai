@@ -1,10 +1,15 @@
 #pragma once
 
-#include <string_view>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace pdk::rules {
+/* Both return a pointer to a string literal that lives for the whole process, so
+ * callers must not free them.  These are the shared rule summary shown on the
+ * Help screen and the scoring blurb next to it. */
+const char *SharedGameRulesText(void);
+const char *HumanHelpText(void);
 
-std::string_view SharedGameRulesText();
-std::string_view HumanHelpText();
-
-} // namespace pdk::rules
+#ifdef __cplusplus
+}
+#endif

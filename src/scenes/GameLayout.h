@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/Geometry.h"
-#include "rules/Scoring.h"
+#include "rules/CppCompat.h"
 
 namespace pdk::scenes::layout {
 
@@ -15,22 +15,22 @@ constexpr float HandBottom = 706.0f;
 constexpr float SelectedLift = 24.0f;
 
 inline Rect PlateFor(rules::PlayerId player) {
-    return player == rules::PlayerId::Ai2 ? Ai2Plate : Ai1Plate;
+    return player == PLAYER_AI2 ? Ai2Plate : Ai1Plate;
 }
 
 // AI1 sits on the left with its avatar on the outer edge; AI2 mirrors it.
 inline Rect AvatarRect(rules::PlayerId player) {
-    if (player == rules::PlayerId::Player) {
+    if (player == PLAYER_HUMAN) {
         return {PlayerPlate.x + 14.0f, PlayerPlate.y + 13.0f, 52.0f, 52.0f};
     }
     const Rect plate = PlateFor(player);
-    const float x = player == rules::PlayerId::Ai1 ? plate.x + 18.0f : plate.x + plate.width - 18.0f - AvatarSize;
+    const float x = player == PLAYER_AI1 ? plate.x + 18.0f : plate.x + plate.width - 18.0f - AvatarSize;
     return {x, plate.y + 20.0f, AvatarSize, AvatarSize};
 }
 
 inline Rect AiInfoArea(rules::PlayerId player) {
     const Rect plate = PlateFor(player);
-    const float x = player == rules::PlayerId::Ai1 ? plate.x + 96.0f : plate.x + 18.0f;
+    const float x = player == PLAYER_AI1 ? plate.x + 96.0f : plate.x + 18.0f;
     return {x, plate.y + 12.0f, plate.width - 114.0f, plate.height - 24.0f};
 }
 

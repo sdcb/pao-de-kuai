@@ -4,9 +4,9 @@ namespace pdk::game {
 
 std::string PlayerLabel(rules::PlayerId player) {
     switch (player) {
-    case rules::PlayerId::Player: return "player";
-    case rules::PlayerId::Ai1: return "ai1";
-    case rules::PlayerId::Ai2: return "ai2";
+    case PLAYER_HUMAN: return "player";
+    case PLAYER_AI1: return "ai1";
+    case PLAYER_AI2: return "ai2";
     }
     return "unknown";
 }

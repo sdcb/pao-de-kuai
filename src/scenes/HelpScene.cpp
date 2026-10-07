@@ -2,7 +2,7 @@
 
 #include "app/App.h"
 #include "audio/SoundIds.h"
-#include "rules/RuleText.h"
+#include "rules/CppCompat.h"
 
 #include <array>
 #include <string>
@@ -25,13 +25,13 @@ struct PatternSample {
 
 std::vector<PatternSample> PatternSamples() {
     return {
-        {"对子", {{Rank::Nine, Suit::Spades}, {Rank::Nine, Suit::Hearts}}},
-        {"顺子", {{Rank::Three, Suit::Clubs}, {Rank::Four, Suit::Hearts}, {Rank::Five, Suit::Spades}, {Rank::Six, Suit::Diamonds}, {Rank::Seven, Suit::Clubs}}},
-        {"连对", {{Rank::Three, Suit::Spades}, {Rank::Three, Suit::Hearts}, {Rank::Four, Suit::Clubs}, {Rank::Four, Suit::Diamonds}}},
-        {"三带二", {{Rank::Seven, Suit::Spades}, {Rank::Seven, Suit::Hearts}, {Rank::Seven, Suit::Clubs}, {Rank::Nine, Suit::Diamonds}, {Rank::Jack, Suit::Spades}}},
-        {"飞机", {{Rank::Eight, Suit::Spades}, {Rank::Eight, Suit::Hearts}, {Rank::Eight, Suit::Clubs}, {Rank::Nine, Suit::Spades},
-                  {Rank::Nine, Suit::Hearts}, {Rank::Nine, Suit::Diamonds}, {Rank::Four, Suit::Clubs}, {Rank::Six, Suit::Hearts}}},
-        {"炸弹", {{Rank::King, Suit::Spades}, {Rank::King, Suit::Hearts}, {Rank::King, Suit::Diamonds}, {Rank::King, Suit::Clubs}}},
+        {"对子", {{RANK_NINE, SUIT_SPADES}, {RANK_NINE, SUIT_HEARTS}}},
+        {"顺子", {{RANK_THREE, SUIT_CLUBS}, {RANK_FOUR, SUIT_HEARTS}, {RANK_FIVE, SUIT_SPADES}, {RANK_SIX, SUIT_DIAMONDS}, {RANK_SEVEN, SUIT_CLUBS}}},
+        {"连对", {{RANK_THREE, SUIT_SPADES}, {RANK_THREE, SUIT_HEARTS}, {RANK_FOUR, SUIT_CLUBS}, {RANK_FOUR, SUIT_DIAMONDS}}},
+        {"三带二", {{RANK_SEVEN, SUIT_SPADES}, {RANK_SEVEN, SUIT_HEARTS}, {RANK_SEVEN, SUIT_CLUBS}, {RANK_NINE, SUIT_DIAMONDS}, {RANK_JACK, SUIT_SPADES}}},
+        {"飞机", {{RANK_EIGHT, SUIT_SPADES}, {RANK_EIGHT, SUIT_HEARTS}, {RANK_EIGHT, SUIT_CLUBS}, {RANK_NINE, SUIT_SPADES},
+                  {RANK_NINE, SUIT_HEARTS}, {RANK_NINE, SUIT_DIAMONDS}, {RANK_FOUR, SUIT_CLUBS}, {RANK_SIX, SUIT_HEARTS}}},
+        {"炸弹", {{RANK_KING, SUIT_SPADES}, {RANK_KING, SUIT_HEARTS}, {RANK_KING, SUIT_DIAMONDS}, {RANK_KING, SUIT_CLUBS}}},
     };
 }
 

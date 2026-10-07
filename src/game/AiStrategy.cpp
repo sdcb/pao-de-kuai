@@ -17,15 +17,15 @@ namespace ai_internal {
 int PatternBaseScore(rules::PatternType type) {
     using rules::PatternType;
     switch (type) {
-    case PatternType::Straight: return 800;
-    case PatternType::ConsecutivePairs: return 760;
-    case PatternType::Plane: return 720;
-    case PatternType::TripleWithPair: return 650;
-    case PatternType::TripleWithOne: return 600;
-    case PatternType::Pair: return 300;
-    case PatternType::Single: return 150;
-    case PatternType::Bomb: return 80;
-    case PatternType::Invalid: return 0;
+    case PATTERN_STRAIGHT: return 800;
+    case PATTERN_CONSECUTIVE_PAIRS: return 760;
+    case PATTERN_PLANE: return 720;
+    case PATTERN_TRIPLE_WITH_PAIR: return 650;
+    case PATTERN_TRIPLE_WITH_ONE: return 600;
+    case PATTERN_PAIR: return 300;
+    case PATTERN_SINGLE: return 150;
+    case PATTERN_BOMB: return 80;
+    case PATTERN_INVALID: return 0;
     }
     return 0;
 }
@@ -43,7 +43,7 @@ bool IsConsecutive(const std::vector<rules::Rank>& ranks) {
         return false;
     }
     for (rules::Rank rank : ranks) {
-        if (rank == rules::Rank::Two) {
+        if (rank == RANK_TWO) {
             return false;
         }
     }
@@ -80,14 +80,14 @@ std::map<rules::Rank, int> CoreUsage(const rules::Cards& cards, const rules::Han
     std::map<rules::Rank, int> core;
     const auto playedCounts = CountRanks(cards);
     switch (pattern.type) {
-    case rules::PatternType::TripleWithOne:
-    case rules::PatternType::TripleWithPair:
+    case PATTERN_TRIPLE_WITH_ONE:
+    case PATTERN_TRIPLE_WITH_PAIR:
         core[pattern.mainRank] = 3;
         break;
-    case rules::PatternType::Plane: {
+    case PATTERN_PLANE: {
         std::vector<rules::Rank> tripleRanks;
         for (const auto& [rank, count] : playedCounts) {
-            if (rank != rules::Rank::Two && count >= 3) {
+            if (rank != RANK_TWO && count >= 3) {
                 tripleRanks.push_back(rank);
             }
         }
@@ -114,13 +114,13 @@ std::map<rules::Rank, int> CoreUsage(const rules::Cards& cards, const rules::Han
         }
         break;
     }
-    case rules::PatternType::Invalid:
+    case PATTERN_INVALID:
         break;
-    case rules::PatternType::Single:
-    case rules::PatternType::Pair:
-    case rules::PatternType::Straight:
-    case rules::PatternType::ConsecutivePairs:
-    case rules::PatternType::Bomb:
+    case PATTERN_SINGLE:
+    case PATTERN_PAIR:
+    case PATTERN_STRAIGHT:
+    case PATTERN_CONSECUTIVE_PAIRS:
+    case PATTERN_BOMB:
         return playedCounts;
     }
     return core;
@@ -169,9 +169,9 @@ int KickerControlPenalty(const Candidate& candidate) {
     if (candidate.remainder.empty()) {
         return 0;
     }
-    if (candidate.pattern.type != rules::PatternType::TripleWithOne &&
-        candidate.pattern.type != rules::PatternType::TripleWithPair &&
-        candidate.pattern.type != rules::PatternType::Plane) {
+    if (candidate.pattern.type != PATTERN_TRIPLE_WITH_ONE &&
+        candidate.pattern.type != PATTERN_TRIPLE_WITH_PAIR &&
+        candidate.pattern.type != PATTERN_PLANE) {
         return 0;
     }
 
@@ -184,13 +184,13 @@ int KickerControlPenalty(const Candidate& candidate) {
         if (kickerUsed <= 0) {
             continue;
         }
-        if (rank == rules::Rank::Two) {
+        if (rank == RANK_TWO) {
             penalty += 1800 * kickerUsed;
-        } else if (rank == rules::Rank::Ace) {
+        } else if (rank == RANK_ACE) {
             penalty += 1300 * kickerUsed;
-        } else if (rank == rules::Rank::King) {
+        } else if (rank == RANK_KING) {
             penalty += 850 * kickerUsed;
-        } else if (rank == rules::Rank::Queen) {
+        } else if (rank == RANK_QUEEN) {
             penalty += 360 * kickerUsed;
         }
     }
@@ -221,13 +221,13 @@ int EvaluateRemainingHand(const rules::Cards& cards) {
             score += 900 + rules::RankValue(rank) * 10;
         }
 
-        if (rank != rules::Rank::Two) {
+        if (rank != RANK_TWO) {
             straightRanks.push_back(rank);
         }
-        if (count >= 2 && rank != rules::Rank::Two) {
+        if (count >= 2 && rank != RANK_TWO) {
             pairRanks.push_back(rank);
         }
-        if (count >= 3 && rank != rules::Rank::Two) {
+        if (count >= 3 && rank != RANK_TWO) {
             tripleRanks.push_back(rank);
         }
     }
@@ -243,10 +243,10 @@ int EvaluateRemainingHand(const rules::Cards& cards) {
 }
 
 int TotalCardsOfRank(rules::Rank rank) {
-    if (rank == rules::Rank::Two) {
+    if (rank == RANK_TWO) {
         return 1;
     }
-    if (rank == rules::Rank::Ace) {
+    if (rank == RANK_ACE) {
         return 3;
     }
     return 4;
@@ -271,21 +271,21 @@ int UnknownRankCount(const Candidate& candidate, const AiContext& context, rules
 
 int UnknownHigherControlCount(const Candidate& candidate, const AiContext& context, rules::Rank rank) {
     int count = 0;
-    if (rank < rules::Rank::King) {
-        count += UnknownRankCount(candidate, context, rules::Rank::King);
+    if (rank < RANK_KING) {
+        count += UnknownRankCount(candidate, context, RANK_KING);
     }
-    if (rank < rules::Rank::Ace) {
-        count += UnknownRankCount(candidate, context, rules::Rank::Ace);
+    if (rank < RANK_ACE) {
+        count += UnknownRankCount(candidate, context, RANK_ACE);
     }
-    if (rank < rules::Rank::Two) {
-        count += UnknownRankCount(candidate, context, rules::Rank::Two);
+    if (rank < RANK_TWO) {
+        count += UnknownRankCount(candidate, context, RANK_TWO);
     }
     return count;
 }
 
 int ProvenSingleControlBonus(const Candidate& candidate, const AiContext& context) {
-    if (candidate.pattern.type != rules::PatternType::Single ||
-        candidate.pattern.mainRank >= rules::Rank::Ace) {
+    if (candidate.pattern.type != PATTERN_SINGLE ||
+        candidate.pattern.mainRank >= RANK_ACE) {
         return 0;
     }
 
@@ -296,7 +296,7 @@ int ProvenSingleControlBonus(const Candidate& candidate, const AiContext& contex
             continue;
         }
         const std::optional<PassObservation>& observation = context.passObservations[static_cast<std::size_t>(i)];
-        if (!observation || observation->pattern.type != rules::PatternType::Single) {
+        if (!observation || observation->pattern.type != PATTERN_SINGLE) {
             continue;
         }
 
@@ -324,7 +324,7 @@ bool PossibleFollowCardCount(int selectedCount, const rules::HandPattern& previo
     if (selectedCount == 4) {
         return true;
     }
-    if (previous.type == rules::PatternType::Plane) {
+    if (previous.type == PATTERN_PLANE) {
         const int minCards = previous.groupCount * 4;
         const int maxCards = previous.groupCount * 5;
         return selectedCount >= minCards && selectedCount <= maxCards;
@@ -353,7 +353,7 @@ void AppendMasksWithCardCount(int n, int count, std::vector<std::uint64_t>& mask
 std::vector<std::uint64_t> FollowCandidateMasks(int n, const rules::HandPattern& previous) {
     std::vector<int> counts;
     counts.push_back(4);
-    if (previous.type == rules::PatternType::Plane) {
+    if (previous.type == PATTERN_PLANE) {
         const int minCards = previous.groupCount * 4;
         const int maxCards = previous.groupCount * 5;
         for (int count = minCards; count <= maxCards; ++count) {
@@ -381,10 +381,10 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
         (context.minOpponentRemainingCards > 0 && context.minOpponentRemainingCards <= 2);
 
     if (context.leading && anyOpponentSingle) {
-        if (candidate.pattern.type == rules::PatternType::Single) {
+        if (candidate.pattern.type == PATTERN_SINGLE) {
             score -= 900;
             score += rules::RankValue(candidate.pattern.mainRank) * 85;
-            if (candidate.pattern.mainRank >= rules::Rank::King) {
+            if (candidate.pattern.mainRank >= RANK_KING) {
                 score += 360;
             }
         } else {
@@ -392,13 +392,13 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
         }
     }
     if (!context.leading && anyOpponentSingle &&
-        context.previous.type == rules::PatternType::Single &&
-        candidate.pattern.type == rules::PatternType::Single) {
+        context.previous.type == PATTERN_SINGLE &&
+        candidate.pattern.type == PATTERN_SINGLE) {
         // When any opponent has reported single, following with the minimum
         // card often hands them the turn. A single-card follow should therefore
         // favor the largest available blocker over preserving a high singleton.
         score += rules::RankValue(candidate.pattern.mainRank) * 115;
-        if (candidate.pattern.mainRank >= rules::Rank::King) {
+        if (candidate.pattern.mainRank >= RANK_KING) {
             score += 420;
         }
     }
@@ -409,15 +409,15 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
 
     if (context.leading && !urgentDefense && leaves > 3) {
         const int rankValue = rules::RankValue(candidate.pattern.mainRank);
-        if (candidate.pattern.type == rules::PatternType::Single) {
+        if (candidate.pattern.type == PATTERN_SINGLE) {
             // Normal lead turns should usually burn low loose cards first. Without
             // this guard the remainder evaluator can prefer throwing away A/2 just
             // because the leftover low cards still form a pretty-looking structure.
             score -= rankValue * 42;
-            if (rankValue >= rules::RankValue(rules::Rank::Ace)) {
+            if (rankValue >= rules::RankValue(RANK_ACE)) {
                 score -= 520;
             }
-            if (candidate.pattern.mainRank == rules::Rank::King || candidate.pattern.mainRank == rules::Rank::Ace) {
+            if (candidate.pattern.mainRank == RANK_KING || candidate.pattern.mainRank == RANK_ACE) {
                 const int unknownHigher = UnknownHigherControlCount(candidate, context, candidate.pattern.mainRank);
                 if (unknownHigher == 0) {
                     score += 260;
@@ -425,9 +425,9 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
                     score += 120;
                 }
             }
-        } else if (candidate.pattern.type == rules::PatternType::Pair) {
+        } else if (candidate.pattern.type == PATTERN_PAIR) {
             score -= rankValue * 18;
-            if (rankValue >= rules::RankValue(rules::Rank::Ace)) {
+            if (rankValue >= rules::RankValue(RANK_ACE)) {
                 score -= 360;
             }
         } else {
@@ -439,7 +439,7 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
         score += ProvenSingleControlBonus(candidate, context);
     }
 
-    if (candidate.pattern.type == rules::PatternType::Bomb) {
+    if (candidate.pattern.type == PATTERN_BOMB) {
         const bool critical = leaves == 0 || leaves <= 2 ||
             (context.minOpponentRemainingCards > 0 && context.minOpponentRemainingCards <= 4);
         score += 180;
@@ -448,7 +448,7 @@ int TacticalAdjustment(const Candidate& candidate, const AiContext& context) {
         } else {
             score -= context.leading ? 250 : 500;
         }
-        if (!context.leading && context.previous.type != rules::PatternType::Bomb && !critical) {
+        if (!context.leading && context.previous.type != PATTERN_BOMB && !critical) {
             score -= 550;
         }
     }

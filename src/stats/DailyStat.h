@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rules/Scoring.h"
+#include "rules/CppCompat.h"
 
 #include <array>
 #include <string>
@@ -11,7 +11,7 @@ namespace pdk::stats {
 struct RoundRecord {
     std::string startedAt;
     std::string endedAt;
-    rules::PlayerId winner{rules::PlayerId::Player};
+    rules::PlayerId winner{PLAYER_HUMAN};
     std::string playerName;
     std::array<int, 3> scores{0, 0, 0};
     std::array<int, 3> remainingCards{0, 0, 0};

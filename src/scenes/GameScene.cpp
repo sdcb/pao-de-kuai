@@ -131,7 +131,7 @@ void GameScene::StartNextRound() {
     handLift_.clear();
     handHover_.clear();
     passTimers_ = {0.0f, 0.0f, 0.0f};
-    lastAnimatedPlayer_ = rules::PlayerId::Player;
+    lastAnimatedPlayer_ = PLAYER_HUMAN;
     if (midgameMock_) {
         game_.SortHands();
         handsSorted_ = true;
@@ -153,8 +153,8 @@ void GameScene::InitializeExternalAi() {
     auto kindFor = [](const std::string& selection) {
         return selection == "strong" ? game::LocalAiKind::Strong : game::LocalAiKind::Basic;
     };
-    controller->SetStrategy(rules::PlayerId::Ai1, kindFor(app_.Settings().ai1));
-    controller->SetStrategy(rules::PlayerId::Ai2, kindFor(app_.Settings().ai2));
+    controller->SetStrategy(PLAYER_AI1, kindFor(app_.Settings().ai1));
+    controller->SetStrategy(PLAYER_AI2, kindFor(app_.Settings().ai2));
     game_.SetExternalAiControllers({std::move(controller)});
 }
 
@@ -265,8 +265,8 @@ void GameScene::Render(graphics::RenderContext& context) {
     context.PushTranslation(shakeX, shakeY);
     DrawTable(context);
     DrawVignette(context, 0.6f);
-    DrawAiSeat(context, rules::PlayerId::Ai1);
-    DrawAiSeat(context, rules::PlayerId::Ai2);
+    DrawAiSeat(context, PLAYER_AI1);
+    DrawAiSeat(context, PLAYER_AI2);
     DrawTurnChip(context);
     DrawPlayedCards(context);
     DrawPassChips(context);
@@ -437,7 +437,7 @@ void GameScene::DrawPlayerPlate(graphics::RenderContext& context) {
     panel.ornament = false;
     panel.fillAlpha = 0.88f;
     DrawPanel(context, plate, panel);
-    DrawAvatar(context, layout::AvatarRect(rules::PlayerId::Player), AvatarLabel(app_.Settings().playerName), active, time_);
+    DrawAvatar(context, layout::AvatarRect(PLAYER_HUMAN), AvatarLabel(app_.Settings().playerName), active, time_);
 
     graphics::TextStyle nameStyle = Text(17.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD);
     nameStyle.wrap = false;
@@ -471,7 +471,7 @@ void GameScene::DrawPlayerHand(graphics::RenderContext& context) {
             continue;
         }
         if (sortAnimation_ > 0.0f) {
-            const rules::Cards& oldHand = handsBeforeSort_[rules::PlayerIndex(rules::PlayerId::Player)];
+            const rules::Cards& oldHand = handsBeforeSort_[rules::PlayerIndex(PLAYER_HUMAN)];
             const int oldIndex = FindCardIndex(oldHand, card);
             if (oldIndex >= 0) {
                 const Rect from = CardRectFor(oldIndex, static_cast<int>(oldHand.size()));
@@ -512,9 +512,9 @@ void GameScene::DrawPlayedCards(graphics::RenderContext& context) {
     const float left = 640.0f - totalW * 0.5f;
     Point source = PlayerPlaySource;
     float sourceRotation = 0.0f;
-    if (lastAnimatedPlayer_ != rules::PlayerId::Player) {
+    if (lastAnimatedPlayer_ != PLAYER_HUMAN) {
         source = layout::AvatarCenter(lastAnimatedPlayer_);
-        sourceRotation = lastAnimatedPlayer_ == rules::PlayerId::Ai1 ? -18.0f : 18.0f;
+        sourceRotation = lastAnimatedPlayer_ == PLAYER_AI1 ? -18.0f : 18.0f;
     }
     const float progress = 1.0f - playAnimation_;
     for (std::size_t i = 0; i < cards.size(); ++i) {
@@ -801,7 +801,7 @@ Rect GameScene::AiCardRectFor(rules::PlayerId player, int index, int count) cons
     const float cardW = cardH / 1.4f;
     const float step = (info.width - cardW) / static_cast<float>(FullHandCardCount - 1);
     const float y = info.y + 36.0f;
-    if (player == rules::PlayerId::Ai2) {
+    if (player == PLAYER_AI2) {
         // Right-aligned so the remaining cards stay next to AI2's avatar.
         const float right = info.x + info.width - cardW;
         return {right - static_cast<float>(count - 1 - index) * step, y, cardW, cardH};
@@ -836,12 +836,12 @@ void GameScene::ConsumeEvents() {
             break;
         case game::GameEventType::RoundEnded:
             app_.Audio().Play(audio::SoundId::RoundEnd);
-            app_.Audio().Play(event.player == rules::PlayerId::Player ? audio::SoundId::Win : audio::SoundId::Lose);
+            app_.Audio().Play(event.player == PLAYER_HUMAN ? audio::SoundId::Win : audio::SoundId::Lose);
             roundResultPending_ = true;
             roundResultDelay_ = 0.0f;
             break;
         case game::GameEventType::Talk:
-            if (event.player != rules::PlayerId::Player) {
+            if (event.player != PLAYER_HUMAN) {
                 app_.Audio().Play(audio::SoundId::AiTalk);
                 app_.PushOverlay(std::make_unique<overlays::TalkBubbleOverlay>(event.player, event.message));
             } else {

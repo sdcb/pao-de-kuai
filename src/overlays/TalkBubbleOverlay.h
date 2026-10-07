@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/Overlay.h"
-#include "rules/Scoring.h"
+#include "rules/CppCompat.h"
 
 #include <string>
 

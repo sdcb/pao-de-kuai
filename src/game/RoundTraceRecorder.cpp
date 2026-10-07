@@ -121,7 +121,7 @@ cJSON* PlayersToJson(
         const rules::PlayerId id = rules::PlayerFromIndex(i);
         cJSON_AddStringToObject(object, "id", rules::PlayerKey(id).c_str());
         cJSON_AddStringToObject(object, "name", players[static_cast<std::size_t>(i)].name.c_str());
-        cJSON_AddStringToObject(object, "kind", id == rules::PlayerId::Player ? "human" : "ai");
+        cJSON_AddStringToObject(object, "kind", id == PLAYER_HUMAN ? "human" : "ai");
         AddStrategyFields(object, strategies[static_cast<std::size_t>(i)]);
         cJSON_AddItemToObject(object, "initialHand", CardsToJson(players[static_cast<std::size_t>(i)].hand));
         cJSON_AddItemToArray(array, object);
