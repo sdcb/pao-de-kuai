@@ -14,6 +14,80 @@
 #include <utility>
 #include <vector>
 
+/*
+ * TEMPORARY TRANSITION SHIM -- DELETE WHEN THIS FILE BECOMES StrongAiStrategy.c.
+ *
+ * AiStrategyInternal.h is pure C now (plan.md S4): the candidate list, the rank counts and
+ * the key set are C containers.  This file is still C++ and still written against the old
+ * shapes (`Candidate`, a std::map of rank counts, a std::vector of candidates), so rather
+ * than rewrite every call site twice -- once now and once when the file is converted --
+ * the old names are reconstructed here on top of the C API.
+ *
+ * Nothing here allocates differently or changes an algorithm; each wrapper forwards.
+ */
+namespace pdk::game::ai_internal {
+
+using Candidate = ::AiCandidate;
+
+inline int PatternBaseScore(PatternType type)
+{
+    return Ai_PatternBaseScore(type);
+}
+
+inline int UnknownRankCount(const AiCandidate& candidate, const AiContext& context, Rank rank)
+{
+    return Ai_UnknownRankCount(&candidate, &context, rank);
+}
+
+inline int KickerControlPenalty(const AiCandidate& candidate)
+{
+    return Ai_KickerControlPenalty(&candidate);
+}
+
+inline std::map<Rank, int> CountRanks(const Cards& cards)
+{
+    AiRankCounts counts;
+    std::map<Rank, int> out;
+
+    AiRankCounts_Build(&cards, &counts);
+    for (Rank rank = RANK_THREE; rank <= RANK_TWO; ++rank) {
+        if (counts.count[rank] > 0) {
+            out[rank] = counts.count[rank];
+        }
+    }
+    return out;
+}
+
+inline std::vector<AiCandidate> GenerateCandidates(const Cards& hand, const AiContext& context)
+{
+    AiCandidateList list;
+    std::vector<AiCandidate> out;
+
+    AiCandidateList_Init(&list);
+    Ai_GenerateCandidates(&hand, &context, &list);
+    out.assign(list.items, list.items + list.count);
+    AiCandidateList_Free(&list);
+    return out;
+}
+
+inline void DeduplicateCandidates(std::vector<AiCandidate>& candidates)
+{
+    AiCandidateList list;
+
+    if (candidates.empty()) {
+        return;
+    }
+    AiCandidateList_Init(&list);
+    for (const AiCandidate& candidate : candidates) {
+        AiCandidateList_Push(&list, &candidate);
+    }
+    Ai_DeduplicateCandidates(&list);
+    candidates.assign(list.items, list.items + list.count);
+    AiCandidateList_Free(&list);
+}
+
+} // namespace pdk::game::ai_internal
+
 namespace pdk::game {
 namespace ai_internal {
 
