@@ -63,7 +63,9 @@ ctest --preset vs2026-release --output-on-failure
 
 主发布工具链是 MinGW-w64 UCRT x64，直接链接系统 `ucrtbase.dll`。MSVC x64/x86/arm64 作为 CI 验证组合保留，默认 `/MT`。
 
-`src/` 正在从 C++ 迁移为纯 C，目前已迁移绝大部分，**还剩 6 个 `.cpp`**（`python tools/check_c_only.py --report` 可查看进度）。迁移完成后会摘掉 MinGW 侧仍然存在的 `-static-libstdc++`/`-static-libgcc`，届时 exe 不再依赖 libstdc++。
+`src/` 已**全量迁移为 C17**：里面没有任何 `.cpp`，`python tools/check_c_only.py` 会报 `src/ is pure C.`，并作为 CI 门禁在每次构建时校验。C++ 只保留在 `tests/`（doctest 单元测试与 `scene_viewer`），它们的 C++ 适配层位于 `tests/support/`。
+
+发布 exe 不依赖 `msvcrt.dll`、`libstdc++` 或 `libgcc`：CRT 经 `api-ms-win-crt-*` 这组 API set 直连系统 `ucrtbase.dll`；PE 头也把最低系统声明为 Win10（`MajorSubsystemVersion 10.0`），与 `WINVER`/`_WIN32_WINNT` 的实际要求一致。
 
 ## 运行数据
 

@@ -4,12 +4,13 @@
 
 ## 构建与测试基线
 
-> **正在进行的改造**：`src/` 正在从 C++ 迁移为**纯 C**，工具链从 MSVC+VC-LTL 改为
-> **双工具链**（MSVC 保留为 CI 验证组合，MinGW-w64 UCRT x64 成为主发布构建），
-> 最低系统提到 Win10，`external/vc-ltl` 已删除。
-> **动手改 `src/` 之前必须先读 [`docs/c-port-conventions.md`](docs/c-port-conventions.md) 与
-> [`plan.md`](plan.md)**——本节的旧描述在迁移完成前只对尚未转换的文件成立，
-> 约定文档才是权威。移植进度可用 `python tools/check_c_only.py --report` 随时查看。
+> **改造已完成**：`src/` 已经是**纯 C（C17）**——里面没有任何 `.cpp`，
+> `python tools/check_c_only.py` 报 `src/ is pure C.`，并且已接入 CI 门禁。
+> 工具链为**双工具链**：MinGW-w64 UCRT x64 是主发布构建（直连系统 `ucrtbase.dll`，
+> PE 声明最低 Win10），MSVC x64/x86/arm64 是 CI 验证组合；`external/vc-ltl` 已删除。
+> C++ 只存在于 `tests/`（doctest 测试与 `scene_viewer`），其 C++ 适配层在 `tests/support/`。
+> **改 `src/` 之前先读 [`docs/c-port-conventions.md`](docs/c-port-conventions.md) 与
+> [`plan.md`](plan.md)**：新代码不得再引入 C++ 或 `<memory>`/`<string>`/`<vector>` 这类头。
 
 - 主线工具链：**MinGW-w64 UCRT x64**（主发布）与 MSVC x64（CI 验证）。
   x86 走 MinGW-w64 UCRT x86；CI 另有 MSVC x64/x86/arm64 的 `/MD`、`/MT` 六个组合。

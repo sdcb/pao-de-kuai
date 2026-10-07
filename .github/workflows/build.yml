@@ -247,6 +247,19 @@ jobs:
             throw "Generated shim headers are stale. Run: python tools/gen_com_shim.py"
           }
 
+      - name: Verify src/ is pure C
+        # src/ was migrated from C++ to C17 (plan.md S0-S8).  This is the gate that keeps it that
+        # way: it fails the moment a .cpp file, a C++ construct or a banned C++ header reappears
+        # under src/.  The C++ that remains in the repository lives under tests/ by design (the
+        # doctest suite and the scene viewer), and check_c_only.py only scans src/.
+        if: ${{ matrix.kind == 'mingw' && matrix.arch == 'x64' }}
+        shell: pwsh
+        run: |
+          python tools/check_c_only.py
+          if ($LASTEXITCODE -ne 0) {
+            throw "src/ is no longer pure C. Run: python tools/check_c_only.py --report"
+          }
+
       - name: Configure (MSVC)
         if: ${{ matrix.kind == 'msvc' }}
         shell: cmd

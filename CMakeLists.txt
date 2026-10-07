@@ -269,14 +269,23 @@ target_link_libraries(scene_viewer PRIVATE pdk_app)
 # working unchanged.
 target_include_directories(scene_viewer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/support")
 
-foreach(target pao_de_kuai scene_viewer)
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_link_options(${target} PRIVATE -static-libstdc++ -static-libgcc)
-    endif()
-endforeach()
-
+# pao_de_kuai is pure C now: src/ has no .cpp at all and the executable links only pdk_app, which
+# is pure C too, so the C++ runtime is not part of it.  scene_viewer stays C++ by design (the UI
+# tests are the one place C++ is still worth having), so it keeps the static C++ runtime.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_link_options(pao_de_kuai PRIVATE -municode)
+    target_link_options(scene_viewer PRIVATE -static-libstdc++ -static-libgcc)
+endif()
+
+# Say out loud what the binary needs.  WINVER/_WIN32_WINNT only decide which APIs compile; the PE
+# header's subsystem version is what Windows reads, and MinGW defaults it to 5.2 (XP-class) while
+# MSVC defaults to 6.0.  The project dropped Win8 support, so both now declare Win10, verifiable
+# with `objdump -p` / `dumpbin /headers`.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_options(pao_de_kuai PRIVATE -municode
+        -Wl,--major-subsystem-version,10 -Wl,--minor-subsystem-version,0
+        -Wl,--major-os-version,10 -Wl,--minor-os-version,0)
+elseif(MSVC)
+    target_link_options(pao_de_kuai PRIVATE "/SUBSYSTEM:WINDOWS,10.0")
 endif()
 
 if(PDK_BUILD_TESTS)
