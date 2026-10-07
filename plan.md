@@ -69,6 +69,25 @@
 > - 进度：`src/` 还有 **48 个 `.cpp`**，`check_c_only.py` 报 293 处 `/std::/` 类残留。
 > - 体积（仍混编）：MinGW x64 758,272 B、MSVC /MT x64 798,208 B。
 >
+> **修订 7（S2 完成记录，commit `3c742b1`）——`src/rules/` 已是纯 C**：
+> - `Rank`/`Suit`/`PatternType`/`PlayerId` 定为 **`uint8_t` + 匿名枚举常量**，不是普通
+>   `enum`：C 里 enum 是 `int`，会让 `Card` 变 8 字节、`Cards` 变 388 字节，而 AI 搜索在
+>   热路径上大量拷贝手牌。现在 `Card` 2 字节、`Cards` 定长 48 张。这是对 §2 表格
+>   "`enum class` → 普通 `enum`" 的**有意偏离**，理由与计划要的"定长值类型 + 搜索更快"一致。
+> - `Cards` 是定长值类型（`Card items[48] + count`），全写入走 `Cards_Push`；
+>   `SortByGameOrder` 用插入排序（手牌 ≤16 张），不引 `qsort`。规则层**零堆分配**。
+> - `reason` 用 `char[128]`；`RankName`/`SuitName`/`PatternName`/`PlayerKey` 返回字符串字面量。
+> - `HandPattern.c` 用按点数索引的计数数组替掉 `std::map<Rank,int>`，遍历顺序与 map 一致。
+> - 枚举常量机械重命名 33 个文件（`rules::Rank::Three` → `RANK_THREE` 等，共 1,024 处），
+>   `pattern.IsValid()` 13 处改为 `rules::IsValid(pattern)`。
+> - **新增 `src/rules/CppCompat.h`（临时，路线 B）**：`src/rules` 以外**所有** rules 符号都是
+>   `rules::X` 限定写法（已实测：0 处非限定引用），所以门面放在 `namespace pdk::rules` 里即可
+>   零改动兼容：`Cards` 仍是 `std::vector<Card>`，内联重载负责打包成 C 定长数组；六个原本返回
+>   `std::string` 的 helper 仍返回 `std::string`；`PaoDeKuaiRules` 保留类形态。
+> - **性能副作用（计划 §9 期望的）**：`unit_tests` 从 MinGW 0.39s → 0.20s、MSVC 0.38s → 0.16s。
+> - 进度：`src/` 剩 **41 个 `.cpp`**，`check_c_only.py` 报 275 处残留。体积：MinGW x64 753,152 B、
+>   MSVC /MT x64 800,256 B（仍链 libstdc++）。
+>
 >
 
 >

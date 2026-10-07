@@ -205,6 +205,15 @@ cleanup:
 
 ### A.1 `rules/Card.h`
 
+**已落地（S2，commit `3c742b1`），与下面的草案有两处有意偏离，以落地版为准：**
+- `Rank`/`Suit`/`PatternType`/`PlayerId` 是 **`uint8_t` typedef + 匿名枚举常量**，
+  不是普通 `enum`（普通 enum 在 C 里是 `int`，会让 `Card` 8 字节、`Cards` 388 字节）。
+- `reason` 用 `char[PATTERN_REASON_CAP]`，`RankName`/`SuitName`/`PatternName`/`PlayerKey`
+  返回字符串字面量（`const char*`）。
+- `src/rules/CppCompat.h` 是**临时** C++ 门面（路线 B）：`Cards` 在 C++ 侧仍是
+  `std::vector<Card>`，内联重载把它打包成 C 定长数组再调 C API。删门面的时机 =
+  `src/` 最后一个 C++ 文件消失的同一刻。
+
 ```c
 typedef enum Suit { SUIT_SPADES, SUIT_HEARTS, SUIT_DIAMONDS, SUIT_CLUBS } Suit;
 typedef enum Rank {
