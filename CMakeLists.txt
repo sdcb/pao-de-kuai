@@ -173,7 +173,7 @@ set(PDK_CORE_SOURCES
     src/rules/Scoring.c
     src/game/AiStrategyInternal.c
     src/game/BasicAiStrategy.c
-    src/game/GameState.cpp
+    src/game/GameState.c
     src/game/ExternalAiController.c
     src/game/LocalAiController.c
     src/game/RoundRecorder.c
@@ -339,4 +339,22 @@ add_test(NAME ui_overlay_confirm_exit COMMAND scene_viewer --overlay confirm-exi
 add_test(NAME ui_overlay_about COMMAND scene_viewer --overlay about --screenshot ${CMAKE_BINARY_DIR}/ui-about.jpg --quality 75)
 add_test(NAME ui_overlay_return_menu COMMAND scene_viewer --overlay return-menu --screenshot ${CMAKE_BINARY_DIR}/ui-return-menu.jpg --quality 75)
 add_test(NAME ui_overlay_invalid COMMAND scene_viewer --overlay invalid --screenshot ${CMAKE_BINARY_DIR}/ui-invalid.jpg --quality 75)
+
+# Each test gets its own working directory.  The app reads appsettings.json from the current
+# directory, and unit_tests' settings round-trip case WRITES one -- so while both ran in the build
+# directory, running unit_tests first reset the file to defaults and the settings screenshot then
+# showed 基础/off instead of the 强力/on the released baseline was captured with.  That made the
+# "five screenshots match the baseline" check depend on test order, which is not a check at all.
+# The UI cases now run against a pinned fixture so the comparison is reproducible.
+set(PDK_UI_TEST_DIR "${CMAKE_BINARY_DIR}/ui-test-cwd")
+set(PDK_UNIT_TEST_DIR "${CMAKE_BINARY_DIR}/unit-test-cwd")
+file(MAKE_DIRECTORY "${PDK_UI_TEST_DIR}" "${PDK_UNIT_TEST_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/appsettings.json"
+     DESTINATION "${PDK_UI_TEST_DIR}")
+set_tests_properties(unit_tests PROPERTIES WORKING_DIRECTORY "${PDK_UNIT_TEST_DIR}")
+set_tests_properties(
+    ui_scene_start ui_overlay_settings ui_scene_game_deal ui_scene_game_play ui_overlay_result
+    ui_scene_stats ui_scene_help ui_scene_loading ui_overlay_confirm_exit ui_overlay_about
+    ui_overlay_return_menu ui_overlay_invalid
+    PROPERTIES WORKING_DIRECTORY "${PDK_UI_TEST_DIR}")
 endif()

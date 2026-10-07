@@ -85,6 +85,7 @@ static void RoundResultOverlay_Render(void *user, RenderContext *context)
     TextStyle nameStyle;
     float stamp;
     char scoreText[16];
+    Str scoreLine;
     Str badges[kBadgeCapacity];
     int badgeCount = 0;
     int scoredBombs = 0;
@@ -124,8 +125,17 @@ static void RoundResultOverlay_Render(void *user, RenderContext *context)
     scoreStyle = TextStyle_Centered(TextStyle_Label(17.0f, 600 /* SEMI_BOLD */));
     rect = Rect_Make(kPanel.x, 248.0f, kPanel.width, 26.0f);
     RoundResultOverlay_Signed(scoreText, (int)sizeof(scoreText), overlay->record.scores[0]);
-    RenderContext_DrawTextUtf8(context, scoreText, &rect, &scoreStyle,
+    // The original drew "本局得分  " + Signed(score) as one centred string.  C has no operator+
+    // for that, and the port kept only the number, silently losing the label -- the baseline
+    // comparison in tools/compare_screenshots.py is what caught it.  Built with Str, which is what
+    // the C++ core::AppendNumber call compiled to, rather than by hand-splicing a byte offset into
+    // a buffer whose label is not ASCII.
+    Str_Init(&scoreLine);
+    Str_Append(&scoreLine, "本局得分  ");
+    Str_Append(&scoreLine, scoreText);
+    RenderContext_DrawTextUtf8(context, Str_CStr(&scoreLine), &rect, &scoreStyle,
                                ScoreColor(overlay->record.scores[0]));
+    Str_Free(&scoreLine);
 
     /* Special-event badges. */
     for (i = 0; i < overlay->record.bombCount; ++i) {
