@@ -15,8 +15,8 @@ using namespace ui;
 using rules::Rank;
 using rules::Suit;
 
-constexpr core::Rect RulesPanel{56.0f, 120.0f, 650.0f, 572.0f};
-constexpr core::Rect SidePanel{724.0f, 120.0f, 500.0f, 572.0f};
+constexpr Rect RulesPanel{56.0f, 120.0f, 650.0f, 572.0f};
+constexpr Rect SidePanel{724.0f, 120.0f, 500.0f, 572.0f};
 
 struct PatternSample {
     const char* name;
@@ -58,7 +58,7 @@ float HelpScene::DrawBullets(graphics::RenderContext& context, std::string_view 
         const std::size_t end = text.find('\n', start);
         const std::string line(text.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start));
         if (!line.empty()) {
-            const core::Size size = context.MeasureText(line, style, width - 20.0f);
+            const Size size = context.MeasureText(line, style, width - 20.0f);
             context.FillEllipse({x + 1.0f, y + 9.0f, 6.0f, 6.0f}, WithAlpha(theme::Gold, 0.85f));
             context.DrawTextUtf8(line, {x + 20.0f, y, width - 20.0f, size.height + 4.0f}, style, theme::Ivory);
             y += size.height + 9.0f;

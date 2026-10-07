@@ -76,16 +76,16 @@ graphics::TextStyle FieldStyle() {
     return style;
 }
 
-core::Rect Inset(const core::Rect& rect, float d) {
+Rect Inset(const Rect& rect, float d) {
     return {rect.x + d, rect.y + d, rect.width - d * 2.0f, rect.height - d * 2.0f};
 }
 
-void DrawKnob(graphics::RenderContext& context, core::Point c, float r, float glow) {
+void DrawKnob(graphics::RenderContext& context, Point c, float r, float glow) {
     if (glow > 0.01f) {
         context.DrawShadow({c.x - r, c.y - r, r * 2.0f, r * 2.0f}, 7.0f, WithAlpha(theme::Gold, 0.45f * glow));
     }
     context.DrawShadow({c.x - r + 2.0f, c.y - r + 4.0f, r * 2.0f - 4.0f, r * 2.0f - 4.0f}, 3.5f, WithAlpha(Black, 0.55f));
-    const core::Rect knob{c.x - r, c.y - r, r * 2.0f, r * 2.0f};
+    const Rect knob{c.x - r, c.y - r, r * 2.0f, r * 2.0f};
     context.FillEllipse(knob, context.Linear({c.x, c.y - r}, {c.x, c.y + r},
         {{0.0f, LerpColor(theme::Ivory, White, 0.3f * glow)}, {1.0f, theme::GoldLight}}));
     context.StrokeEllipse(Inset(knob, 0.5f), WithAlpha(theme::GoldDeep, 0.9f), 1.0f);
@@ -124,7 +124,7 @@ void TextField::Update(float dt) {
     blink_ += dt;
 }
 
-core::Point TextField::TextOrigin() const {
+Point TextField::TextOrigin() const {
     return {rect.x + FieldPadX, rect.y + (rect.height - lineHeight_) * 0.5f};
 }
 
@@ -158,7 +158,7 @@ void TextField::Draw(graphics::RenderContext& context) {
         }
     }
 
-    const core::Point origin = TextOrigin();
+    const Point origin = TextOrigin();
     context.PushClip(Inset(rect, 4.0f));
     if (display.empty() && !placeholder.empty()) {
         graphics::TextStyle style = FieldStyle();
@@ -198,7 +198,7 @@ int TextField::HitIndex(float x, float y) const {
     if (!layout_) {
         return static_cast<int>(text_.size());
     }
-    const core::Point origin = TextOrigin();
+    const Point origin = TextOrigin();
     BOOL trailing = FALSE;
     BOOL inside = FALSE;
     DWRITE_HIT_TEST_METRICS metrics{};
@@ -260,7 +260,7 @@ void TextField::DeleteSelection() {
 }
 
 bool TextField::OnMouseDown(float x, float y, bool shift) {
-    if (!rect.Contains(x, y)) {
+    if (!Rect_Contains(&rect, x, y)) {
         SetFocused(false);
         return false;
     }
@@ -385,12 +385,12 @@ void Slider::Update(float dt) {
 
 void Slider::Draw(graphics::RenderContext& context) const {
     const float cy = rect.y + rect.height * 0.5f;
-    const core::Rect track{rect.x, cy - 3.0f, rect.width, 6.0f};
+    const Rect track{rect.x, cy - 3.0f, rect.width, 6.0f};
     context.FillRoundedRect(track, 3.0f, WithAlpha(theme::RoomDeep, 0.9f));
     context.StrokeRoundedRect(track, 3.0f, WithAlpha(theme::Gold, 0.22f), 1.0f);
     const float kx = rect.x + rect.width * Clamp01(value);
     if (kx > rect.x + 1.0f) {
-        const core::Rect fill{rect.x, track.y, kx - rect.x, track.height};
+        const Rect fill{rect.x, track.y, kx - rect.x, track.height};
         context.FillRoundedRect(fill, 3.0f, context.Linear({fill.x, fill.y}, {fill.x + std::max(fill.width, 1.0f), fill.y},
             {{0.0f, theme::GoldDeep}, {1.0f, theme::GoldLight}}));
     }
@@ -412,8 +412,8 @@ bool Slider::SetFromX(float x) {
 }
 
 bool Slider::OnMouseDown(float x, float y) {
-    const core::Rect hit{rect.x - 14.0f, rect.y - 6.0f, rect.width + 28.0f, rect.height + 12.0f};
-    if (!hit.Contains(x, y)) {
+    const Rect hit{rect.x - 14.0f, rect.y - 6.0f, rect.width + 28.0f, rect.height + 12.0f};
+    if (!Rect_Contains(&hit, x, y)) {
         return false;
     }
     dragging = true;
@@ -422,8 +422,8 @@ bool Slider::OnMouseDown(float x, float y) {
 }
 
 bool Slider::OnMouseMove(float x, float y) {
-    const core::Rect hit{rect.x - 14.0f, rect.y - 6.0f, rect.width + 28.0f, rect.height + 12.0f};
-    hover = hit.Contains(x, y);
+    const Rect hit{rect.x - 14.0f, rect.y - 6.0f, rect.width + 28.0f, rect.height + 12.0f};
+    hover = Rect_Contains(&hit, x, y);
     return dragging && SetFromX(x);
 }
 
@@ -438,7 +438,7 @@ void Segmented::Update(float dt) {
 }
 
 int Segmented::HitTest(float x, float y) const {
-    if (options.empty() || !rect.Contains(x, y)) {
+    if (options.empty() || !Rect_Contains(&rect, x, y)) {
         return -1;
     }
     const float width = rect.width / static_cast<float>(options.size());
@@ -467,7 +467,7 @@ void Segmented::Draw(graphics::RenderContext& context) const {
     context.StrokeRoundedRect(Inset(rect, 0.5f), radius, WithAlpha(theme::Gold, 0.28f), 1.0f);
 
     const float width = rect.width / static_cast<float>(options.size());
-    const core::Rect pill{rect.x + 3.0f + width * slide, rect.y + 3.0f, width - 6.0f, rect.height - 6.0f};
+    const Rect pill{rect.x + 3.0f + width * slide, rect.y + 3.0f, width - 6.0f, rect.height - 6.0f};
     context.DrawShadow({pill.x + 2.0f, pill.y + 3.0f, pill.width - 4.0f, pill.height - 2.0f}, 4.0f, WithAlpha(Black, 0.45f));
     context.FillRoundedRect(pill, pill.height * 0.5f, context.Linear({pill.x, pill.y}, {pill.x, pill.y + pill.height},
         {{0.0f, theme::GoldLight}, {0.6f, theme::Gold}, {1.0f, theme::GoldDeep}}));
@@ -477,7 +477,7 @@ void Segmented::Draw(graphics::RenderContext& context) const {
     for (std::size_t i = 0; i < options.size(); ++i) {
         const float weight = Clamp01(1.0f - std::fabs(slide - static_cast<float>(i)));
         const D2D1_COLOR_F idle = static_cast<int>(i) == hover ? theme::Ivory : theme::Muted;
-        const core::Rect cell{rect.x + width * static_cast<float>(i), rect.y, width, rect.height};
+        const Rect cell{rect.x + width * static_cast<float>(i), rect.y, width, rect.height};
         context.DrawTextUtf8(options[i], cell, style, LerpColor(idle, theme::GoldInk, weight));
     }
 }
@@ -503,7 +503,7 @@ void Toggle::Draw(graphics::RenderContext& context) const {
 }
 
 bool Toggle::OnMouseDown(float x, float y) {
-    if (!rect.Contains(x, y)) {
+    if (!Rect_Contains(&rect, x, y)) {
         return false;
     }
     on = !on;

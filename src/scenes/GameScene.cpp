@@ -2,7 +2,7 @@
 
 #include "app/App.h"
 #include "audio/SoundIds.h"
-#include "core/StringUtil.h"
+#include "core/CppCompat.h"
 #include "game/LocalAiController.h"
 #include "overlays/ReturnToMenuOverlay.h"
 #include "overlays/RoundResultOverlay.h"
@@ -34,8 +34,8 @@ constexpr float PlayedCardTop = 220.0f;
 constexpr float HoverLift = 7.0f;
 constexpr float PassChipSeconds = 1.6f;
 constexpr float ToastSeconds = 4.5f;
-constexpr core::Point DealCenter{640.0f, 300.0f};
-constexpr core::Point PlayerPlaySource{640.0f, 640.0f};
+constexpr Point DealCenter{640.0f, 300.0f};
+constexpr Point PlayerPlaySource{640.0f, 640.0f};
 
 bool ContainsIndex(const std::vector<int>& values, int index) {
     return std::find(values.begin(), values.end(), index) != values.end();
@@ -66,7 +66,7 @@ int FindCardIndex(const rules::Cards& cards, rules::Card card) {
 }
 
 // Moves a dealt card from the centre pile along a shallow arc; returns flight progress.
-float DealFlight(core::Rect& rect, float& rotation, int index, float elapsed) {
+float DealFlight(Rect& rect, float& rotation, int index, float elapsed) {
     const float t = Clamp01((elapsed - static_cast<float>(index) * DealCardInterval) / (DealCardInterval * 1.5f));
     const float e = EaseOutCubic(t);
     const float startRotation = static_cast<float>((index * 37) % 29 - 14);
@@ -251,7 +251,7 @@ void GameScene::Render(graphics::RenderContext& context) {
         app_.LoadGameResources();
     }
     context.Clear(theme::Room);
-    context.FillRect({0.0f, 0.0f, core::LogicalWidth, core::LogicalHeight}, context.Radial({640.0f, 330.0f}, 900.0f, 620.0f,
+    context.FillRect({0.0f, 0.0f, LogicalWidth, LogicalHeight}, context.Radial({640.0f, 330.0f}, 900.0f, 620.0f,
         {{0.0f, theme::FeltDeep}, {0.6f, theme::Room}, {1.0f, theme::RoomDeep}}));
 
     float shakeX = 0.0f;
@@ -282,8 +282,8 @@ void GameScene::Render(graphics::RenderContext& context) {
 }
 
 void GameScene::DrawTable(graphics::RenderContext& context) {
-    const core::Rect& table = layout::Table;
-    const core::Point center{table.x + table.width * 0.5f, table.y + table.height * 0.5f};
+    const Rect& table = layout::Table;
+    const Point center{table.x + table.width * 0.5f, table.y + table.height * 0.5f};
     const float rx = table.width * 0.5f;
     const float ry = table.height * 0.5f;
     constexpr D2D1_COLOR_F Black = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -294,7 +294,7 @@ void GameScene::DrawTable(graphics::RenderContext& context) {
             {{0.0f, WithAlpha(Black, 0.6f)}, {0.86f, WithAlpha(Black, 0.5f)}, {1.0f, WithAlpha(Black, 0.0f)}}));
 
     // Padded leather rail with a gold inlay.
-    const core::Rect rail{table.x - 16.0f, table.y - 16.0f, table.width + 32.0f, table.height + 32.0f};
+    const Rect rail{table.x - 16.0f, table.y - 16.0f, table.width + 32.0f, table.height + 32.0f};
     context.FillEllipse(rail, context.Linear({0.0f, rail.y}, {0.0f, rail.y + rail.height},
         {{0.0f, Rgb(0x3A2A1C)}, {0.5f, Rgb(0x21170F)}, {1.0f, Rgb(0x120C08)}}));
     context.StrokeEllipse({rail.x + 2.0f, rail.y + 2.0f, rail.width - 4.0f, rail.height - 4.0f}, WithAlpha(theme::GoldLight, 0.10f), 2.0f);
@@ -333,7 +333,7 @@ void GameScene::DrawTurnChip(graphics::RenderContext& context) {
     style.weight = DWRITE_FONT_WEIGHT_SEMI_BOLD;
     if (highlight) {
         const float pulse = 0.5f + 0.5f * std::sin(time_ * 4.0f);
-        const core::Rect rect = ChipRect(context, {640.0f, 44.0f}, Anchor::Center, text, style);
+        const Rect rect = ChipRect(context, {640.0f, 44.0f}, Anchor::Center, text, style);
         context.DrawShadow(rect, 9.0f, WithAlpha(theme::Gold, 0.25f + 0.2f * pulse));
         style.fill = WithAlpha(theme::GoldDeep, 0.35f);
         style.stroke = WithAlpha(theme::GoldLight, 0.85f);
@@ -346,7 +346,7 @@ void GameScene::DrawTurnChip(graphics::RenderContext& context) {
 
 void GameScene::DrawAiSeat(graphics::RenderContext& context, rules::PlayerId player) {
     const game::PlayerState& state = game_.Players()[rules::PlayerIndex(player)];
-    const core::Rect plate = layout::PlateFor(player);
+    const Rect plate = layout::PlateFor(player);
     const bool active = handsSorted_ && !game_.IsRoundOver() && game_.CurrentPlayer() == player;
 
     PanelStyle panel;
@@ -360,7 +360,7 @@ void GameScene::DrawAiSeat(graphics::RenderContext& context, rules::PlayerId pla
             WithAlpha(theme::GoldLight, 0.35f + 0.3f * pulse), 1.6f);
     }
 
-    const core::Rect avatar = layout::AvatarRect(player);
+    const Rect avatar = layout::AvatarRect(player);
     DrawAvatar(context, avatar, AvatarLabel(state.name), active, time_);
 
     const int count = static_cast<int>(state.hand.size());
@@ -381,7 +381,7 @@ void GameScene::DrawAiSeat(graphics::RenderContext& context, rules::PlayerId pla
     }
     DrawChip(context, {avatar.x + avatar.width * 0.5f, avatar.y + avatar.height + 16.0f}, Anchor::Center, countText, countChip);
 
-    const core::Rect info = layout::AiInfoArea(player);
+    const Rect info = layout::AiInfoArea(player);
     graphics::TextStyle nameStyle = Text(17.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD);
     nameStyle.wrap = false;
     nameStyle.ellipsis = true;
@@ -400,7 +400,7 @@ void GameScene::DrawAiSeat(graphics::RenderContext& context, rules::PlayerId pla
     context.DrawTextUtf8("今日 " + SignedScore(today), {info.x + info.width - 96.0f, info.y + 3.0f, 96.0f, 22.0f}, scoreStyle, ScoreColor(today));
 
     for (int i = 0; i < count; ++i) {
-        core::Rect target = AiCardRectFor(player, i, count);
+        Rect target = AiCardRectFor(player, i, count);
         CardLook look;
         look.shadow = 0.8f;
         if (!handsSorted_) {
@@ -413,7 +413,7 @@ void GameScene::DrawAiSeat(graphics::RenderContext& context, rules::PlayerId pla
             if (oldIndex >= 0) {
                 // AI cards stay face-down, but their backs still move from the
                 // dealt order to the sorted order so all hands feel consistent.
-                const core::Rect from = AiCardRectFor(player, oldIndex, static_cast<int>(oldHand.size()));
+                const Rect from = AiCardRectFor(player, oldIndex, static_cast<int>(oldHand.size()));
                 const float t = EaseInOutSine(1.0f - sortAnimation_);
                 target.x = Lerp(from.x, target.x, t);
                 target.y = Lerp(from.y, target.y, t);
@@ -430,7 +430,7 @@ void GameScene::DrawAiSeat(graphics::RenderContext& context, rules::PlayerId pla
 }
 
 void GameScene::DrawPlayerPlate(graphics::RenderContext& context) {
-    const core::Rect plate = layout::PlayerPlate;
+    const Rect plate = layout::PlayerPlate;
     const bool active = handsSorted_ && game_.IsHumanTurn();
     PanelStyle panel;
     panel.radius = 20.0f;
@@ -461,7 +461,7 @@ void GameScene::DrawPlayerHand(graphics::RenderContext& context) {
     const float glowPulse = 0.72f + 0.28f * std::sin(time_ * 5.0f);
     for (int i = 0; i < static_cast<int>(hand.size()); ++i) {
         const rules::Card& card = hand[static_cast<std::size_t>(i)];
-        core::Rect rect = CardRect(i);
+        Rect rect = CardRect(i);
         CardLook look;
         if (!handsSorted_) {
             if (DealFlight(rect, look.rotation, i, dealElapsed_) <= 0.0f) {
@@ -474,7 +474,7 @@ void GameScene::DrawPlayerHand(graphics::RenderContext& context) {
             const rules::Cards& oldHand = handsBeforeSort_[rules::PlayerIndex(rules::PlayerId::Player)];
             const int oldIndex = FindCardIndex(oldHand, card);
             if (oldIndex >= 0) {
-                const core::Rect from = CardRectFor(oldIndex, static_cast<int>(oldHand.size()));
+                const Rect from = CardRectFor(oldIndex, static_cast<int>(oldHand.size()));
                 const float t = EaseInOutSine(1.0f - sortAnimation_);
                 rect.x = Lerp(from.x, rect.x, t);
                 rect.y = Lerp(from.y, rect.y, t) - std::sin(t * Pi) * 16.0f;
@@ -510,7 +510,7 @@ void GameScene::DrawPlayedCards(graphics::RenderContext& context) {
     const float step = VisibleStepForWidth(cardW);
     const float totalW = CardRowWidth(static_cast<int>(cards.size()), cardW);
     const float left = 640.0f - totalW * 0.5f;
-    core::Point source = PlayerPlaySource;
+    Point source = PlayerPlaySource;
     float sourceRotation = 0.0f;
     if (lastAnimatedPlayer_ != rules::PlayerId::Player) {
         source = layout::AvatarCenter(lastAnimatedPlayer_);
@@ -518,13 +518,13 @@ void GameScene::DrawPlayedCards(graphics::RenderContext& context) {
     }
     const float progress = 1.0f - playAnimation_;
     for (std::size_t i = 0; i < cards.size(); ++i) {
-        const core::Rect finalRect{left + static_cast<float>(i) * step, PlayedCardTop, cardW, cardH};
-        core::Rect rect = finalRect;
+        const Rect finalRect{left + static_cast<float>(i) * step, PlayedCardTop, cardW, cardH};
+        Rect rect = finalRect;
         CardLook look;
         if (playAnimation_ > 0.0f) {
             const float t = Clamp01((progress - static_cast<float>(i) * 0.012f) / 0.8f);
             const float e = EaseOutCubic(t);
-            const float scale = Lerp(0.5f, 1.0f, EaseOutBack(t, 1.3f));
+            const float scale = Lerp(0.5f, 1.0f, EaseOutBackWith(t, 1.3f));
             const float cx = Lerp(source.x, finalRect.x + cardW * 0.5f, e);
             const float cy = Lerp(source.y, finalRect.y + cardH * 0.5f, e);
             rect.width = cardW * scale;
@@ -552,7 +552,7 @@ void GameScene::DrawPlayedCards(graphics::RenderContext& context) {
 }
 
 void GameScene::DrawPassChips(graphics::RenderContext& context) {
-    constexpr core::Point anchors[3] = {{640.0f, 504.0f}, {300.0f, 232.0f}, {980.0f, 232.0f}};
+    constexpr Point anchors[3] = {{640.0f, 504.0f}, {300.0f, 232.0f}, {980.0f, 232.0f}};
     ChipStyle chip;
     chip.fontSize = 17.0f;
     chip.height = 38.0f;
@@ -568,7 +568,7 @@ void GameScene::DrawPassChips(graphics::RenderContext& context) {
         const float age = PassChipSeconds - timer;
         const float alpha = Clamp01(age * 6.0f) * Clamp01(timer * 3.0f);
         context.PushOpacity(alpha);
-        const core::Point anchor{anchors[i].x, anchors[i].y - EaseOutCubic(Clamp01(age * 3.0f)) * 10.0f};
+        const Point anchor{anchors[i].x, anchors[i].y - EaseOutCubic(Clamp01(age * 3.0f)) * 10.0f};
         context.DrawShadow(ChipRect(context, anchor, Anchor::Center, "不要", chip), 8.0f, {0.0f, 0.0f, 0.0f, 0.5f});
         DrawChip(context, anchor, Anchor::Center, "不要", chip);
         context.PopOpacity();
@@ -587,7 +587,7 @@ void GameScene::DrawToast(graphics::RenderContext& context) {
     chip.padX = 20.0f;
     chip.fill = WithAlpha(theme::Ink, 0.9f);
     chip.stroke = WithAlpha(theme::Gold, 0.4f);
-    const core::Point anchor{640.0f, 446.0f + (1.0f - EaseOutCubic(Clamp01(toastAge_ * 4.0f))) * 8.0f};
+    const Point anchor{640.0f, 446.0f + (1.0f - EaseOutCubic(Clamp01(toastAge_ * 4.0f))) * 8.0f};
     DrawChip(context, anchor, Anchor::Center, toastText_, chip);
     context.PopOpacity();
 }
@@ -613,8 +613,8 @@ void GameScene::DrawBombEffect(graphics::RenderContext& context) {
     }
     const float p = 1.0f - bombAnimation_;
     const float fade = bombAnimation_;
-    const core::Point center{640.0f, 290.0f};
-    context.FillRect({0.0f, 0.0f, core::LogicalWidth, core::LogicalHeight}, context.Radial(center, 820.0f, 600.0f,
+    const Point center{640.0f, 290.0f};
+    context.FillRect({0.0f, 0.0f, LogicalWidth, LogicalHeight}, context.Radial(center, 820.0f, 600.0f,
         {{0.0f, Rgb(0xFFD58A, 0.5f * fade * fade * fade)}, {0.45f, Rgb(0xC23B2E, 0.18f * fade * fade)}, {1.0f, Rgb(0xC23B2E, 0.0f)}}));
 
     const float ring = 60.0f + 640.0f * EaseOutCubic(p);
@@ -622,7 +622,7 @@ void GameScene::DrawBombEffect(graphics::RenderContext& context) {
     const float ring2 = 40.0f + 480.0f * EaseOutCubic(Clamp01(p * 1.25f - 0.1f));
     context.StrokeEllipse({center.x - ring2, center.y - ring2 * 0.62f, ring2 * 2.0f, ring2 * 1.24f}, WithAlpha(theme::CinnabarLight, fade * 0.8f), 1.0f + 4.0f * fade);
 
-    const float stamp = EaseOutBack(Clamp01(p / 0.22f), 1.6f);
+    const float stamp = EaseOutBackWith(Clamp01(p / 0.22f), 1.6f);
     const float sealAlpha = Clamp01(p * 10.0f) * Clamp01((1.0f - p) / 0.35f);
     context.PushOpacity(sealAlpha);
     context.PushScale(Lerp(2.3f, 1.0f, stamp), center);
@@ -772,31 +772,31 @@ bool GameScene::InteractionReady() const {
 int GameScene::HitPlayerCard(float x, float y) const {
     const auto& hand = game_.Players()[0].hand;
     for (int i = static_cast<int>(hand.size()) - 1; i >= 0; --i) {
-        core::Rect rect = CardRect(i);
+        Rect rect = CardRect(i);
         if (game_.SelectedIndices().contains(i)) {
             rect.y -= layout::SelectedLift;
         }
-        if (rect.Contains(x, y)) {
+        if (Rect_Contains(&rect, x, y)) {
             return i;
         }
     }
     return -1;
 }
 
-core::Rect GameScene::CardRect(int index) const {
+Rect GameScene::CardRect(int index) const {
     const auto& hand = game_.Players()[0].hand;
     return CardRectFor(index, static_cast<int>(hand.size()));
 }
 
-core::Rect GameScene::CardRectFor(int index, int count) const {
+Rect GameScene::CardRectFor(int index, int count) const {
     const float step = VisibleStepForWidth(PlayerCardWidth);
     const float totalW = CardRowWidth(count, PlayerCardWidth);
     const float startX = 640.0f - totalW * 0.5f;
     return {startX + static_cast<float>(index) * step, layout::HandBottom - PlayerCardHeight, PlayerCardWidth, PlayerCardHeight};
 }
 
-core::Rect GameScene::AiCardRectFor(rules::PlayerId player, int index, int count) const {
-    const core::Rect info = layout::AiInfoArea(player);
+Rect GameScene::AiCardRectFor(rules::PlayerId player, int index, int count) const {
+    const Rect info = layout::AiInfoArea(player);
     const float cardH = layout::AiCardHeight;
     const float cardW = cardH / 1.4f;
     const float step = (info.width - cardW) / static_cast<float>(FullHandCardCount - 1);

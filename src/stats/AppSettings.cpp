@@ -1,6 +1,6 @@
 #include "stats/AppSettings.h"
 
-#include "core/WinFile.h"
+#include "core/CppCompat.h"
 
 #include <cJSON.h>
 

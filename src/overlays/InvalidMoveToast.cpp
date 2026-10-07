@@ -13,7 +13,7 @@ void InvalidMoveToast::Update(float dt) {
 }
 
 void InvalidMoveToast::Render(graphics::RenderContext& context) {
-    const float in = EaseOutBack(Progress(elapsed_, 0.0f, 0.3f), 1.4f);
+    const float in = EaseOutBackWith(Progress(elapsed_, 0.0f, 0.3f), 1.4f);
     const float alpha = Clamp01(elapsed_ * 8.0f) * Clamp01((2.0f - elapsed_) / 0.4f);
     context.PushOpacity(alpha);
     context.PushTranslation(0.0f, (1.0f - in) * -18.0f);
@@ -23,7 +23,7 @@ void InvalidMoveToast::Render(graphics::RenderContext& context) {
     chip.padX = 24.0f;
     chip.fill = WithAlpha(theme::CinnabarDeep, 0.94f);
     chip.stroke = WithAlpha(theme::CinnabarLight, 0.75f);
-    core::Rect rect = ChipRect(context, {640.0f, 118.0f}, Anchor::Center, text_, chip);
+    Rect rect = ChipRect(context, {640.0f, 118.0f}, Anchor::Center, text_, chip);
     rect.x -= 14.0f;
     rect.width += 28.0f;
     context.DrawShadow({rect.x + 4.0f, rect.y + 6.0f, rect.width - 8.0f, rect.height}, 10.0f, {0.0f, 0.0f, 0.0f, 0.55f});

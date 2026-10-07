@@ -16,7 +16,7 @@ public:
     void SetEnabled(bool enabled);
     bool Enabled() const { return enabled_; }
     // Caret in logical coordinates; moves the composition and candidate windows.
-    void SetCaret(const core::Rect& caret, const core::ViewTransform& view);
+    void SetCaret(const Rect& caret, const ViewTransform& view);
 
     bool ReadComposition(std::wstring& text, int& cursor) const;
     bool ReadResult(std::wstring& text) const;

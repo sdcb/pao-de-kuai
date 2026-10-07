@@ -74,9 +74,9 @@ bool App::WantsTextInput() const {
 void App::SyncIme() {
     const bool wants = WantsTextInput();
     ime_.SetEnabled(wants);
-    core::Rect caret;
+    Rect caret;
     if (wants && TopOverlay()->TextCaretRect(caret)) {
-        ime_.SetCaret(caret, renderContext_.ViewTransform());
+        ime_.SetCaret(caret, renderContext_.View());
     }
 }
 
@@ -137,7 +137,7 @@ void App::Render() {
     }
     if (sceneFade_ > 0.0f) {
         const float t = sceneFade_ * sceneFade_ * (3.0f - 2.0f * sceneFade_);
-        renderContext_.FillRect({0.0f, 0.0f, core::LogicalWidth, core::LogicalHeight}, D2D1::ColorF(0.012f, 0.047f, 0.035f, t));
+        renderContext_.FillRect({0.0f, 0.0f, LogicalWidth, LogicalHeight}, D2D1::ColorF(0.012f, 0.047f, 0.035f, t));
     }
     if (!renderContext_.EndFrame()) {
         ReleaseGameResources();

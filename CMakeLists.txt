@@ -157,11 +157,13 @@ add_library(doctest::doctest ALIAS doctest)
 target_include_directories(doctest SYSTEM INTERFACE "${PDK_EXTERNAL_DIR}/doctest")
 
 # src/ is pure C.  Every entry below is .c; the C++ remnants live in tests/.
+# Files that are not converted yet keep their .cpp name and are moved here as
+# each stage lands (see docs/c-port-conventions.md).
 set(PDK_CORE_SOURCES
     src/core/Str.c
-    src/core/StringUtil.cpp
-    src/core/Tween.cpp
-    src/core/WinFile.cpp
+    src/core/Timer.c
+    src/core/Tween.c
+    src/core/WinFile.c
     src/rules/Card.cpp
     src/rules/Deck.cpp
     src/rules/HandPattern.cpp

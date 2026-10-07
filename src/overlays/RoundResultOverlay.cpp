@@ -2,7 +2,7 @@
 
 #include "app/App.h"
 #include "audio/SoundIds.h"
-#include "core/StringUtil.h"
+#include "core/CppCompat.h"
 
 #include <array>
 #include <cmath>
@@ -12,7 +12,7 @@ namespace {
 
 using namespace ui;
 
-constexpr core::Rect Panel{330.0f, 128.0f, 620.0f, 470.0f};
+constexpr Rect Panel{330.0f, 128.0f, 620.0f, 470.0f};
 constexpr float TableLeft = 384.0f;
 constexpr float TableRight = 896.0f;
 constexpr float HeaderY = 322.0f;
@@ -48,7 +48,7 @@ void RoundResultOverlay::Render(graphics::RenderContext& context) {
         DrawRadialGlow(context, {640.0f, 150.0f}, 190.0f, WithAlpha(theme::Gold, 0.16f));
     }
 
-    const float stamp = EaseOutBack(Progress(elapsed_, 0.12f, 0.35f), 1.8f);
+    const float stamp = EaseOutBackWith(Progress(elapsed_, 0.12f, 0.35f), 1.8f);
     context.PushOpacity(Clamp01(Progress(elapsed_, 0.12f, 0.12f)));
     context.PushScale(Lerp(1.9f, 1.0f, stamp), {640.0f, 150.0f});
     DrawSeal(context, {640.0f, 150.0f}, 88.0f, win ? "胜" : "负", win ? theme::Cinnabar : Rgb(0x4A5A54), win ? -6.0f : 5.0f, 58.0f);
@@ -97,7 +97,7 @@ void RoundResultOverlay::Render(graphics::RenderContext& context) {
         chip.stroke = WithAlpha(theme::CinnabarLight, 0.7f);
         chip.text = theme::Ivory;
         float total = -10.0f;
-        std::vector<core::Rect> rects;
+        std::vector<Rect> rects;
         for (const std::string& badge : badges) {
             rects.push_back(ChipRect(context, {0.0f, 292.0f}, Anchor::Left, badge, chip));
             total += rects.back().width + 10.0f;

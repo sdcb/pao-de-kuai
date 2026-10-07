@@ -131,7 +131,8 @@ int main(int argc, char** argv) {
         return result;
     }
 
-    pdk::core::FrameTimer timer;
+    FrameTimer timer;
+    FrameTimer_Init(&timer);
     MSG msg{};
     // Toasts and talk bubbles expire after 2-3 s, so capture those overlays early.
     const bool transient = args.overlay == "invalid" || args.overlay == "talk";
@@ -145,7 +146,7 @@ int main(int argc, char** argv) {
             DispatchMessageW(&msg);
         }
         app.Resize(1280, 720);
-        app.Update(timer.Tick());
+        app.Update(FrameTimer_Tick(&timer));
         app.Render();
         Sleep(16);
     }

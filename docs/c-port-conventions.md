@@ -198,3 +198,142 @@ cleanup:
 - 不引入 `<filesystem>`、`<fstream>`、`<sstream>`、`fmt`、`<random>`。
 - 文件和目录操作走 `src/core/WinFile.*`；数字拼字符串走 `core::AppendNumber` / `Str_AppendNumber`。
 - 不新增第三方依赖。`external/` 只有 `cjson` 与 `doctest`（VC-LTL 已删除）。
+
+---
+
+## 附录 A：rules / game / stats 的目标 API（下一步照这个写，别自己另发明一套）
+
+### A.1 `rules/Card.h`
+
+```c
+typedef enum Suit { SUIT_SPADES, SUIT_HEARTS, SUIT_DIAMONDS, SUIT_CLUBS } Suit;
+typedef enum Rank {
+    RANK_THREE = 3, RANK_FOUR, RANK_FIVE, RANK_SIX, RANK_SEVEN, RANK_EIGHT,
+    RANK_NINE, RANK_TEN, RANK_JACK, RANK_QUEEN, RANK_KING, RANK_ACE, RANK_TWO = 15
+} Rank;
+
+typedef struct Card { Rank rank; Suit suit; } Card;
+
+/* Replaces `std::vector<Card>` / `rules::Cards`.  Fixed capacity: the deck is
+ * 48 cards and the largest hand is 16, so nothing in this project needs more.
+ * Zero heap traffic and freely copyable. */
+enum { CARDS_MAX = 48 };
+typedef struct Cards { Card items[CARDS_MAX]; int count; } Cards;
+
+void  Cards_Clear(Cards *c);
+bool  Cards_Push(Cards *c, Card card);          /* false when full */
+bool  Cards_Remove(Cards *c, Card card);        /* removes first match */
+void  Cards_RemoveAt(Cards *c, int index);
+bool  Cards_Contains(const Cards *c, Card card);
+int   Cards_IndexOf(const Cards *c, Card card);
+void  Cards_Append(Cards *dst, const Cards *src);
+int   Cards_Compare(const Cards *a, const Cards *b); /* was operator<=> (rank, then suit) */
+
+int   RankValue(Rank rank);
+int   SortValue(Card card);
+bool  IsSpadeThree(Card card);
+/* The old std::string returns become caller-owned Str (free with Str_Free). */
+void  RankName(Str *out, Rank rank);
+void  SuitName(Str *out, Suit suit);
+void  Card_ToString(Str *out, Card card);
+void  Cards_ToString(Str *out, const Cards *cards);
+void  SortByGameOrder(Cards *cards);
+```
+
+`enum class` 的具名限定用**正则机械替换**（全仓库）：
+`rules::Rank::X` → `RANK_X`、`rules::Suit::X` → `SUIT_X`、
+`rules::PatternType::X` → `PATTERN_X`、`rules::PlayerId::X` → `PLAYER_X`
+（`Player`→`PLAYER_HUMAN`、`Ai1`→`PLAYER_AI1`、`Ai2`→`PLAYER_AI2`）。
+约 1,276 处，替换后逐个文件编译核对，不要手工改。
+
+### A.2 `rules/HandPattern.h`、`MoveValidator.h`、`Scoring.h`、`RuleSet.h`
+
+- `PatternResult.reason` / `MoveValidation.reason` / `AiMoveChoice.reason`：定长
+  `char reason[128]`（计划 §2）。写入一律走带长度检查的 helper，禁止裸 `strcpy`。
+- `HandPattern.IsValid()` → `bool HandPattern_IsValid(const HandPattern *p);`
+- `PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal);`
+  （原来的默认参数改成显式传值，调用点补 `-1, false`）
+- `RoundScoreInput` / `RoundScoreResult` 里的 `std::array<int,3>` 直接写 `int x[3]`，
+  `std::vector<BombScoreEvent> bombs` → `BombScoreEvent bombs[8]; int bombCount;`
+  （单局最多 12 张炸弹牌，8 个事件足够；越界时丢弃并断言）。`SpringInfo.losers`
+  → `PlayerId losers[3]; int loserCount;`
+- `PlayerKey` → `const char *PlayerKey(PlayerId player);`（返回静态字符串，无分配）
+
+### A.3 `game/StrategyMetadata.h`
+
+四个工厂都返回字符串字面量，所以直接：
+
+```c
+typedef struct StrategyMetadata { const char *strategy; const char *strategyVersion; } StrategyMetadata;
+StrategyMetadata HumanStrategyMetadata(void);
+StrategyMetadata BasicStrategyMetadata(void);
+StrategyMetadata StrongStrategyMetadata(void);
+StrategyMetadata RulesStrategyMetadata(void);
+```
+
+### A.4 `game/Player.h`、`game/AiStrategy.h`
+
+```c
+typedef struct PlayerState {
+    char name[64];          /* settings 的玩家名上限远小于此 */
+    Cards hand;
+    bool hasPlayedCards;
+} PlayerState;
+bool PlayerState_Empty(const PlayerState *p);
+```
+
+`AiContext`：`std::optional` / `std::vector` 内嵌成员按计划 §2 替换：
+
+```c
+typedef struct PassObservation { HandPattern pattern; int remainingCards; } PassObservation;
+typedef struct OptionalPass { PassObservation value; bool has; } OptionalPass;
+typedef struct PassHistory { PassObservation items[48]; int count; } PassHistory;
+```
+
+`AiStrategy` 用 §4 的手写 vtable：
+
+```c
+typedef struct AiStrategy AiStrategy;
+typedef struct AiStrategyVtbl {
+    AiMoveChoice (*ChooseMove)(AiStrategy *self, const Cards *hand, const AiContext *context);
+    StrategyMetadata (*Metadata)(AiStrategy *self);
+} AiStrategyVtbl;
+struct AiStrategy { const AiStrategyVtbl *vtbl; void *user; };
+
+/* 每个实现一个返回自静态表的构造 + 一个 Destroy（无分配时可空） */
+AiStrategy *BasicAiStrategy_Create(void);
+AiStrategy *StrongAiStrategy_Create(void);
+void        AiStrategy_Destroy(AiStrategy *strategy);
+AiMoveChoice BasicAiStrategy_ChooseMove(const Cards *hand, const AiContext *context);
+void         BasicAiStrategy_Recommend(const Cards *hand, const AiContext *context,
+                                       int limit, AiMoveChoice *out, int *outCount);
+```
+
+`tests/rules_tests/TestWeakAiStrategy.h` 改成填一张 `static const AiStrategyVtbl` + `void *user`
+（对应 `GameState_SetLocalAiStrategy`），验证 vtable 注入点。
+
+### A.5 `game/GameState.h`
+
+- `class GameState` → `typedef struct GameState GameState;` + `GameState_Init/Destroy`
+  （内部固定缓冲，尽量零分配）；所有成员函数 → `GameState_Xxx(GameState *s, ...)`。
+- `std::optional<...> lastPattern` / `nextRoundLeader` → `{ T value; bool has; }` + `_Set/_Clear`。
+- `std::set<int>`（选中 / 推荐索引）→ `uint64_t` 位掩码（手牌 ≤16），涉及
+  `GameState.cpp:598/643/706/734` 附近的位运算改写。
+- 事件列表（`ClearEvents` / 事件队列）用定长环形缓冲，不要把 `std::vector` 换成无界 realloc。
+- 线程与取消：`LocalAiController` 用 `CreateThread`/`WaitForSingleObject`/`CloseHandle` +
+  `InterlockedIncrement` 的 generation；`StrongAiStrategy` 的 8 worker 同理；
+  `std::atomic<float> masterVolume` → `LONG` 存 bit pattern + `InterlockedExchange`。
+  句柄一定 `CloseHandle`，不引入 winpthreads。
+
+### A.6 `stats/*`
+
+`AppSettings` / `StatStore`：`std::string` → `Str`，`std::string` 列表 → `StrList`
+（`src/core/Str.h`，S1 引入）。JSON 字段名与 schema **一个字节都不许变**
+（`StatsTests` 是判据）。cJSON 已经是 C，改动应很小。
+
+### A.7 `tests/rules_tests/*`
+
+保持 C++ + doctest，只把 `rules::` / `game::` 调用改成上面的 C API：
+`TestHelpers.h` 提供 `C(rank, suit)`、`MakeCards({...})` 之类的薄夹具；
+`GameStateTests.cpp`（1361 行）改动量最大，先改夹具再机械替换。
+**这些测试是移植正确性的主要判据，禁止为了让测试通过而改产品语义。**

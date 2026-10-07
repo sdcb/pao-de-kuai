@@ -6,7 +6,7 @@
 namespace pdk::overlays {
 namespace {
 
-constexpr core::Rect Panel{400.0f, 226.0f, 480.0f, 256.0f};
+constexpr Rect Panel{400.0f, 226.0f, 480.0f, 256.0f};
 
 } // namespace
 

@@ -1,7 +1,7 @@
 #include "game/AiStrategy.h"
 #include "game/AiStrategyInternal.h"
 
-#include "core/StringUtil.h"
+#include "core/CppCompat.h"
 
 #include <algorithm>
 #include <cstdint>

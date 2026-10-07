@@ -42,9 +42,9 @@ private:
     void UpdateMidgameMock();
     bool InteractionReady() const;
     int HitPlayerCard(float x, float y) const;
-    core::Rect CardRect(int index) const;
-    core::Rect CardRectFor(int index, int count) const;
-    core::Rect AiCardRectFor(rules::PlayerId player, int index, int count) const;
+    Rect CardRect(int index) const;
+    Rect CardRectFor(int index, int count) const;
+    Rect AiCardRectFor(rules::PlayerId player, int index, int count) const;
     void LayoutActionButtons();
     void InitializeExternalAi();
     void ConsumeEvents();

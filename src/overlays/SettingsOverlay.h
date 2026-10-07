@@ -24,7 +24,7 @@ public:
     bool OnText(const std::wstring& text) override;
     bool WantsTextInput() const override { return nameField_.Focused(); }
     void OnImeComposition(const std::wstring& text, int cursor) override;
-    bool TextCaretRect(core::Rect& caret) const override;
+    bool TextCaretRect(Rect& caret) const override;
 
 private:
     void Save();

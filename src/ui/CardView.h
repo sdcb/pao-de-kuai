@@ -19,7 +19,7 @@ struct CardLook {
     float opacity{1.0f};
 };
 
-void DrawCardFace(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, const rules::Card& card, const core::Rect& rect, const CardLook& look = {});
-void DrawCardBack(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, const core::Rect& rect, const CardLook& look = {});
+void DrawCardFace(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, const rules::Card& card, const Rect& rect, const CardLook& look = {});
+void DrawCardBack(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, const Rect& rect, const CardLook& look = {});
 
 } // namespace pdk::ui

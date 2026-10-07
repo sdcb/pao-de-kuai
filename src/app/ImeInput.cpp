@@ -39,15 +39,15 @@ void ImeInput::SetEnabled(bool enabled) {
     lastCaret_ = {-1, -1, -1, -1};
 }
 
-void ImeInput::SetCaret(const core::Rect& caret, const core::ViewTransform& view) {
+void ImeInput::SetCaret(const Rect& caret, const ViewTransform& view) {
     if (!hwnd_ || !enabled_) {
         return;
     }
     const RECT pixel{
-        ui::RoundToInt(caret.x * view.scale + view.offsetX),
-        ui::RoundToInt(caret.y * view.scale + view.offsetY),
-        ui::RoundToInt((caret.x + caret.width) * view.scale + view.offsetX),
-        ui::RoundToInt((caret.y + caret.height) * view.scale + view.offsetY)
+        RoundToInt(caret.x * view.scale + view.offsetX),
+        RoundToInt(caret.y * view.scale + view.offsetY),
+        RoundToInt((caret.x + caret.width) * view.scale + view.offsetX),
+        RoundToInt((caret.y + caret.height) * view.scale + view.offsetY)
     };
     if (pixel.left == lastCaret_.left && pixel.top == lastCaret_.top && pixel.bottom == lastCaret_.bottom) {
         return;

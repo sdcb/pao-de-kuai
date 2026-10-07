@@ -10,15 +10,15 @@ namespace {
 constexpr D2D1_COLOR_F Black = {0.0f, 0.0f, 0.0f, 1.0f};
 constexpr D2D1_COLOR_F White = {1.0f, 1.0f, 1.0f, 1.0f};
 
-core::Point Center(const core::Rect& rect) {
+Point Center(const Rect& rect) {
     return {rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f};
 }
 
-core::Rect Offset(const core::Rect& rect, float dx, float dy) {
+Rect Offset(const Rect& rect, float dx, float dy) {
     return {rect.x + dx, rect.y + dy, rect.width, rect.height};
 }
 
-core::Rect Inset(const core::Rect& rect, float d) {
+Rect Inset(const Rect& rect, float d) {
     return {rect.x + d, rect.y + d, rect.width - d * 2.0f, rect.height - d * 2.0f};
 }
 
@@ -31,7 +31,7 @@ void DrawButtonLabel(graphics::RenderContext& context, const Button& button, D2D
     }
     const float iconSize = std::min(button.rect.height * 0.46f, 22.0f);
     if (button.text.empty()) {
-        const core::Point c = Center(button.rect);
+        const Point c = Center(button.rect);
         DrawIcon(context, button.icon, {c.x - iconSize * 0.5f, c.y - iconSize * 0.5f, iconSize, iconSize}, color);
         return;
     }
@@ -57,7 +57,7 @@ void Button::Draw(graphics::RenderContext& context) const {
         return;
     }
     const float h = enabled ? hoverT : 0.0f;
-    const core::Point center = Center(rect);
+    const Point center = Center(rect);
     const float radius = rect.height * 0.5f;
 
     context.PushOpacity((enabled ? 1.0f : 0.42f) * (visible ? std::max(visibleT, 0.02f) : visibleT));
@@ -128,11 +128,11 @@ bool Button::HitTest(float x, float y) const {
         return false;
     }
     if (style == ButtonStyle::Icon) {
-        const core::Point c = Center(rect);
+        const Point c = Center(rect);
         const float r = std::min(rect.width, rect.height) * 0.5f;
         return (x - c.x) * (x - c.x) + (y - c.y) * (y - c.y) <= r * r;
     }
-    return rect.Contains(x, y);
+    return Rect_Contains(&rect, x, y);
 }
 
 void Button::UpdateHover(float x, float y) {
@@ -167,7 +167,7 @@ void ButtonGroup::UpdateHover(std::vector<Button>& buttons, float x, float y) {
     }
 }
 
-void DrawPanel(graphics::RenderContext& context, const core::Rect& rect, const PanelStyle& style) {
+void DrawPanel(graphics::RenderContext& context, const Rect& rect, const PanelStyle& style) {
     if (style.shadow > 0.0f) {
         context.DrawShadow(Offset(Inset(rect, 6.0f), 0.0f, 12.0f), 18.0f, WithAlpha(Black, 0.55f * style.shadow));
     }
@@ -185,20 +185,20 @@ void DrawPanel(graphics::RenderContext& context, const core::Rect& rect, const P
     }
 }
 
-void DrawOrnamentCorners(graphics::RenderContext& context, const core::Rect& rect, D2D1_COLOR_F color, float size, float inset) {
+void DrawOrnamentCorners(graphics::RenderContext& context, const Rect& rect, D2D1_COLOR_F color, float size, float inset) {
     // A small 回-fret hook mirrored into each corner.
-    const std::array<core::Point, 3> outer{core::Point{0.0f, size}, core::Point{0.0f, 0.0f}, core::Point{size, 0.0f}};
+    const std::array<Point, 3> outer{Point{0.0f, size}, Point{0.0f, 0.0f}, Point{size, 0.0f}};
     const float s = size;
-    const std::array<core::Point, 4> hook{
-        core::Point{4.5f, s - 5.0f}, core::Point{4.5f, 4.5f}, core::Point{s - 5.0f, 4.5f}, core::Point{s - 5.0f, 9.0f}};
+    const std::array<Point, 4> hook{
+        Point{4.5f, s - 5.0f}, Point{4.5f, 4.5f}, Point{s - 5.0f, 4.5f}, Point{s - 5.0f, 9.0f}};
     const std::array<std::array<float, 4>, 4> corners{{
         {rect.x + inset, rect.y + inset, 1.0f, 1.0f},
         {rect.x + rect.width - inset, rect.y + inset, -1.0f, 1.0f},
         {rect.x + inset, rect.y + rect.height - inset, 1.0f, -1.0f},
         {rect.x + rect.width - inset, rect.y + rect.height - inset, -1.0f, -1.0f}}};
     for (const auto& corner : corners) {
-        std::array<core::Point, 3> a{};
-        std::array<core::Point, 4> b{};
+        std::array<Point, 3> a{};
+        std::array<Point, 4> b{};
         for (std::size_t i = 0; i < outer.size(); ++i) {
             a[i] = {corner[0] + outer[i].x * corner[2], corner[1] + outer[i].y * corner[3]};
         }
@@ -215,7 +215,7 @@ void DrawHairline(graphics::RenderContext& context, float x0, float x1, float y,
         {{0.0f, WithAlpha(theme::Gold, 0.0f)}, {0.5f, WithAlpha(theme::Gold, alpha)}, {1.0f, WithAlpha(theme::Gold, 0.0f)}}), 1.0f);
 }
 
-core::Rect ChipRect(graphics::RenderContext& context, core::Point anchor, Anchor align, const std::string& text, const ChipStyle& style) {
+Rect ChipRect(graphics::RenderContext& context, Point anchor, Anchor align, const std::string& text, const ChipStyle& style) {
     graphics::TextStyle textStyle = Text(style.fontSize, style.weight);
     textStyle.wrap = false;
     const float width = context.MeasureText(text, textStyle).width + style.padX * 2.0f;
@@ -228,7 +228,7 @@ core::Rect ChipRect(graphics::RenderContext& context, core::Point anchor, Anchor
     return {x, anchor.y - style.height * 0.5f, width, style.height};
 }
 
-void DrawChip(graphics::RenderContext& context, const core::Rect& rect, const std::string& text, const ChipStyle& style) {
+void DrawChip(graphics::RenderContext& context, const Rect& rect, const std::string& text, const ChipStyle& style) {
     const float radius = rect.height * 0.5f;
     context.FillRoundedRect(rect, radius, style.fill);
     if (style.stroke.a > 0.0f) {
@@ -239,8 +239,8 @@ void DrawChip(graphics::RenderContext& context, const core::Rect& rect, const st
     context.DrawTextUtf8(text, rect, textStyle, style.text);
 }
 
-core::Rect DrawChip(graphics::RenderContext& context, core::Point anchor, Anchor align, const std::string& text, const ChipStyle& style) {
-    const core::Rect rect = ChipRect(context, anchor, align, text, style);
+Rect DrawChip(graphics::RenderContext& context, Point anchor, Anchor align, const std::string& text, const ChipStyle& style) {
+    const Rect rect = ChipRect(context, anchor, align, text, style);
     DrawChip(context, rect, text, style);
     return rect;
 }
@@ -264,7 +264,7 @@ std::string AvatarLabel(const std::string& name) {
     return name.substr(0, std::min(length, name.size()));
 }
 
-void DrawRadialGlow(graphics::RenderContext& context, core::Point center, float radius, D2D1_COLOR_F color, float ring) {
+void DrawRadialGlow(graphics::RenderContext& context, Point center, float radius, D2D1_COLOR_F color, float ring) {
     // Keep the alpha out of the gradient stops and drive it with opacity:
     // animated alphas would otherwise mint a fresh cached brush every frame.
     const D2D1_COLOR_F solid = {color.r, color.g, color.b, 1.0f};
@@ -277,8 +277,8 @@ void DrawRadialGlow(graphics::RenderContext& context, core::Point center, float 
     context.PopOpacity();
 }
 
-void DrawAvatar(graphics::RenderContext& context, const core::Rect& rect, const std::string& label, bool active, float time) {
-    const core::Point c = Center(rect);
+void DrawAvatar(graphics::RenderContext& context, const Rect& rect, const std::string& label, bool active, float time) {
+    const Point c = Center(rect);
     const float r = rect.width * 0.5f;
     if (active) {
         const float pulse = 0.5f + 0.5f * std::sin(time * 4.2f);
@@ -295,8 +295,8 @@ void DrawAvatar(graphics::RenderContext& context, const core::Rect& rect, const 
     context.DrawTextUtf8(label, rect, style, theme::GoldLight);
 }
 
-void DrawSeal(graphics::RenderContext& context, core::Point center, float size, const std::string& text, D2D1_COLOR_F color, float rotation, float fontSize) {
-    const core::Rect rect{center.x - size * 0.5f, center.y - size * 0.5f, size, size};
+void DrawSeal(graphics::RenderContext& context, Point center, float size, const std::string& text, D2D1_COLOR_F color, float rotation, float fontSize) {
+    const Rect rect{center.x - size * 0.5f, center.y - size * 0.5f, size, size};
     const float radius = size * 0.1f;
     context.PushRotation(rotation, center);
     context.DrawShadow(Inset(rect, size * 0.08f), size * 0.08f, WithAlpha(Black, 0.35f));
@@ -314,11 +314,11 @@ void DrawSeal(graphics::RenderContext& context, core::Point center, float size, 
     context.PopTransform();
 }
 
-void DrawProgressBar(graphics::RenderContext& context, const core::Rect& rect, float value, float time) {
+void DrawProgressBar(graphics::RenderContext& context, const Rect& rect, float value, float time) {
     const float radius = rect.height * 0.5f;
     context.FillRoundedRect(rect, radius, WithAlpha(theme::Ink, 0.9f));
     context.StrokeRoundedRect(rect, radius, WithAlpha(theme::Gold, 0.22f), 1.0f);
-    const core::Rect fill{rect.x, rect.y, std::max(rect.height, rect.width * Clamp01(value)), rect.height};
+    const Rect fill{rect.x, rect.y, std::max(rect.height, rect.width * Clamp01(value)), rect.height};
     context.FillRoundedRect(fill, radius, context.Linear({fill.x, fill.y}, {fill.x + fill.width, fill.y},
         {{0.0f, theme::GoldDeep}, {1.0f, theme::GoldLight}}));
     const float sweep = std::fmod(time * 0.9f, 1.4f) - 0.2f;
@@ -330,13 +330,13 @@ void DrawProgressBar(graphics::RenderContext& context, const core::Rect& rect, f
 }
 
 void DrawVignette(graphics::RenderContext& context, float strength) {
-    context.FillRect({0.0f, 0.0f, core::LogicalWidth, core::LogicalHeight},
+    context.FillRect({0.0f, 0.0f, LogicalWidth, LogicalHeight},
         context.Radial({640.0f, 360.0f}, 860.0f, 560.0f,
             {{0.0f, WithAlpha(theme::RoomDeep, 0.0f)}, {0.62f, WithAlpha(theme::RoomDeep, 0.0f)}, {1.0f, WithAlpha(theme::RoomDeep, strength)}}));
 }
 
-void DrawRoomBackground(graphics::RenderContext& context, core::Point focus) {
-    const core::Rect full{0.0f, 0.0f, core::LogicalWidth, core::LogicalHeight};
+void DrawRoomBackground(graphics::RenderContext& context, Point focus) {
+    const Rect full{0.0f, 0.0f, LogicalWidth, LogicalHeight};
     context.FillRect(full, context.Radial(focus, 900.0f, 720.0f,
         {{0.0f, theme::Felt}, {0.5f, theme::FeltDeep}, {1.0f, theme::Room}}));
     context.PushOpacity(0.28f);
@@ -347,17 +347,17 @@ void DrawRoomBackground(graphics::RenderContext& context, core::Point focus) {
 
 void DrawBackdrop(graphics::RenderContext& context, float alpha) {
     context.PushOpacity(alpha);
-    context.FillRect({0.0f, 0.0f, core::LogicalWidth, core::LogicalHeight}, WithAlpha(theme::RoomDeep, 0.58f));
+    context.FillRect({0.0f, 0.0f, LogicalWidth, LogicalHeight}, WithAlpha(theme::RoomDeep, 0.58f));
     DrawVignette(context, 0.7f);
     context.PopOpacity();
 }
 
-void DrawDialogBody(graphics::RenderContext& context, const core::Rect& panel, Icon icon, D2D1_COLOR_F accent,
+void DrawDialogBody(graphics::RenderContext& context, const Rect& panel, Icon icon, D2D1_COLOR_F accent,
     const std::string& title, const std::string& subtitle) {
     DrawPanel(context, panel);
-    const core::Point badge{panel.x + panel.width * 0.5f, panel.y + 52.0f};
+    const Point badge{panel.x + panel.width * 0.5f, panel.y + 52.0f};
     DrawRadialGlow(context, badge, 44.0f, WithAlpha(accent, 0.22f));
-    const core::Rect circle{badge.x - 24.0f, badge.y - 24.0f, 48.0f, 48.0f};
+    const Rect circle{badge.x - 24.0f, badge.y - 24.0f, 48.0f, 48.0f};
     context.FillEllipse(circle, WithAlpha(theme::Ink, 0.9f));
     context.StrokeEllipse(circle, WithAlpha(accent, 0.85f), 1.4f);
     DrawIcon(context, icon, {badge.x - 12.0f, badge.y - 12.0f, 24.0f, 24.0f}, accent);
@@ -365,11 +365,11 @@ void DrawDialogBody(graphics::RenderContext& context, const core::Rect& panel, I
     context.DrawTextUtf8(subtitle, {panel.x + 30.0f, panel.y + 126.0f, panel.width - 60.0f, 24.0f}, Centered(Text(15.0f)), theme::Muted);
 }
 
-void BeginModal(graphics::RenderContext& context, const core::Rect& panel, float elapsed) {
+void BeginModal(graphics::RenderContext& context, const Rect& panel, float elapsed) {
     DrawBackdrop(context, EaseOutCubic(Progress(elapsed, 0.0f, 0.22f)));
     const float t = Progress(elapsed, 0.0f, 0.32f);
     context.PushOpacity(EaseOutCubic(Progress(elapsed, 0.0f, 0.2f)));
-    context.PushScale(Lerp(0.93f, 1.0f, EaseOutBack(t, 1.4f)), Center(panel));
+    context.PushScale(Lerp(0.93f, 1.0f, EaseOutBackWith(t, 1.4f)), Center(panel));
 }
 
 void EndModal(graphics::RenderContext& context) {

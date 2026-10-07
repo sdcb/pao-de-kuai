@@ -5,16 +5,16 @@
 namespace pdk::graphics {
 namespace {
 
-D2D1_RECT_F ToRectF(const core::Rect& rect) {
+D2D1_RECT_F ToRectF(const Rect& rect) {
     return D2D1::RectF(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
 }
 
-D2D1_ROUNDED_RECT ToRounded(const core::Rect& rect, float radius) {
+D2D1_ROUNDED_RECT ToRounded(const Rect& rect, float radius) {
     const float r = std::max(0.0f, std::min(radius, std::min(rect.width, rect.height) * 0.5f));
     return D2D1::RoundedRect(ToRectF(rect), r, r);
 }
 
-D2D1_ELLIPSE ToEllipse(const core::Rect& rect) {
+D2D1_ELLIPSE ToEllipse(const Rect& rect) {
     return D2D1::Ellipse(
         D2D1::Point2F(rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f),
         rect.width * 0.5f,
@@ -48,7 +48,7 @@ bool RenderContext::Initialize(HWND hwnd, bool offscreen) {
     GetClientRect(hwnd_, &rc);
     pixelWidth_ = std::max(1280, static_cast<int>(rc.right - rc.left));
     pixelHeight_ = std::max(720, static_cast<int>(rc.bottom - rc.top));
-    transform_ = core::ComputeViewTransform(pixelWidth_, pixelHeight_);
+    transform_ = ComputeViewTransform(pixelWidth_, pixelHeight_);
 
     if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, d2dFactory_.ReleaseAndGetAddressOf()))) {
         return false;
@@ -76,7 +76,7 @@ bool RenderContext::CreateTarget() {
     if (offscreenMode_) {
         pixelWidth_ = 1280;
         pixelHeight_ = 720;
-        transform_ = core::ComputeViewTransform(pixelWidth_, pixelHeight_);
+        transform_ = ComputeViewTransform(pixelWidth_, pixelHeight_);
         if (!wicFactory_ || FAILED(wicFactory_->CreateBitmap(
                 static_cast<UINT>(pixelWidth_), static_cast<UINT>(pixelHeight_), GUID_WICPixelFormat32bppPBGRA,
                 WICBitmapCacheOnLoad, offscreen_.ReleaseAndGetAddressOf()))) {
@@ -95,7 +95,7 @@ bool RenderContext::CreateTarget() {
         GetClientRect(hwnd_, &rc);
         pixelWidth_ = std::max(1280, static_cast<int>(rc.right - rc.left));
         pixelHeight_ = std::max(720, static_cast<int>(rc.bottom - rc.top));
-        transform_ = core::ComputeViewTransform(pixelWidth_, pixelHeight_);
+        transform_ = ComputeViewTransform(pixelWidth_, pixelHeight_);
 
         const D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
             D2D1_RENDER_TARGET_TYPE_DEFAULT,
@@ -143,7 +143,7 @@ void RenderContext::Resize(int pixelWidth, int pixelHeight) {
     }
     pixelWidth_ = std::max(1280, pixelWidth);
     pixelHeight_ = std::max(720, pixelHeight);
-    transform_ = core::ComputeViewTransform(pixelWidth_, pixelHeight_);
+    transform_ = ComputeViewTransform(pixelWidth_, pixelHeight_);
     if (hwndTarget_) {
         hwndTarget_->Resize(D2D1::SizeU(static_cast<UINT32>(pixelWidth_), static_cast<UINT32>(pixelHeight_)));
     }
@@ -201,11 +201,11 @@ void RenderContext::PushTranslation(float dx, float dy) {
     PushTransform(D2D1::Matrix3x2F::Translation(dx, dy));
 }
 
-void RenderContext::PushScale(float scale, core::Point center) {
+void RenderContext::PushScale(float scale, Point center) {
     PushTransform(D2D1::Matrix3x2F::Scale(scale, scale, D2D1::Point2F(center.x, center.y)));
 }
 
-void RenderContext::PushRotation(float degrees, core::Point center) {
+void RenderContext::PushRotation(float degrees, Point center) {
     PushTransform(D2D1::Matrix3x2F::Rotation(degrees, D2D1::Point2F(center.x, center.y)));
 }
 
@@ -228,7 +228,7 @@ void RenderContext::PopOpacity() {
     }
 }
 
-void RenderContext::PushClip(const core::Rect& rect) {
+void RenderContext::PushClip(const Rect& rect) {
     if (target_) {
         target_->PushAxisAlignedClip(ToRectF(rect), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     }
@@ -294,7 +294,7 @@ ID2D1GradientStopCollection* RenderContext::Stops(std::initializer_list<Gradient
     return raw;
 }
 
-ID2D1Brush* RenderContext::Linear(core::Point from, core::Point to, std::initializer_list<GradientStop> stops) {
+ID2D1Brush* RenderContext::Linear(Point from, Point to, std::initializer_list<GradientStop> stops) {
     if (!target_) {
         return nullptr;
     }
@@ -320,7 +320,7 @@ ID2D1Brush* RenderContext::Linear(core::Point from, core::Point to, std::initial
     return it->second.Get();
 }
 
-ID2D1Brush* RenderContext::Radial(core::Point center, float radiusX, float radiusY, std::initializer_list<GradientStop> stops) {
+ID2D1Brush* RenderContext::Radial(Point center, float radiusX, float radiusY, std::initializer_list<GradientStop> stops) {
     if (!target_) {
         return nullptr;
     }
@@ -356,67 +356,67 @@ ID2D1Brush* RenderContext::FeltBrush() {
     return brush;
 }
 
-void RenderContext::FillRect(const core::Rect& rect, D2D1_COLOR_F color) {
+void RenderContext::FillRect(const Rect& rect, D2D1_COLOR_F color) {
     FillRect(rect, Solid(color));
 }
 
-void RenderContext::FillRect(const core::Rect& rect, ID2D1Brush* brush) {
+void RenderContext::FillRect(const Rect& rect, ID2D1Brush* brush) {
     if (target_ && brush) {
         target_->FillRectangle(ToRectF(rect), brush);
     }
 }
 
-void RenderContext::StrokeRect(const core::Rect& rect, D2D1_COLOR_F color, float width) {
+void RenderContext::StrokeRect(const Rect& rect, D2D1_COLOR_F color, float width) {
     if (ID2D1Brush* brush = Solid(color)) {
         target_->DrawRectangle(ToRectF(rect), brush, width);
     }
 }
 
-void RenderContext::FillRoundedRect(const core::Rect& rect, float radius, D2D1_COLOR_F color) {
+void RenderContext::FillRoundedRect(const Rect& rect, float radius, D2D1_COLOR_F color) {
     FillRoundedRect(rect, radius, Solid(color));
 }
 
-void RenderContext::FillRoundedRect(const core::Rect& rect, float radius, ID2D1Brush* brush) {
+void RenderContext::FillRoundedRect(const Rect& rect, float radius, ID2D1Brush* brush) {
     if (target_ && brush) {
         target_->FillRoundedRectangle(ToRounded(rect, radius), brush);
     }
 }
 
-void RenderContext::StrokeRoundedRect(const core::Rect& rect, float radius, D2D1_COLOR_F color, float width) {
+void RenderContext::StrokeRoundedRect(const Rect& rect, float radius, D2D1_COLOR_F color, float width) {
     StrokeRoundedRect(rect, radius, Solid(color), width);
 }
 
-void RenderContext::StrokeRoundedRect(const core::Rect& rect, float radius, ID2D1Brush* brush, float width) {
+void RenderContext::StrokeRoundedRect(const Rect& rect, float radius, ID2D1Brush* brush, float width) {
     if (target_ && brush) {
         target_->DrawRoundedRectangle(ToRounded(rect, radius), brush, width);
     }
 }
 
-void RenderContext::FillEllipse(const core::Rect& rect, D2D1_COLOR_F color) {
+void RenderContext::FillEllipse(const Rect& rect, D2D1_COLOR_F color) {
     FillEllipse(rect, Solid(color));
 }
 
-void RenderContext::FillEllipse(const core::Rect& rect, ID2D1Brush* brush) {
+void RenderContext::FillEllipse(const Rect& rect, ID2D1Brush* brush) {
     if (target_ && brush) {
         target_->FillEllipse(ToEllipse(rect), brush);
     }
 }
 
-void RenderContext::StrokeEllipse(const core::Rect& rect, D2D1_COLOR_F color, float width) {
+void RenderContext::StrokeEllipse(const Rect& rect, D2D1_COLOR_F color, float width) {
     StrokeEllipse(rect, Solid(color), width);
 }
 
-void RenderContext::StrokeEllipse(const core::Rect& rect, ID2D1Brush* brush, float width) {
+void RenderContext::StrokeEllipse(const Rect& rect, ID2D1Brush* brush, float width) {
     if (target_ && brush) {
         target_->DrawEllipse(ToEllipse(rect), brush, width);
     }
 }
 
-void RenderContext::DrawLine(core::Point from, core::Point to, D2D1_COLOR_F color, float width) {
+void RenderContext::DrawLine(Point from, Point to, D2D1_COLOR_F color, float width) {
     DrawLine(from, to, Solid(color), width);
 }
 
-void RenderContext::DrawLine(core::Point from, core::Point to, ID2D1Brush* brush, float width) {
+void RenderContext::DrawLine(Point from, Point to, ID2D1Brush* brush, float width) {
     if (target_ && brush) {
         target_->DrawLine(D2D1::Point2F(from.x, from.y), D2D1::Point2F(to.x, to.y), brush, width, RoundStroke());
     }
@@ -431,7 +431,7 @@ ID2D1StrokeStyle* RenderContext::RoundStroke() {
     return roundStroke_.Get();
 }
 
-void RenderContext::FillPolygon(std::span<const core::Point> points, D2D1_COLOR_F color) {
+void RenderContext::FillPolygon(std::span<const Point> points, D2D1_COLOR_F color) {
     if (!target_ || !d2dFactory_ || points.size() < 3) {
         return;
     }
@@ -451,7 +451,7 @@ void RenderContext::FillPolygon(std::span<const core::Point> points, D2D1_COLOR_
     }
 }
 
-void RenderContext::StrokePolyline(std::span<const core::Point> points, D2D1_COLOR_F color, float width, bool closed) {
+void RenderContext::StrokePolyline(std::span<const Point> points, D2D1_COLOR_F color, float width, bool closed) {
     if (!target_ || !d2dFactory_ || points.size() < 2) {
         return;
     }
@@ -471,7 +471,7 @@ void RenderContext::StrokePolyline(std::span<const core::Point> points, D2D1_COL
     }
 }
 
-void RenderContext::DrawShadow(const core::Rect& rect, float blur, D2D1_COLOR_F color) {
+void RenderContext::DrawShadow(const Rect& rect, float blur, D2D1_COLOR_F color) {
     if (!target_ || blur <= 0.0f || opacity_ <= 0.0f) {
         return;
     }
@@ -485,7 +485,7 @@ void RenderContext::DrawShadow(const core::Rect& rect, float blur, D2D1_COLOR_F 
     constexpr float corner = size * 0.5f - 4.0f;
     const float k = blur / ProceduralTextures::ShadowSigma;
     const float pad = static_cast<float>(ProceduralTextures::ShadowPad) * k;
-    const core::Rect outer{rect.x - pad, rect.y - pad, rect.width + pad * 2.0f, rect.height + pad * 2.0f};
+    const Rect outer{rect.x - pad, rect.y - pad, rect.width + pad * 2.0f, rect.height + pad * 2.0f};
     const float cornerW = std::min(corner * k, outer.width * 0.5f);
     const float cornerH = std::min(corner * k, outer.height * 0.5f);
     const float dx[4] = {outer.x, outer.x + cornerW, outer.x + outer.width - cornerW, outer.x + outer.width};
@@ -551,11 +551,11 @@ RenderContext::TextFormatEntry* RenderContext::Format(const TextStyle& style) {
     return &it->second;
 }
 
-void RenderContext::DrawTextUtf8(const std::string& text, const core::Rect& rect, const TextStyle& style, D2D1_COLOR_F color) {
+void RenderContext::DrawTextUtf8(const std::string& text, const Rect& rect, const TextStyle& style, D2D1_COLOR_F color) {
     DrawTextUtf8(text, rect, style, Solid(color));
 }
 
-void RenderContext::DrawTextUtf8(const std::string& text, const core::Rect& rect, const TextStyle& style, ID2D1Brush* brush) {
+void RenderContext::DrawTextUtf8(const std::string& text, const Rect& rect, const TextStyle& style, ID2D1Brush* brush) {
     if (!target_ || !brush || text.empty()) {
         return;
     }
@@ -569,7 +569,7 @@ void RenderContext::DrawTextUtf8(const std::string& text, const core::Rect& rect
 
 void RenderContext::DrawTextUtf8(
     const std::string& text,
-    const core::Rect& rect,
+    const Rect& rect,
     float fontSize,
     D2D1_COLOR_F color,
     DWRITE_TEXT_ALIGNMENT align,
@@ -581,7 +581,7 @@ void RenderContext::DrawTextUtf8(
     DrawTextUtf8(text, rect, style, color);
 }
 
-core::Size RenderContext::MeasureText(const std::string& text, const TextStyle& style, float maxWidth) {
+Size RenderContext::MeasureText(const std::string& text, const TextStyle& style, float maxWidth) {
     TextFormatEntry* entry = Format(style);
     if (!entry || text.empty()) {
         return {};
@@ -608,7 +608,7 @@ ComPtr<IDWriteTextLayout> RenderContext::CreateTextLayout(const std::wstring& te
     return layout;
 }
 
-void RenderContext::DrawTextLayout(IDWriteTextLayout* layout, core::Point origin, D2D1_COLOR_F color) {
+void RenderContext::DrawTextLayout(IDWriteTextLayout* layout, Point origin, D2D1_COLOR_F color) {
     ID2D1Brush* brush = Solid(color);
     if (!target_ || !layout || !brush) {
         return;
@@ -616,7 +616,7 @@ void RenderContext::DrawTextLayout(IDWriteTextLayout* layout, core::Point origin
     target_->DrawTextLayout(D2D1::Point2F(origin.x, origin.y), layout, brush);
 }
 
-void RenderContext::DrawBitmap(ID2D1Bitmap* bitmap, const core::Rect& dest, const D2D1_RECT_U* source, float opacity) {
+void RenderContext::DrawBitmap(ID2D1Bitmap* bitmap, const Rect& dest, const D2D1_RECT_U* source, float opacity) {
     if (!target_ || !bitmap) {
         return;
     }
@@ -631,7 +631,7 @@ void RenderContext::DrawBitmap(ID2D1Bitmap* bitmap, const core::Rect& dest, cons
     target_->DrawBitmap(bitmap, ToRectF(dest), opacity * opacity_, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, nullptr);
 }
 
-void RenderContext::DrawBitmap(ID2D1Bitmap* bitmap, const core::Rect& dest, const D2D1_RECT_F& source, float opacity) {
+void RenderContext::DrawBitmap(ID2D1Bitmap* bitmap, const Rect& dest, const D2D1_RECT_F& source, float opacity) {
     if (!target_ || !bitmap) {
         return;
     }

@@ -15,7 +15,7 @@ namespace pdk::ui {
 // Single-line editor with caret, selection, clipboard and inline IME composition.
 class TextField {
 public:
-    core::Rect rect;
+    Rect rect;
     std::string placeholder;
     int maxChars{12};
     HWND clipboardOwner{};
@@ -27,7 +27,7 @@ public:
 
     void Update(float dt);
     void Draw(graphics::RenderContext& context);
-    void UpdateHover(float x, float y) { hover_ = rect.Contains(x, y); }
+    void UpdateHover(float x, float y) { hover_ = Rect_Contains(&rect, x, y); }
     // Focuses the field and places the caret; returns false when the click is outside.
     bool OnMouseDown(float x, float y, bool shift);
     void OnMouseMove(float x, float y);
@@ -35,7 +35,7 @@ public:
     bool OnKeyDown(const core::KeyEvent& key);
     void Insert(const std::wstring& text);
     void SetComposition(const std::wstring& text, int cursor);
-    core::Rect CaretRect() const { return caretRect_; }
+    Rect CaretRect() const { return caretRect_; }
 
 private:
     int HitIndex(float x, float y) const;
@@ -46,7 +46,7 @@ private:
     bool HasSelection() const { return caret_ != anchor_; }
     void MoveCaret(int index, bool extend);
     int CharCount(const std::wstring& text) const;
-    core::Point TextOrigin() const;
+    Point TextOrigin() const;
 
     std::wstring text_;
     std::wstring composition_;
@@ -62,11 +62,11 @@ private:
     bool layoutDirty_{true};
     graphics::ComPtr<IDWriteTextLayout> layout_;
     float lineHeight_{24.0f};
-    core::Rect caretRect_{};
+    Rect caretRect_{};
 };
 
 struct Slider {
-    core::Rect rect;
+    Rect rect;
     float value{0.0f};
     bool hover{false};
     bool dragging{false};
@@ -85,7 +85,7 @@ private:
 };
 
 struct Segmented {
-    core::Rect rect;
+    Rect rect;
     std::vector<std::string> options;
     int selected{0};
     int hover{-1};
@@ -102,7 +102,7 @@ private:
 };
 
 struct Toggle {
-    core::Rect rect;
+    Rect rect;
     bool on{false};
     bool hover{false};
     float t{0.0f};
@@ -110,7 +110,7 @@ struct Toggle {
 
     void Update(float dt);
     void Draw(graphics::RenderContext& context) const;
-    void UpdateHover(float x, float y) { hover = rect.Contains(x, y); }
+    void UpdateHover(float x, float y) { hover = Rect_Contains(&rect, x, y); }
     bool OnMouseDown(float x, float y);
 };
 

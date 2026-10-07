@@ -67,6 +67,26 @@ void WStr_AssignN(WStr *s, const wchar_t *text, int count);
 bool WStr_Equals(const WStr *s, const wchar_t *text);
 const wchar_t *WStr_CStr(const WStr *s);
 
+/* ---- string lists ---------------------------------------------------- */
+/*
+ * Replaces std::vector<std::string> for the places that need an unbounded
+ * number of names (the stat/ directory listing, for example).  Each entry owns
+ * its buffer; StrList_Free releases the list and every entry.
+ */
+typedef struct StrList {
+    char **items;
+    int count;
+    int cap;
+} StrList;
+
+void StrList_Init(StrList *list);
+void StrList_Free(StrList *list);
+void StrList_Clear(StrList *list);
+/* Copies the first `len` bytes of `text` (or the whole string when len < 0). */
+bool StrList_Push(StrList *list, const char *text, int len);
+/* Never returns NULL for a valid index; returns "" out of range. */
+const char *StrList_At(const StrList *list, int index);
+
 /* ---- conversions ----------------------------------------------------- */
 /*
  * Both return a heap buffer owned by the caller (free with free()), or NULL on

@@ -1,6 +1,6 @@
 #include "game/GameState.h"
 
-#include "core/StringUtil.h"
+#include "core/CppCompat.h"
 #include "stats/StatStore.h"
 
 #include <algorithm>

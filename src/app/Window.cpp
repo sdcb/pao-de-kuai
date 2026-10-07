@@ -52,7 +52,8 @@ bool Window::Create(App& app, const wchar_t* title, int width, int height) {
 }
 
 int Window::Run() {
-    core::FrameTimer timer;
+    FrameTimer timer;
+    FrameTimer_Init(&timer);
     MSG msg{};
     while (!app_->ShouldQuit()) {
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -62,7 +63,7 @@ int Window::Run() {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
-        const float dt = timer.Tick();
+        const float dt = FrameTimer_Tick(&timer);
         app_->Update(dt);
         app_->Render();
         Sleep(1);
@@ -152,7 +153,9 @@ void Window::ForwardMouse(UINT message, LPARAM lParam) {
     }
     const float x = static_cast<float>(GET_X_LPARAM(lParam));
     const float y = static_cast<float>(GET_Y_LPARAM(lParam));
-    const core::Point logical = core::ToLogical({x, y}, app_->RenderContext().ViewTransform());
+    const ViewTransform view = app_->RenderContext().View();
+    const Point physical{x, y};
+    const Point logical = ToLogical(physical, &view);
     if (message == WM_MOUSEMOVE) {
         app_->OnMouseMove(logical.x, logical.y);
     } else if (message == WM_LBUTTONDOWN) {

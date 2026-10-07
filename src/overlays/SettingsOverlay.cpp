@@ -2,7 +2,7 @@
 
 #include "app/App.h"
 #include "audio/SoundIds.h"
-#include "core/StringUtil.h"
+#include "core/CppCompat.h"
 
 #include <windows.h>
 
@@ -11,7 +11,7 @@ namespace {
 
 using namespace ui;
 
-constexpr core::Rect Panel{330.0f, 104.0f, 620.0f, 512.0f};
+constexpr Rect Panel{330.0f, 104.0f, 620.0f, 512.0f};
 constexpr float LabelX = Panel.x + 48.0f;
 constexpr float ControlX = Panel.x + 188.0f;
 constexpr float ControlRight = Panel.x + Panel.width - 48.0f;
@@ -210,7 +210,7 @@ void SettingsOverlay::OnImeComposition(const std::wstring& text, int cursor) {
     nameField_.SetComposition(text, cursor);
 }
 
-bool SettingsOverlay::TextCaretRect(core::Rect& caret) const {
+bool SettingsOverlay::TextCaretRect(Rect& caret) const {
     if (!nameField_.Focused()) {
         return false;
     }

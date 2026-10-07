@@ -2,7 +2,7 @@
 
 #include "app/App.h"
 #include "audio/SoundIds.h"
-#include "core/StringUtil.h"
+#include "core/CppCompat.h"
 #include "overlays/AboutOverlay.h"
 #include "stats/StatStore.h"
 
@@ -61,7 +61,7 @@ void StartScene::OnEnter() {
 void StartScene::Update(float dt) {
     elapsed_ += dt;
     ButtonGroup::UpdateAll(buttons_, dt);
-    const core::Point target{(mouse_.x - 640.0f) / 640.0f, (mouse_.y - 360.0f) / 360.0f};
+    const Point target{(mouse_.x - 640.0f) / 640.0f, (mouse_.y - 360.0f) / 360.0f};
     parallax_.x = Approach(parallax_.x, target.x, 3.0f, dt);
     parallax_.y = Approach(parallax_.y, target.y, 3.0f, dt);
 }
@@ -74,7 +74,7 @@ void StartScene::Render(graphics::RenderContext& context) {
     DrawRoomBackground(context, {430.0f + parallax_.x * 20.0f, 330.0f + parallax_.y * 14.0f});
 
     // Moon-like halo behind the title block.
-    const core::Point halo{400.0f + parallax_.x * 8.0f, 330.0f + parallax_.y * 6.0f};
+    const Point halo{400.0f + parallax_.x * 8.0f, 330.0f + parallax_.y * 6.0f};
     DrawRadialGlow(context, halo, 330.0f, WithAlpha(theme::Gold, 0.07f));
     context.StrokeEllipse({halo.x - 262.0f, halo.y - 262.0f, 524.0f, 524.0f}, WithAlpha(theme::Gold, 0.10f), 1.0f);
     context.StrokeEllipse({halo.x - 250.0f, halo.y - 250.0f, 500.0f, 500.0f}, WithAlpha(theme::Gold, 0.05f), 1.0f);
@@ -104,7 +104,7 @@ void StartScene::DrawTitle(graphics::RenderContext& context) {
     context.PushOpacity(t);
     context.PushTranslation(0.0f, (1.0f - t) * 18.0f);
 
-    const core::Rect titleRect{150.0f, 150.0f, 560.0f, 150.0f};
+    const Rect titleRect{150.0f, 150.0f, 560.0f, 150.0f};
     graphics::TextStyle title = Kai(132.0f);
     title.wrap = false;
     context.DrawTextUtf8("跑得快", {titleRect.x + 3.0f, titleRect.y + 6.0f, titleRect.width, titleRect.height}, title, WithAlpha(theme::RoomDeep, 0.7f));
@@ -129,7 +129,7 @@ void StartScene::DrawTitle(graphics::RenderContext& context) {
 
 void StartScene::DrawCardFan(graphics::RenderContext& context) {
     const float appear = EaseOutCubic(Progress(elapsed_, 0.25f, 0.9f));
-    const core::Point pivot{360.0f + parallax_.x * 14.0f, 900.0f + parallax_.y * 8.0f};
+    const Point pivot{360.0f + parallax_.x * 14.0f, 900.0f + parallax_.y * 8.0f};
     const float cardW = 116.0f;
     const float cardH = cardW * 1.4f;
     for (std::size_t i = 0; i < FanCards.size(); ++i) {
@@ -138,7 +138,7 @@ void StartScene::DrawCardFan(graphics::RenderContext& context) {
         const float angle = (index * 12.5f + drift * 0.8f) * appear;
         const float radians = angle * 3.14159265f / 180.0f;
         const float reach = 378.0f + drift * 3.0f;
-        const core::Point center{pivot.x + std::sin(radians) * reach, pivot.y - std::cos(radians) * reach + (1.0f - appear) * 60.0f};
+        const Point center{pivot.x + std::sin(radians) * reach, pivot.y - std::cos(radians) * reach + (1.0f - appear) * 60.0f};
         CardLook look;
         look.rotation = angle;
         look.shadow = 1.2f;

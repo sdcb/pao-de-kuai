@@ -230,6 +230,23 @@ jobs:
           }
           "MINGW_ROOT=$root" >> $env:GITHUB_ENV
 
+      - name: Verify generated COM shim is up to date
+        # src/graphics/{d2d_c.h,dwrite_c.h,iids_gen.h} are generated from the
+        # MinGW-w64 headers.  If upstream moves, this fails here instead of
+        # showing up as an ABI crash at runtime.  shim_layout covers the same
+        # ground at compile time; this step additionally catches a stale commit.
+        if: ${{ matrix.kind == 'mingw' && matrix.arch == 'x64' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inc = Get-ChildItem -Path $env:MINGW_ROOT -Recurse -Filter d2d1.h |
+                 Where-Object { $_.DirectoryName -like "*\include" } | Select-Object -First 1
+          if (-not $inc) { throw "No d2d1.h found under $env:MINGW_ROOT" }
+          python tools/gen_com_shim.py --check --mingw-include "$($inc.DirectoryName)"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Generated shim headers are stale. Run: python tools/gen_com_shim.py"
+          }
+
       - name: Configure (MSVC)
         if: ${{ matrix.kind == 'msvc' }}
         shell: cmd

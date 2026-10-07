@@ -23,7 +23,39 @@
 > 4. **IID 来源定死**：`#define INITGUID` + 单一 TU，`-luuid` 补不齐（实测缺 3 个符号）。
 > 5. **`windres` 实测可用**（真实 ico + RCDATA + UTF-8 中文注释）；**`-flto` 在最小程序上零收益**。
 >
-> **修订 5（本次）**：工具链版本策略按你的决定改为——**本地不追平（x64=16.1.0、x86=16.2.0），CI 每次解析 niXman 的 latest release，不 pin 版本**。为了不因此丢掉可复现性，§5 补了三件事：正则选资产（不靠版本号）、用 API 的 asset `digest` 校验完整性（不写死哈希）、CI 打印解析到的 tag/asset/`gcc --version` 并提供 `PDK_MINGW_TAG` 逃生舱。§8 开放项 1 关闭。
+> **修订 5**：工具链版本策略按你的决定改为——**本地不追平（x64=16.1.0、x86=16.2.0），CI 每次解析 niXman 的 latest release，不 pin 版本**。为了不因此丢掉可复现性，§5 补了三件事：正则选资产（不靠版本号）、用 API 的 asset `digest` 校验完整性（不写死哈希）、CI 打印解析到的 tag/asset/`gcc --version` 并提供 `PDK_MINGW_TAG` 逃生舱。§8 开放项 1 关闭。
+>
+> **修订 6（S0 完成记录，2026-10-07，commit `18abe57`）**：S0 已落地并**三条链路全绿**
+> （MSVC x64 7/7、MinGW UCRT x64 7/7、MinGW UCRT x86 7/7；5 张 UI 截图与基线逐像素一致）。
+> 与计划正文的偏差与实际做法：
+> 1. **shim 不再做 `#ifdef` 分流**：`dwrite.h` 在**两套工具链上都不 include**，
+>    `graphics/dwrite_c.h` 自带类型副本（由生成器从 MinGW 头提取），因此业务代码里
+>    **一个编译器分支都没有**。只有 `tests/shim_layout/shim_layout_ref.c` include `<dwrite.h>`
+>    （并 `#define PDK_SKIP_DWRITE_TYPES`）来和真实 SDK 做 `sizeof`/`offsetof` 断言。
+> 2. **生成器已实现**：`tools/gen_com_shim.py`（+ `tools/shimparse.py`）生成
+>    `src/graphics/{d2d_c.h,dwrite_c.h,iids_gen.h}` 与 `tests/shim_layout/ShimLayoutChecks.h`；
+>    `--check` 模式供 CI 做漂移检测。不采用"只给用到的方法定型"，而是**全部方法都定型**
+>    （D2D 参数类型走 `<d2d1.h>`；DWrite 未用到的方法留 `void*` 占位），
+>    未识别的接口参数统一折成 `void*`（ABI 相同）。
+> 3. **`iids_gen.h` 还要定义 `KSDATAFORMAT_SUBTYPE_{PCM,IEEE_FLOAT}`**：MSVC 的
+>    `DEFINE_GUIDEX` 在任何情况下都只是声明（不受 `INITGUID` 影响），这两个 GUID
+>    靠任何头文件都不会有定义。值从 MinGW 的 `DEFINE_GUIDSTRUCT("...", NAME)` 取。
+> 4. **新增 `src/audio/MfCompat.h`**：MinGW 头里没有 `MFCreateMFByteStreamOnStream`
+>    的声明（但 `libmfplat.a` 导出它），手工补原型。
+> 5. **`StringUtil` 合并进 `Str`**（计划 §2 本来就把 `Str_AppendNumber` 放在 `Str.h`），
+>    `src/core/StringUtil.*` 删除，不保留同名包装。
+> 6. **ctest 变成 7 个目标**（新增 `shim_layout`，即计划 §6 要求的那个自检）。
+> 7. **体积现状（仍是 C++ 混编，仅供对照）**：MinGW x64 `pao_de_kuai.exe` = 756,224 B
+>    （`-Os -s --gc-sections`；但 UI/场景还是 C++，仍链了 `-static-libstdc++`）；
+>    MSVC `/MT` x64 = 803,328 B。等 `src/` 全 C 后去掉 `-static-libstdc++` 才是有意义的数字。
+> 8. **本地 DSH 沙箱坑**：放在工作区内的 exe 无法在真实 `%TEMP%` 下建目录（EACCES），
+>    会让 `unit_tests` 的 temp 目录用例假失败。本地跑 ctest 时把 `TEMP`/`TMP` 指向构建目录。
+> 9. **逐阶段做法确定为"依赖顺序 + 每步保持三链路全绿"**：核心叶子 → rules/stats/game →
+>    graphics → audio → UI/场景/app（此时才把 `Scene`/`Overlay` vtable 化）。
+>    `docs/c-port-conventions.md` 是后续每一步的唯一约定来源。
+>
+>
+
 >
 > **修订 2 的直接后果（务必先读）**：既然 MSVC 要继续编译同一个 `src/`，那么 **MSVC C 模式缺 D2D vtable、且完全不能 include `dwrite.h`** 这个问题就重新生效。因此 §3 的两个 ABI shim **必须保留**——但改写成"**双工具链共用一份可移植 shim**"，而不是修订 1 里只服务于 MinGW 的那套宏。MinGW 侧的价值随之改变：它的 C 模式 vtable **成了 shim 布局的机器可核对来源**（§3.3），这是本次修订最实质的技术收益。
 

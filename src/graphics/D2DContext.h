@@ -57,63 +57,63 @@ public:
     ID2D1Factory* Factory() const { return d2dFactory_.Get(); }
     IDWriteFactory* DWriteFactory() const { return dwriteFactory_.Get(); }
     IWICImagingFactory* WicFactory() const { return wicFactory_.Get(); }
-    core::ViewTransform ViewTransform() const { return transform_; }
+    ViewTransform View() const { return transform_; }
 
     // Clear also resets the transform and opacity stacks to the logical 1280x720 view.
     void Clear(D2D1_COLOR_F color);
 
     void PushTransform(const D2D1_MATRIX_3X2_F& local);
     void PushTranslation(float dx, float dy);
-    void PushScale(float scale, core::Point center);
-    void PushRotation(float degrees, core::Point center);
+    void PushScale(float scale, Point center);
+    void PushRotation(float degrees, Point center);
     void PopTransform();
     void PushOpacity(float opacity);
     void PopOpacity();
     float Opacity() const { return opacity_; }
-    void PushClip(const core::Rect& rect);
+    void PushClip(const Rect& rect);
     void PopClip();
 
     ID2D1Brush* Solid(D2D1_COLOR_F color);
-    ID2D1Brush* Linear(core::Point from, core::Point to, std::initializer_list<GradientStop> stops);
-    ID2D1Brush* Radial(core::Point center, float radiusX, float radiusY, std::initializer_list<GradientStop> stops);
+    ID2D1Brush* Linear(Point from, Point to, std::initializer_list<GradientStop> stops);
+    ID2D1Brush* Radial(Point center, float radiusX, float radiusY, std::initializer_list<GradientStop> stops);
     // Tiled felt grain; the caller controls strength with PushOpacity.
     ID2D1Brush* FeltBrush();
 
-    void FillRect(const core::Rect& rect, D2D1_COLOR_F color);
-    void FillRect(const core::Rect& rect, ID2D1Brush* brush);
-    void StrokeRect(const core::Rect& rect, D2D1_COLOR_F color, float width = 1.0f);
-    void FillRoundedRect(const core::Rect& rect, float radius, D2D1_COLOR_F color);
-    void FillRoundedRect(const core::Rect& rect, float radius, ID2D1Brush* brush);
-    void StrokeRoundedRect(const core::Rect& rect, float radius, D2D1_COLOR_F color, float width = 1.0f);
-    void StrokeRoundedRect(const core::Rect& rect, float radius, ID2D1Brush* brush, float width = 1.0f);
-    void FillEllipse(const core::Rect& rect, D2D1_COLOR_F color);
-    void FillEllipse(const core::Rect& rect, ID2D1Brush* brush);
-    void StrokeEllipse(const core::Rect& rect, D2D1_COLOR_F color, float width = 1.0f);
-    void StrokeEllipse(const core::Rect& rect, ID2D1Brush* brush, float width = 1.0f);
-    void DrawLine(core::Point from, core::Point to, D2D1_COLOR_F color, float width = 1.0f);
-    void DrawLine(core::Point from, core::Point to, ID2D1Brush* brush, float width = 1.0f);
-    void FillPolygon(std::span<const core::Point> points, D2D1_COLOR_F color);
-    void StrokePolyline(std::span<const core::Point> points, D2D1_COLOR_F color, float width, bool closed = false);
+    void FillRect(const Rect& rect, D2D1_COLOR_F color);
+    void FillRect(const Rect& rect, ID2D1Brush* brush);
+    void StrokeRect(const Rect& rect, D2D1_COLOR_F color, float width = 1.0f);
+    void FillRoundedRect(const Rect& rect, float radius, D2D1_COLOR_F color);
+    void FillRoundedRect(const Rect& rect, float radius, ID2D1Brush* brush);
+    void StrokeRoundedRect(const Rect& rect, float radius, D2D1_COLOR_F color, float width = 1.0f);
+    void StrokeRoundedRect(const Rect& rect, float radius, ID2D1Brush* brush, float width = 1.0f);
+    void FillEllipse(const Rect& rect, D2D1_COLOR_F color);
+    void FillEllipse(const Rect& rect, ID2D1Brush* brush);
+    void StrokeEllipse(const Rect& rect, D2D1_COLOR_F color, float width = 1.0f);
+    void StrokeEllipse(const Rect& rect, ID2D1Brush* brush, float width = 1.0f);
+    void DrawLine(Point from, Point to, D2D1_COLOR_F color, float width = 1.0f);
+    void DrawLine(Point from, Point to, ID2D1Brush* brush, float width = 1.0f);
+    void FillPolygon(std::span<const Point> points, D2D1_COLOR_F color);
+    void StrokePolyline(std::span<const Point> points, D2D1_COLOR_F color, float width, bool closed = false);
 
     // Soft Gaussian shadow or glow shaped like a rounded rect; blur is the Gaussian sigma in logical pixels.
-    void DrawShadow(const core::Rect& rect, float blur, D2D1_COLOR_F color);
+    void DrawShadow(const Rect& rect, float blur, D2D1_COLOR_F color);
 
-    void DrawTextUtf8(const std::string& text, const core::Rect& rect, const TextStyle& style, D2D1_COLOR_F color);
-    void DrawTextUtf8(const std::string& text, const core::Rect& rect, const TextStyle& style, ID2D1Brush* brush);
+    void DrawTextUtf8(const std::string& text, const Rect& rect, const TextStyle& style, D2D1_COLOR_F color);
+    void DrawTextUtf8(const std::string& text, const Rect& rect, const TextStyle& style, ID2D1Brush* brush);
     void DrawTextUtf8(
         const std::string& text,
-        const core::Rect& rect,
+        const Rect& rect,
         float fontSize,
         D2D1_COLOR_F color,
         DWRITE_TEXT_ALIGNMENT align = DWRITE_TEXT_ALIGNMENT_LEADING,
         DWRITE_PARAGRAPH_ALIGNMENT valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-    core::Size MeasureText(const std::string& text, const TextStyle& style, float maxWidth = 4096.0f);
+    Size MeasureText(const std::string& text, const TextStyle& style, float maxWidth = 4096.0f);
     // Layouts give editors caret hit-testing; they do not depend on the device and survive target loss.
     ComPtr<IDWriteTextLayout> CreateTextLayout(const std::wstring& text, const TextStyle& style, float maxWidth, float maxHeight);
-    void DrawTextLayout(IDWriteTextLayout* layout, core::Point origin, D2D1_COLOR_F color);
+    void DrawTextLayout(IDWriteTextLayout* layout, Point origin, D2D1_COLOR_F color);
 
-    void DrawBitmap(ID2D1Bitmap* bitmap, const core::Rect& dest, const D2D1_RECT_U* source = nullptr, float opacity = 1.0f);
-    void DrawBitmap(ID2D1Bitmap* bitmap, const core::Rect& dest, const D2D1_RECT_F& source, float opacity = 1.0f);
+    void DrawBitmap(ID2D1Bitmap* bitmap, const Rect& dest, const D2D1_RECT_U* source = nullptr, float opacity = 1.0f);
+    void DrawBitmap(ID2D1Bitmap* bitmap, const Rect& dest, const D2D1_RECT_F& source, float opacity = 1.0f);
 
     std::wstring Utf8ToWide(const std::string& text) const;
 
@@ -132,7 +132,10 @@ private:
     HWND hwnd_{};
     int pixelWidth_{1280};
     int pixelHeight_{720};
-    core::ViewTransform transform_{};
+    /* ViewTransform has no default member initialiser any more (C has
+     * none), so seed the scale explicitly; ComputeViewTransform overwrites it
+     * in Initialize(). */
+    ViewTransform transform_ = ViewTransform_Identity();
     ComPtr<ID2D1Factory> d2dFactory_;
     ComPtr<IDWriteFactory> dwriteFactory_;
     ComPtr<IWICImagingFactory> wicFactory_;

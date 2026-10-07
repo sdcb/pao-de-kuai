@@ -23,7 +23,7 @@ void TipOverlay::Render(graphics::RenderContext& context) {
     chip.fill = WithAlpha(theme::Ink, 0.94f);
     chip.stroke = WithAlpha(theme::Gold, 0.6f);
     chip.text = theme::Ivory;
-    core::Rect rect = ChipRect(context, {640.0f, 196.0f}, Anchor::Center, text_, chip);
+    Rect rect = ChipRect(context, {640.0f, 196.0f}, Anchor::Center, text_, chip);
     rect.x -= 14.0f;
     rect.width += 28.0f;
     context.DrawShadow({rect.x + 4.0f, rect.y + 6.0f, rect.width - 8.0f, rect.height}, 10.0f, {0.0f, 0.0f, 0.0f, 0.5f});

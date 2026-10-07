@@ -45,7 +45,7 @@ void LoadingScene::Render(graphics::RenderContext& context) {
 
     graphics::TextStyle title = Centered(Kai(76.0f));
     title.wrap = false;
-    const core::Rect titleRect{0.0f, 230.0f, 1280.0f, 100.0f};
+    const Rect titleRect{0.0f, 230.0f, 1280.0f, 100.0f};
     context.DrawTextUtf8("跑得快", titleRect, title, context.Linear({0.0f, 250.0f}, {0.0f, 320.0f},
         {{0.0f, theme::GoldLight}, {0.6f, theme::Gold}, {1.0f, theme::GoldDeep}}));
     DrawSeal(context, {782.0f, 256.0f}, 40.0f, "极\n客", theme::Cinnabar, -6.0f, 16.0f);

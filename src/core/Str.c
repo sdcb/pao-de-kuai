@@ -265,6 +265,73 @@ const wchar_t *WStr_CStr(const WStr *s)
     return s->data != NULL ? s->data : L"";
 }
 
+/* ---- string lists ---------------------------------------------------- */
+
+void StrList_Init(StrList *list)
+{
+    list->items = NULL;
+    list->count = 0;
+    list->cap = 0;
+}
+
+void StrList_Free(StrList *list)
+{
+    if (list->items != NULL) {
+        for (int i = 0; i < list->count; ++i) {
+            free(list->items[i]);
+        }
+        free(list->items);
+    }
+    StrList_Init(list);
+}
+
+void StrList_Clear(StrList *list)
+{
+    if (list->items != NULL) {
+        for (int i = 0; i < list->count; ++i) {
+            free(list->items[i]);
+        }
+    }
+    list->count = 0;
+}
+
+bool StrList_Push(StrList *list, const char *text, int len)
+{
+    if (text == NULL) {
+        return false;
+    }
+    if (len < 0) {
+        len = (int)strlen(text);
+    }
+    if (list->count == list->cap) {
+        const int next = list->cap > 0 ? list->cap * 2 : 8;
+        char **grown = (char **)realloc(list->items, (size_t)next * sizeof(char *));
+        if (grown == NULL) {
+            return false;
+        }
+        list->items = grown;
+        list->cap = next;
+    }
+    char *copy = (char *)malloc((size_t)len + 1);
+    if (copy == NULL) {
+        return false;
+    }
+    if (len > 0) {
+        memcpy(copy, text, (size_t)len);
+    }
+    copy[len] = '\0';
+    list->items[list->count++] = copy;
+    return true;
+}
+
+const char *StrList_At(const StrList *list, int index)
+{
+    if (index < 0 || index >= list->count) {
+        return "";
+    }
+    return list->items[index];
+}
+
 /* ---- conversions ----------------------------------------------------- */
 
 wchar_t *PdkUtf8ToWide(const char *text)

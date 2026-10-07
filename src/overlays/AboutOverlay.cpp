@@ -8,7 +8,7 @@ namespace {
 
 using namespace ui;
 
-constexpr core::Rect Panel{300.0f, 96.0f, 680.0f, 528.0f};
+constexpr Rect Panel{300.0f, 96.0f, 680.0f, 528.0f};
 
 } // namespace
 

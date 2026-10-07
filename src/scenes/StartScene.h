@@ -28,8 +28,8 @@ private:
     std::vector<Button> buttons_;
     std::string welcome_;
     float elapsed_{0.0f};
-    core::Point mouse_{640.0f, 360.0f};
-    core::Point parallax_{0.0f, 0.0f};
+    Point mouse_{640.0f, 360.0f};
+    Point parallax_{0.0f, 0.0f};
 };
 
 } // namespace pdk::scenes

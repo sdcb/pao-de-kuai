@@ -12,10 +12,10 @@ constexpr D2D1_COLOR_F Black = {0.0f, 0.0f, 0.0f, 1.0f};
 constexpr D2D1_COLOR_F White = {1.0f, 1.0f, 1.0f, 1.0f};
 
 template <typename DrawContent>
-void DrawCardCommon(graphics::RenderContext& context, const core::Rect& rect, const CardLook& look, DrawContent&& content) {
-    core::Rect r = rect;
+void DrawCardCommon(graphics::RenderContext& context, const Rect& rect, const CardLook& look, DrawContent&& content) {
+    Rect r = rect;
     r.y -= look.lift;
-    const core::Point center{r.x + r.width * 0.5f, r.y + r.height * 0.5f};
+    const Point center{r.x + r.width * 0.5f, r.y + r.height * 0.5f};
     const float radius = r.width * theme::CardRadiusRatio;
     const bool rotated = look.rotation != 0.0f;
     if (rotated) {
@@ -51,9 +51,9 @@ void DrawCardCommon(graphics::RenderContext& context, const core::Rect& rect, co
     }
 }
 
-void DrawAtlasRect(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, D2D1_RECT_U source, const core::Rect& dest) {
+void DrawAtlasRect(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, D2D1_RECT_U source, const Rect& dest) {
     const resources::CardAtlasInfo& info = resources::GetCardAtlasInfo();
-    const float requested = dest.width * context.ViewTransform().scale / static_cast<float>(info.cardWidth);
+    const float requested = dest.width * context.View().scale / static_cast<float>(info.cardWidth);
     float levelScale = 1.0f;
     ID2D1Bitmap* bitmap = atlas.BitmapFor(requested, levelScale);
     // Half-texel inset keeps bilinear sampling from bleeding into the neighbouring card.
@@ -67,8 +67,8 @@ void DrawAtlasRect(graphics::RenderContext& context, graphics::SpriteAtlas& atla
 
 } // namespace
 
-void DrawCardFace(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, const rules::Card& card, const core::Rect& rect, const CardLook& look) {
-    DrawCardCommon(context, rect, look, [&](const core::Rect& r) {
+void DrawCardFace(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, const rules::Card& card, const Rect& rect, const CardLook& look) {
+    DrawCardCommon(context, rect, look, [&](const Rect& r) {
         if (atlas.Loaded()) {
             DrawAtlasRect(context, atlas, resources::CardSourceRect(card), r);
             return;
@@ -80,8 +80,8 @@ void DrawCardFace(graphics::RenderContext& context, graphics::SpriteAtlas& atlas
     });
 }
 
-void DrawCardBack(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, const core::Rect& rect, const CardLook& look) {
-    DrawCardCommon(context, rect, look, [&](const core::Rect& r) {
+void DrawCardBack(graphics::RenderContext& context, graphics::SpriteAtlas& atlas, const Rect& rect, const CardLook& look) {
+    DrawCardCommon(context, rect, look, [&](const Rect& r) {
         if (atlas.Loaded()) {
             DrawAtlasRect(context, atlas, resources::CardBackSourceRect(), r);
             return;

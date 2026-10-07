@@ -1,6 +1,6 @@
 #include "stats/StatStore.h"
 
-#include "core/WinFile.h"
+#include "core/CppCompat.h"
 
 #include <cJSON.h>
 

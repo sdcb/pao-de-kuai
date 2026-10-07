@@ -1,21 +1,24 @@
 #pragma once
 
-#include <chrono>
+/*
+ * Frame delta timer, replacing the std::chrono-based C++ class (plan.md 2).
+ *
+ * A zero-initialised FrameTimer is valid: the first Tick lazily starts the
+ * clock, so callers do not have to remember FrameTimer_Init.  dt is clamped to
+ * 0.1 s exactly as before, so a stalled frame cannot teleport animations.
+ */
 
-namespace pdk::core {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-class FrameTimer {
-public:
-    float Tick() {
-        const auto now = clock::now();
-        const float dt = std::chrono::duration<float>(now - last_).count();
-        last_ = now;
-        return dt > 0.1f ? 0.1f : dt;
-    }
+typedef struct FrameTimer {
+    long long last; /* QueryPerformanceCounter ticks */
+} FrameTimer;
 
-private:
-    using clock = std::chrono::steady_clock;
-    clock::time_point last_{clock::now()};
-};
+void FrameTimer_Init(FrameTimer *timer);
+float FrameTimer_Tick(FrameTimer *timer);
 
-} // namespace pdk::core
+#ifdef __cplusplus
+}
+#endif

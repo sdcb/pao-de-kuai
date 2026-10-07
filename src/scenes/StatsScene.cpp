@@ -2,7 +2,7 @@
 
 #include "app/App.h"
 #include "audio/SoundIds.h"
-#include "core/StringUtil.h"
+#include "core/CppCompat.h"
 
 #include <algorithm>
 #include <array>
@@ -62,7 +62,7 @@ void StatsScene::Render(graphics::RenderContext& context) {
         const float appear = EaseOutCubic(Progress(elapsed_, 0.05f + static_cast<float>(index) * 0.08f, 0.5f));
         const float grow = EaseOutCubic(Progress(elapsed_, 0.3f + static_cast<float>(index) * 0.08f, 0.8f));
         const float totalWidth = CardWidth * 3.0f + CardGap * 2.0f;
-        const core::Rect card{640.0f - totalWidth * 0.5f + static_cast<float>(index) * (CardWidth + CardGap), CardTop, CardWidth, CardHeight};
+        const Rect card{640.0f - totalWidth * 0.5f + static_cast<float>(index) * (CardWidth + CardGap), CardTop, CardWidth, CardHeight};
         context.PushOpacity(appear);
         context.PushTranslation(0.0f, (1.0f - appear) * 18.0f);
         DrawPanel(context, card);
@@ -102,9 +102,9 @@ void StatsScene::Render(graphics::RenderContext& context) {
             const float length = half * static_cast<float>(std::abs(score)) / static_cast<float>(maxAbs) * grow;
             if (length > 0.5f) {
                 const D2D1_COLOR_F color = ScoreColor(score);
-                const core::Rect bar = score >= 0
-                    ? core::Rect{zero, rowY + 9.0f, length, 8.0f}
-                    : core::Rect{zero - length, rowY + 9.0f, length, 8.0f};
+                const Rect bar = score >= 0
+                    ? Rect{zero, rowY + 9.0f, length, 8.0f}
+                    : Rect{zero - length, rowY + 9.0f, length, 8.0f};
                 context.FillRoundedRect(bar, 4.0f, context.Linear({bar.x, bar.y}, {bar.x + bar.width, bar.y},
                     score >= 0 ? std::initializer_list<graphics::GradientStop>{{0.0f, WithAlpha(color, 0.45f)}, {1.0f, color}}
                                : std::initializer_list<graphics::GradientStop>{{0.0f, color}, {1.0f, WithAlpha(color, 0.45f)}}));

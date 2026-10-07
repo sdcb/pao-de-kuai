@@ -1,7 +1,6 @@
 #include "game/RoundTraceRecorder.h"
 
-#include "core/StringUtil.h"
-#include "core/WinFile.h"
+#include "core/CppCompat.h"
 #include "stats/StatStore.h"
 
 #include <cJSON.h>
