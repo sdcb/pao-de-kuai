@@ -324,7 +324,7 @@ void GameScene::DrawTurnChip(graphics::RenderContext& context) {
         text = "轮到你出牌";
         highlight = true;
     } else {
-        text = game_.Players()[rules::PlayerIndex(game_.CurrentPlayer())].name + " 出牌中";
+        text = std::string(game_.Players()[rules::PlayerIndex(game_.CurrentPlayer())].name) + " 出牌中";
     }
     ChipStyle style;
     style.fontSize = 16.0f;
@@ -544,7 +544,7 @@ void GameScene::DrawPlayedCards(graphics::RenderContext& context) {
         chip.fontSize = 14.5f;
         chip.height = 30.0f;
         chip.padX = 16.0f;
-        const std::string label = game_.Players()[rules::PlayerIndex(game_.LastMovePlayer())].name + "  ·  " +
+        const std::string label = std::string(game_.Players()[rules::PlayerIndex(game_.LastMovePlayer())].name) + "  ·  " +
             rules::PatternDescription(*game_.LastPattern());
         DrawChip(context, {640.0f, PlayedCardTop + cardH + 28.0f}, Anchor::Center, label, chip);
         context.PopOpacity();

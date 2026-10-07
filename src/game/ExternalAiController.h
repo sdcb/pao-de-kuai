@@ -20,7 +20,7 @@ struct ExternalAiRequest {
 struct ExternalAiResult {
     bool ok{false};
     std::string errorMessage;
-    TurnDecisionSource source{TurnDecisionSource::LocalAi};
+    TurnDecisionSource source{TURN_SOURCE_LOCAL_AI};
     std::optional<AiMoveChoice> localChoice;
 };
 

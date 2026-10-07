@@ -359,9 +359,9 @@ std::optional<TalkKind> RoundEndGoodTalkKind(const rules::Cards& hand) {
 } // namespace
 
 GameState::GameState() {
-    players_[0].name = "\xE6\x9D\x8E\xE5\xA7\x90";
-    players_[1].name = "AI1";
-    players_[2].name = "AI2";
+    Str_CopyTo(players_[0].name, PDK_SEAT_NAME_CAP, "\xE6\x9D\x8E\xE5\xA7\x90");
+    Str_CopyTo(players_[1].name, PDK_SEAT_NAME_CAP, "AI1");
+    Str_CopyTo(players_[2].name, PDK_SEAT_NAME_CAP, "AI2");
     lastTalkIndices_.fill(-1);
 }
 
@@ -376,9 +376,9 @@ void GameState::StartNewRound(const std::string& playerName, unsigned seed) {
     const std::optional<rules::PlayerId> requestedLeader = nextRoundLeader_;
     nextRoundLeader_.reset();
     playerName_ = playerName.empty() ? "\xE6\x9D\x8E\xE5\xA7\x90" : playerName;
-    players_[0] = PlayerState{playerName_, MakeCards({}), false};
-    players_[1] = PlayerState{"AI1", MakeCards({}), false};
-    players_[2] = PlayerState{"AI2", MakeCards({}), false};
+    PlayerState_Init(&players_[0], playerName_.c_str());
+    PlayerState_Init(&players_[1], "AI1");
+    PlayerState_Init(&players_[2], "AI2");
     selectedIndices_.clear();
     hintIndices_.clear();
     bombs_.clear();
@@ -525,8 +525,8 @@ bool GameState::PlaySelected() {
     TurnRecord record = BuildTurnRecord(
         before,
         PLAYER_HUMAN,
-        TurnDecisionSource::Human,
-        TurnDecisionReason::NormalChoice,
+        TURN_SOURCE_HUMAN,
+        TURN_REASON_NORMAL_CHOICE,
         ActionFromCards(cards),
         ActionFromCards(cards),
         cards,
@@ -551,8 +551,8 @@ bool GameState::PassHuman() {
     TurnRecord record = BuildTurnRecord(
         before,
         PLAYER_HUMAN,
-        TurnDecisionSource::Human,
-        TurnDecisionReason::CannotBeat,
+        TURN_SOURCE_HUMAN,
+        TURN_REASON_CANNOT_BEAT,
         ActionFromCards(MakeCards({}), true),
         ActionFromCards(MakeCards({}), true),
         MakeCards({}),
@@ -578,8 +578,8 @@ bool GameState::ApplyHint() {
             TurnRecord record = BuildTurnRecord(
                 before,
                 PLAYER_HUMAN,
-                TurnDecisionSource::Human,
-                TurnDecisionReason::CannotBeat,
+                TURN_SOURCE_HUMAN,
+                TURN_REASON_CANNOT_BEAT,
                 ActionFromCards(MakeCards({}), true),
                 ActionFromCards(MakeCards({}), true),
                 MakeCards({}),
@@ -896,18 +896,31 @@ std::vector<std::pair<rules::Cards, rules::HandPattern>> GameState::LegalMoves(r
 }
 
 TurnSnapshot GameState::Snapshot() const {
-    return TurnSnapshot{
-        {players_[0].hand, players_[1].hand, players_[2].hand},
-        lastCards_,
-        lastPattern_,
-        lastMovePlayer_,
-        currentPlayer_,
-        passCount_
-    };
+    TurnSnapshot snapshot;
+    snapshot.hands[0] = players_[0].hand;
+    snapshot.hands[1] = players_[1].hand;
+    snapshot.hands[2] = players_[2].hand;
+    snapshot.lastCards = lastCards_;
+    snapshot.hasLastPattern = lastPattern_.has_value();
+    if (snapshot.hasLastPattern) {
+        snapshot.lastPattern = *lastPattern_;
+    }
+    snapshot.lastMovePlayer = lastMovePlayer_;
+    snapshot.currentPlayer = currentPlayer_;
+    snapshot.passCount = passCount_;
+    return snapshot;
 }
 
 GameAction GameState::ActionFromCards(const rules::Cards& cards, bool pass) const {
-    return GameAction{pass ? "pass" : "play", pass ? std::vector<std::string>{} : RanksOf(cards)};
+    GameAction action;
+    GameAction_Clear(&action);
+    GameAction_Set(&action, pass ? "pass" : "play");
+    if (!pass) {
+        for (const std::string& rank : RanksOf(cards)) {
+            GameAction_AddRank(&action, rank.c_str());
+        }
+    }
+    return action;
 }
 
 TurnRecord GameState::BuildTurnRecord(
@@ -933,17 +946,20 @@ TurnRecord GameState::BuildTurnRecord(
     record.requestedAction = requested;
     record.finalAction = final;
     record.finalCards = finalCards;
-    record.finalPattern = finalPattern;
+    record.hasFinalPattern = finalPattern.has_value();
+    if (record.hasFinalPattern) {
+        record.finalPattern = *finalPattern;
+    }
     record.accepted = accepted;
-    record.validationMessage = validationMessage;
-    if (strategy.strategy.empty()) {
-        if (source == TurnDecisionSource::System ||
-            reason == TurnDecisionReason::CannotBeat ||
-            reason == TurnDecisionReason::OnlyLegalMove) {
+    Str_CopyTo(record.validationMessage, PDK_TURN_TEXT_CAP, validationMessage.c_str());
+    if (strategy.strategy == nullptr || strategy.strategy[0] == '\0') {
+        if (source == TURN_SOURCE_SYSTEM ||
+            reason == TURN_REASON_CANNOT_BEAT ||
+            reason == TURN_REASON_ONLY_LEGAL_MOVE) {
             strategy = RulesStrategyMetadata();
-        } else if (source == TurnDecisionSource::Human) {
+        } else if (source == TURN_SOURCE_HUMAN) {
             strategy = HumanStrategyMetadata();
-        } else if (source == TurnDecisionSource::LocalAi && actor == PLAYER_HUMAN) {
+        } else if (source == TURN_SOURCE_LOCAL_AI && actor == PLAYER_HUMAN) {
             strategy = aiPlayers_[Index(actor)].Metadata();
         } else {
             strategy = roundStrategies_[static_cast<std::size_t>(Index(actor))];
@@ -955,7 +971,7 @@ TurnRecord GameState::BuildTurnRecord(
 }
 
 void GameState::AppendRecord(TurnRecord record) {
-    if (record.trace.reasoningContent.empty()) {
+    if (record.trace.reasoningContent[0] == '\0') {
         record.trace = SyntheticTrace(record);
     }
     turnRecords_.push_back(std::move(record));
@@ -989,9 +1005,9 @@ TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
     std::string reasoning = "本地记录：";
     reasoning += PlayerLabel(record.actor);
     reasoning += ' ';
-    if (record.reason == TurnDecisionReason::CannotBeat) {
+    if (record.reason == TURN_REASON_CANNOT_BEAT) {
         reasoning += "按规则要不起，只能不要。";
-    } else if (record.reason == TurnDecisionReason::OnlyLegalMove) {
+    } else if (record.reason == TURN_REASON_ONLY_LEGAL_MOVE) {
         reasoning += "只有一种合法选择，直接执行 ";
         reasoning += MoveText(record.finalAction);
         reasoning += "。";
@@ -1000,7 +1016,7 @@ TurnDecisionTrace GameState::SyntheticTrace(const TurnRecord& record) const {
         reasoning += MoveText(record.finalAction);
         reasoning += "。";
     }
-    trace.reasoningContent = reasoning;
+    Str_CopyTo(trace.reasoningContent, PDK_TURN_TEXT_CAP, reasoning.c_str());
     return trace;
 }
 
@@ -1061,17 +1077,17 @@ std::shared_ptr<ExternalAiController> GameState::AiControllerFor(rules::PlayerId
 void GameState::PlayLocalAiTurn(rules::PlayerId player) {
     const TurnSnapshot before = Snapshot();
     const auto legal = LegalMoves(player);
-    TurnDecisionSource source = TurnDecisionSource::LocalAi;
-    TurnDecisionReason reason = legal.size() == 1 ? TurnDecisionReason::OnlyLegalMove : TurnDecisionReason::NormalChoice;
+    TurnDecisionSource source = TURN_SOURCE_LOCAL_AI;
+    TurnDecisionReason reason = legal.size() == 1 ? TURN_REASON_ONLY_LEGAL_MOVE : TURN_REASON_NORMAL_CHOICE;
     AiMoveChoice choice;
     if (legal.empty() && !CurrentPlayerLeads()) {
-        source = TurnDecisionSource::System;
-        reason = TurnDecisionReason::CannotBeat;
+        source = TURN_SOURCE_SYSTEM;
+        reason = TURN_REASON_CANNOT_BEAT;
         choice.pass = true;
     } else {
         choice = aiPlayers_[Index(player)].ChooseMove(players_[Index(player)].hand, MakeAiContext(player));
         if (choice.pass) {
-            reason = TurnDecisionReason::CannotBeat;
+            reason = TURN_REASON_CANNOT_BEAT;
         }
     }
 
@@ -1175,7 +1191,7 @@ bool GameState::ApplyLocalAiResult(const AiMoveChoice& choice, TurnDecisionSourc
             before,
             actor,
             source,
-            TurnDecisionReason::CannotBeat,
+            TURN_REASON_CANNOT_BEAT,
             ActionFromCards(MakeCards({}), true),
             ActionFromCards(MakeCards({}), true),
             MakeCards({}),
@@ -1205,7 +1221,7 @@ bool GameState::ApplyLocalAiResult(const AiMoveChoice& choice, TurnDecisionSourc
         before,
         actor,
         source,
-        TurnDecisionReason::NormalChoice,
+        TURN_REASON_NORMAL_CHOICE,
         ActionFromCards(choice.cards),
         ActionFromCards(choice.cards),
         choice.cards,

@@ -57,7 +57,7 @@ void LocalAiController::Start(ExternalAiRequest request) {
     const auto strategyIt = strategies_.find(request.player);
     if (strategyIt == strategies_.end()) {
         ExternalAiResult failed;
-        failed.source = TurnDecisionSource::LocalAi;
+        failed.source = TURN_SOURCE_LOCAL_AI;
         failed.errorMessage = "No local AI strategy configured for player";
         std::lock_guard lock(state->mutex);
         state->pending = false;
@@ -76,7 +76,7 @@ void LocalAiController::Start(ExternalAiRequest request) {
 
     std::thread([state, kind, request = std::move(request), generation]() mutable {
         ExternalAiResult result;
-        result.source = TurnDecisionSource::LocalAi;
+        result.source = TURN_SOURCE_LOCAL_AI;
         try {
             std::unique_ptr<AiStrategy> strategy = MakeStrategy(kind);
             result.localChoice = strategy->ChooseMove(

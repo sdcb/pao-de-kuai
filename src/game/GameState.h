@@ -5,6 +5,7 @@
 #include "game/Player.h"
 #include "game/RoundTraceRecorder.h"
 #include "rules/CppCompat.h"
+#include "game/CppCompat.h"
 #include "stats/CppCompat.h"
 
 #include <array>

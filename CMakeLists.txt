@@ -177,7 +177,7 @@ set(PDK_CORE_SOURCES
     src/game/RoundRecorder.cpp
     src/game/RoundTraceRecorder.cpp
     src/game/StrongAiStrategy.cpp
-    src/game/TurnRecord.cpp
+    src/game/TurnRecord.c
     src/stats/AppSettings.c
     src/stats/StatStore.c
 )

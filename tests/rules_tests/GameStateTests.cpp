@@ -925,8 +925,8 @@ TEST_CASE("AI1 can use local async strong controller and records a local decisio
     auto controller = std::make_shared<game::LocalAiController>();
     controller->SetStrategy(PLAYER_AI1, game::LocalAiKind::Strong);
     const game::StrategyMetadata metadata = controller->MetadataFor(PLAYER_AI1);
-    CHECK(metadata.strategy == "strong");
-    CHECK(metadata.strategyVersion == "2.1");
+    CHECK(std::string(metadata.strategy) == "strong");
+    CHECK(std::string(metadata.strategyVersion) == "2.1");
 
     game::GameState state;
     state.SetExternalAiController(controller);
@@ -948,11 +948,11 @@ TEST_CASE("AI1 can use local async strong controller and records a local decisio
     REQUIRE(state.TurnRecords().size() == 1);
     const game::TurnRecord& record = state.TurnRecords().back();
     CHECK(record.actor == PLAYER_AI1);
-    CHECK(record.source == game::TurnDecisionSource::LocalAi);
-    CHECK(record.strategy.strategy == "strong");
-    CHECK(record.strategy.strategyVersion == "2.1");
+    CHECK(record.source == game::TURN_SOURCE_LOCAL_AI);
+    CHECK(std::string(record.strategy.strategy) == "strong");
+    CHECK(std::string(record.strategy.strategyVersion) == "2.1");
     CHECK(record.accepted);
-    CHECK(record.finalAction.action == "play");
+    CHECK(std::string(record.finalAction.action) == "play");
     REQUIRE_FALSE(state.LastCards().empty());
     CHECK(rules::RankValue(state.LastCards().front().rank) > rules::RankValue(RANK_FOUR));
 }
@@ -976,8 +976,8 @@ TEST_CASE("AI1 only legal move is recorded without calling the async controller"
     state.Update(1.0f);
     CHECK(controller->startCount == 0);
     REQUIRE(state.TurnRecords().size() == 1);
-    CHECK(state.TurnRecords().back().source == game::TurnDecisionSource::LocalAi);
-    CHECK(state.TurnRecords().back().reason == game::TurnDecisionReason::OnlyLegalMove);
+    CHECK(state.TurnRecords().back().source == game::TURN_SOURCE_LOCAL_AI);
+    CHECK(state.TurnRecords().back().reason == game::TURN_REASON_ONLY_LEGAL_MOVE);
 }
 
 TEST_CASE("local AI2 actions are recorded but not external controlled") {
@@ -1000,7 +1000,7 @@ TEST_CASE("local AI2 actions are recorded but not external controlled") {
     CHECK(controller->startCount == 0);
     REQUIRE(state.TurnRecords().size() == 1);
     CHECK(state.TurnRecords().back().actor == PLAYER_AI2);
-    CHECK(state.TurnRecords().back().source == game::TurnDecisionSource::LocalAi);
+    CHECK(state.TurnRecords().back().source == game::TURN_SOURCE_LOCAL_AI);
 }
 
 TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
@@ -1026,8 +1026,8 @@ TEST_CASE("AI2 forced move is recorded when AI2 is external controlled") {
     REQUIRE(state.TurnRecords().size() == 1);
     const game::TurnRecord& record = state.TurnRecords().back();
     CHECK(record.actor == PLAYER_AI2);
-    CHECK(record.reason == game::TurnDecisionReason::OnlyLegalMove);
-    CHECK_FALSE(record.trace.reasoningContent.empty());
+    CHECK(record.reason == game::TURN_REASON_ONLY_LEGAL_MOVE);
+    CHECK_FALSE(record.trace.reasoningContent[0] == '\0');
 }
 
 TEST_CASE("AI2 can use local async basic controller through multi controller routing") {
@@ -1062,7 +1062,7 @@ TEST_CASE("AI2 can use local async basic controller through multi controller rou
     REQUIRE(state.TurnRecords().size() == 1);
     const game::TurnRecord& record = state.TurnRecords().back();
     CHECK(record.actor == PLAYER_AI2);
-    CHECK(record.source == game::TurnDecisionSource::LocalAi);
+    CHECK(record.source == game::TURN_SOURCE_LOCAL_AI);
     CHECK(record.accepted);
     REQUIRE_FALSE(state.LastCards().empty());
     CHECK(rules::RankValue(state.LastCards().front().rank) > rules::RankValue(RANK_FOUR));
@@ -1089,9 +1089,9 @@ TEST_CASE("failed async AI result falls back to the built-in local strategy") {
     state.Update(0.1f);
     REQUIRE(state.TurnRecords().size() == 1);
     const game::TurnRecord& record = state.TurnRecords().back();
-    CHECK(record.source == game::TurnDecisionSource::LocalAi);
+    CHECK(record.source == game::TURN_SOURCE_LOCAL_AI);
     CHECK(record.accepted);
-    CHECK(record.finalAction.action == "play");
+    CHECK(std::string(record.finalAction.action) == "play");
     CHECK_FALSE(state.LastCards().empty());
 }
 

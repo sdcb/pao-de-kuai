@@ -178,6 +178,22 @@ const char *Str_CStr(const Str *s)
     return s->data != NULL ? s->data : "";
 }
 
+void Str_CopyTo(char *dst, int cap, const char *src)
+{
+    int i = 0;
+
+    if (cap <= 0) {
+        return;
+    }
+    if (src != NULL) {
+        while (src[i] != '\0' && i + 1 < cap) {
+            dst[i] = src[i];
+            ++i;
+        }
+    }
+    dst[i] = '\0';
+}
+
 /* ---- wide strings ---------------------------------------------------- */
 
 void WStr_Init(WStr *s)

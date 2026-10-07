@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game/CppCompat.h"
 #include "game/StrategyMetadata.h"
 #include "rules/CppCompat.h"
 

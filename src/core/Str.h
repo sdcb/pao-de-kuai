@@ -47,6 +47,11 @@ bool Str_Equals(const Str *s, const char *text);
 /* Never returns NULL, so callers can pass it straight to Win32 as a C string. */
 const char *Str_CStr(const Str *s);
 
+/* Copies `src` into a fixed buffer, truncating and always NUL terminating.  NULL src
+ * clears the buffer.  This is the one sanctioned way to fill a char[] field; every
+ * fixed-buffer struct in the project uses it instead of strncpy. */
+void Str_CopyTo(char *dst, int cap, const char *src);
+
 /* ---- wide strings ---------------------------------------------------- */
 
 typedef struct WStr {
