@@ -105,6 +105,30 @@
 > - **`game/`（7 个 `.cpp`，约 3,500 行）与 `graphics/`（5 个）、`ui+scenes+overlays+app`（21 个）
 >   仍在后面**；体积达标必须等这些全部转完、去掉 `-static-libstdc++` 之后才可能实现。
 >
+> **修订 9（S6 完成记录，commit `ef10c1b`）——`src/audio/` 已是纯 C**：
+> - `std::shared_ptr<const std::vector<float>>` → 引用计数 `SampleBuffer`；
+>   `std::mutex` → `CRITICAL_SECTION`；`std::thread` → `CreateThread`+`WaitForSingleObject`；
+>   `std::atomic<bool>` → `volatile LONG`；`std::atomic<float>` 主音量 → **bit pattern 存 LONG**
+>   + `InterlockedCompareExchange/Exchange`（没有 32 位 interlocked float 交换）；
+>   `std::map<SoundId, Sound>` → 按 SoundId 索引的定长表；声部表与待播队列各 24 项定长数组。
+> - **`IMMNotificationClient` 是应用侧唯一手写的 COM 回调**，8 槽全部写出，并加了
+>   `_Static_assert(sizeof(PDK vtable) == sizeof(IMMNotificationClientVtbl))`——**两套工具链都会查**。
+> - **实测抓到一个真问题**：`iids.c` 原本 include `<mmdeviceapi.h>`/`<audioclient.h>` 靠
+>   INITGUID 拿 GUID，但这只对 MinGW 有效（MinGW 用 `DEFINE_GUID`）；MSVC 那两个头只有
+>   `EXTERN_C const IID name;` 声明，于是 MSVC 链接期报 6 个未解析符号（`IID_IAudioClient`、
+>   `IID_IAudioClient3`、`IID_IAudioRenderClient`、`IID_IMMNotificationClient`、
+>   `IID_IMMDeviceEnumerator`、`CLSID_MMDeviceEnumerator`）。修法：生成器从 MinGW 头把
+>   这 6 个 GUID 一起产出到 `iids_gen.h`，并从 `iids.c` 里移除那两个 include，
+>   保证两套工具链**各自只有一份定义**。
+> - **新增 ctest 目标 `audio_decode`**（`tests/audio_decode/AudioDecodeTest.c`）：启动 MF 后
+>   解码全部 21 个内嵌音效，断言 `sampleRate == 44100`、样本非空、且在 577 样本延迟之上
+>   **首样本必须恰好为 0**（延迟裁剪淡入的签名）。不需要声卡，所以三套工具链都能跑。
+>   ctest 因此变成 **8 个目标**。
+> - `AudioEngine` 生命周期用一次性探针实测过：Initialize 返回 1、重复调用幂等、Available 为真、
+>   Play 接受、Destroy 干净回收（含渲染线程 join）。
+> - 进度：`src/` 剩 **33 个 `.cpp`**，`check_c_only.py` 残留 254 处。体积：MinGW x64 741,376 B、
+>   MSVC /MT x64 764,416 B；依赖表仍然只有系统 DLL（无 msvcrt/vcruntime/libgcc/libwinpthread）。
+>
 >
 
 >

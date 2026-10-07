@@ -137,6 +137,7 @@ ctest --preset vs2026-release --output-on-failure
 
 ```text
 shim_layout
+audio_decode
 unit_tests
 ui_scene_start
 ui_overlay_settings
@@ -148,6 +149,9 @@ ui_overlay_result
 `shim_layout` 是 COM shim 的 ABI 自检：在 MinGW 下把生成的平铺 PDK vtable 与真实 SDK 的
 C vtable 做 `sizeof`/`offsetof` 静态断言，并在两套工具链上校验 vendored DirectWrite 类型。
 改了 `src/graphics/d2d_c.h`、`dwrite_c.h` 或生成器后必须让它保持绿。
+
+`audio_decode` 解码全部 21 个内嵌音效，检查 44.1 kHz 契约、样本非空、以及 577 样本 MP3
+编码器延迟裁剪的淡入签名（首样本为 0）。它不需要声卡，但 **WASAPI 实际出声仍只能人工确认**。
 
 `rules_tests` 运行 `tests/rules_tests/` 下的 doctest 用例，仍产出单个 `unit_tests.exe`。
 
