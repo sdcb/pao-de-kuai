@@ -2,7 +2,7 @@
 
 #include "scenes/StatsScene.h"
 
-#include "app/AppApi.h"
+#include "app/App.h"
 #include "graphics/d2d_c.h"
 #include "scenes/SceneCommon.h"
 #include "stats/StatStore.h"

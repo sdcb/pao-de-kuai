@@ -4,7 +4,7 @@
  * The main menu: the title block with a fanned straight, the six-button menu, and the parallax
  * halo behind it all.  Pure C.
  *
- * `app` is an opaque App* (see app/AppApi.h).  The returned handle owns its state and frees it
+ * `app` is an opaque App* (see app/App.h).  The returned handle owns its state and frees it
  * through the scene vtable's Destroy slot.
  */
 

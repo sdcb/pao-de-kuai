@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-/* `app` is an opaque App* (see app/AppApi.h).  The record is copied, so the caller keeps its own.
+/* `app` is an opaque App* (see app/App.h).  The record is copied, so the caller keeps its own.
  * Returns an owning handle. */
 Overlay RoundResultOverlay_New(void *app, const RoundRecord *record);
 

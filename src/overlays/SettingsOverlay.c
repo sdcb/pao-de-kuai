@@ -2,7 +2,7 @@
 
 #include "overlays/SettingsOverlay.h"
 
-#include "app/AppApi.h"
+#include "app/App.h"
 #include "audio/SoundIds.h"
 #include "core/Str.h"
 #include "graphics/d2d_c.h"

@@ -195,10 +195,10 @@ target_compile_definitions(pdk_core PRIVATE
 )
 
 set(PDK_APP_SOURCES
-    src/app/App.cpp
+    src/app/App.c
     src/app/Dpi.c
     src/app/ImeInput.c
-    src/app/Window.cpp
+    src/app/Window.c
     src/app/WindowChrome.c
     src/audio/AudioDecoder.c
     src/audio/AudioEngine.c
@@ -252,7 +252,7 @@ set_source_files_properties(src/resources/resources.rc PROPERTIES OBJECT_DEPENDS
 )
 
 add_executable(pao_de_kuai WIN32
-    src/app/WinMain.cpp
+    src/app/WinMain.c
     src/resources/resources.rc
 )
 target_link_libraries(pao_de_kuai PRIVATE pdk_app)

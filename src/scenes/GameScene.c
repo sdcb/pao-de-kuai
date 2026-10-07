@@ -2,7 +2,7 @@
 
 #include "scenes/GameScene.h"
 
-#include "app/AppApi.h"
+#include "app/App.h"
 #include "audio/SoundIds.h"
 #include "core/Str.h"
 #include "game/GameState.h"

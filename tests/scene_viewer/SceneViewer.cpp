@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -112,21 +113,23 @@ int main(int argc, char** argv) {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     const Args args = ParseArgs(argc, argv);
 
-    pdk::app::App app;
-    pdk::app::Window window;
-    if (!window.Create(app, L"scene_viewer", 1280, 720)) {
+    App app;
+    Window window;
+    App_Init(&app);
+    memset(&window, 0, sizeof(window));
+    if (!Window_Create(&window, &app, L"scene_viewer", 1280, 720)) {
         CoUninitialize();
         return 1;
     }
-    if (!app.Initialize(window.Hwnd(), true, !args.screenshot.empty())) {
+    if (!App_Initialize(&app, Window_Hwnd(&window), true, !args.screenshot.empty())) {
         CoUninitialize();
         return 2;
     }
-    app.ShowViewerScene(args.scene, args.overlay, args.mock);
-    app.Resize(1280, 720);
+    App_ShowViewerScene(&app, args.scene.c_str(), args.overlay.c_str(), args.mock.c_str());
+    App_Resize(&app, 1280, 720);
 
     if (args.screenshot.empty()) {
-        const int result = window.Run();
+        const int result = Window_Run(&window);
         CoUninitialize();
         return result;
     }
@@ -145,15 +148,16 @@ int main(int argc, char** argv) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
-        app.Resize(1280, 720);
-        app.Update(FrameTimer_Tick(&timer));
-        app.Render();
+        App_Resize(&app, 1280, 720);
+        App_Update(&app, FrameTimer_Tick(&timer));
+        App_Render(&app);
         Sleep(16);
     }
 
     // Scenes render offscreen so screenshots work even when the window is occluded.
-    const bool ok = SaveJpeg(app.RenderContext().OffscreenBitmap(), Utf8ToWide(args.screenshot), args.quality);
-    app.ConfirmExit();
+    const bool ok = SaveJpeg(RenderContext_OffscreenBitmap(App_RenderContext(&app)),
+                             Utf8ToWide(args.screenshot), args.quality);
+    App_ConfirmExit(&app);
     CoUninitialize();
     return ok ? 0 : 3;
 }

@@ -2,7 +2,7 @@
 
 #include "scenes/StartScene.h"
 
-#include "app/AppApi.h"
+#include "app/App.h"
 #include "graphics/d2d_c.h"
 #include "overlays/AboutOverlay.h"
 #include "rules/Card.h"
@@ -213,7 +213,7 @@ static bool StartScene_OnMouseDown(void *user, float x, float y)
     }
     App_PlaySound(scene->app, SOUND_BUTTON_CLICK);
     if (hit == 0) {
-        App_StartGame(scene->app);
+        App_StartGame(scene->app, false);
     } else if (hit == 1) {
         App_ShowStats(scene->app);
     } else if (hit == 2) {

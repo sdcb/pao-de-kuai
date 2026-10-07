@@ -7,7 +7,7 @@
  * The C++ version constructed the next scene itself (`ChangeScene(make_unique<GameScene>(...))`);
  * a C translation unit cannot, so both exits go through App_EnterGame / App_EnterStats.
  *
- * `app` is an opaque App* (see app/AppApi.h).  The returned handle owns its state and releases it
+ * `app` is an opaque App* (see app/App.h).  The returned handle owns its state and releases it
  * through the scene vtable's Destroy slot, exactly like the overlays.
  */
 

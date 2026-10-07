@@ -2,7 +2,7 @@
 
 #include "scenes/LoadingScene.h"
 
-#include "app/AppApi.h"
+#include "app/App.h"
 #include "core/Str.h"
 #include "graphics/d2d_c.h"
 #include "ui/Anim.h"

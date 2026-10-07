@@ -2,7 +2,7 @@
 
 #include "scenes/HelpScene.h"
 
-#include "app/AppApi.h"
+#include "app/App.h"
 #include "graphics/d2d_c.h"
 #include "rules/Card.h"
 #include "rules/RuleText.h"

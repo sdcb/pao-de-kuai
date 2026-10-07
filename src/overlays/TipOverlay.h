@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-/* `app` is an opaque App* (see app/AppApi.h).  Returns an owning handle. */
+/* `app` is an opaque App* (see app/App.h).  Returns an owning handle. */
 Overlay TipOverlay_New(void *app, const char *text);
 
 #ifdef __cplusplus

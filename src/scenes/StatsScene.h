@@ -4,7 +4,7 @@
  * The stats page: today, this month and all-time, one tall card per period, aggregated from the
  * per-round records on disk.  Pure C.
  *
- * `app` is an opaque App* (see app/AppApi.h).  The returned handle owns its state and frees it
+ * `app` is an opaque App* (see app/App.h).  The returned handle owns its state and frees it
  * through the scene vtable's Destroy slot.
  */
 
