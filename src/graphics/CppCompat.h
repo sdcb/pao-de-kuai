@@ -337,6 +337,11 @@ public:
         return out;
     }
 
+    /* The underlying C struct, for the layer facades that forward to C functions taking a
+     * RenderContext*. */
+    ::RenderContext* Native() { return &data_; }
+    const ::RenderContext* Native() const { return &data_; }
+
 private:
     ::RenderContext data_;
 };
