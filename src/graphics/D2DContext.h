@@ -154,7 +154,8 @@ private:
     std::list<std::uint64_t> gradientOrder_;
     std::map<std::uint64_t, std::list<std::uint64_t>::iterator> gradientLookup_;
     std::map<std::uint64_t, TextFormatEntry> formats_;
-    ProceduralTextures textures_;
+    /* Value-initialised here: the C struct holds raw interface pointers. */
+    ProceduralTextures textures_{};
 
     std::vector<D2D1_MATRIX_3X2_F> transforms_;
     std::vector<float> opacities_;

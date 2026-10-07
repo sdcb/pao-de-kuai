@@ -1,5 +1,7 @@
 #include "graphics/D2DContext.h"
 
+#include "graphics/CppCompat.h"
+
 #include <algorithm>
 
 namespace pdk::graphics {
@@ -132,7 +134,7 @@ void RenderContext::DiscardDeviceResources() {
     stops_.clear();
     gradientOrder_.clear();
     gradientLookup_.clear();
-    textures_.Reset();
+    ProceduralTextures_Reset(&textures_);
     target_.Reset();
     hwndTarget_.Reset();
 }
@@ -349,7 +351,7 @@ ID2D1Brush* RenderContext::Radial(Point center, float radiusX, float radiusY, st
 }
 
 ID2D1Brush* RenderContext::FeltBrush() {
-    ID2D1BitmapBrush* brush = textures_.Felt(target_.Get());
+    ID2D1BitmapBrush* brush = ProceduralFelt(textures_, target_.Get());
     if (brush) {
         brush->SetOpacity(opacity_);
     }
@@ -475,16 +477,16 @@ void RenderContext::DrawShadow(const Rect& rect, float blur, D2D1_COLOR_F color)
     if (!target_ || blur <= 0.0f || opacity_ <= 0.0f) {
         return;
     }
-    ID2D1Bitmap* mask = textures_.Shadow(target_.Get());
+    ID2D1Bitmap* mask = ProceduralShadow(textures_, target_.Get());
     ID2D1Brush* brush = Solid(color);
     if (!mask || !brush) {
         return;
     }
-    constexpr float size = static_cast<float>(ProceduralTextures::ShadowSize);
+    constexpr float size = static_cast<float>(PDK_SHADOW_SIZE);
     // Corner slices stop just short of the centre where the blurred mask is flat.
     constexpr float corner = size * 0.5f - 4.0f;
-    const float k = blur / ProceduralTextures::ShadowSigma;
-    const float pad = static_cast<float>(ProceduralTextures::ShadowPad) * k;
+    const float k = blur / PDK_SHADOW_SIGMA;
+    const float pad = static_cast<float>(PDK_SHADOW_PAD) * k;
     const Rect outer{rect.x - pad, rect.y - pad, rect.width + pad * 2.0f, rect.height + pad * 2.0f};
     const float cornerW = std::min(corner * k, outer.width * 0.5f);
     const float cornerH = std::min(corner * k, outer.height * 0.5f);

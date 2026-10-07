@@ -1,7 +1,7 @@
 #include "app/App.h"
 
 #include "audio/SoundIds.h"
-#include "graphics/WicImageLoader.h"
+#include "graphics/CppCompat.h"
 #include "overlays/AboutOverlay.h"
 #include "overlays/ConfirmExitDialog.h"
 #include "overlays/InvalidMoveToast.h"
