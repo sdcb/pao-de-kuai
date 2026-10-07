@@ -482,6 +482,34 @@
 > - `AboutOverlay` 的署名段落原本是捕获累加 `y` 的 lambda；C 里改成显式 `CreditsCursor` 交给助手，
 >   顺带让"累加值"不可能被第二个调用点写错。
 > - `check_c_only.py` 残留 177 → **146** 处。
+>
+> **S7c 起的最优顺序（依赖分析结论，供后续轮次直接执行）**
+>
+> 关键依赖：**`GameScene` 重度依赖 `GameState`**（用到 27 个方法：`Update`/`Players`/`Events`/
+> `HintIndices`/`PlaySelected`/`SelectBestPatternFromDraggedCards`/`StartNewRound`/`LastRoundRecord`…），
+> 而 `GameState` 是 C++。所以要么先把 `GameState` 转 C（然后 GameScene 直接调 `GameState_*`），
+> 要么给 GameState 开一条 27 函数的 `extern "C"` 边界——**前者明显更好**。
+> 但**四个小场景不依赖 GameState**，可以先用 `AppApi.h` 边界拿下：
+>
+> | 场景 | 行数 | 需要的 `app_.` | 需要的 ABI 新增 |
+> |---|---|---|---|
+> | HelpScene | 113 | Audio, CardAtlas, LoadCardAtlas, ShowStart | `App_CardAtlas`(→`::SpriteAtlas*`), `App_LoadCardAtlas` |
+> | StatsScene | 134 | Audio, Settings, ShowStart | `App_GetSettings`（已在计划内） |
+> | StartScene | 154 | Audio, CardAtlas, LoadCardAtlas, PushOverlay, RequestClose, Settings, ShowHelp, ShowSettings, ShowStats, StartGame | `App_ShowHelp`/`App_ShowSettings`/`App_ShowStats`/`App_StartGame`/`App_RequestClose` |
+> | LoadingScene | 47 | Audio, ChangeScene, LoadGameResources | `App_LoadGameResources`, `App_EnterGame`/`App_EnterStats`（C 文件不能 `new GameScene`） |
+>
+> 注意 `LoadingScene` 原本直接 `app_.ChangeScene(make_unique<GameScene>(app_))`——**C 文件无法构造场景类型**，
+> 所以要在 ABI 里给 `App_EnterGame`（App.cpp 内 `ChangeScene(Transfer(new GameScene(*this)))`）。
+>
+> 推荐顺序：
+> 1. `RoundResultOverlay` + `SettingsOverlay`（本轮子代理在做）→ 10 个 `.cpp`
+> 2. `HelpScene` → `StatsScene` → `StartScene` → `LoadingScene`（配 `AppApi.h` 扩展）→ 6 个
+> 3. **`GameState`(1388 行)**：最大的一块。`std::vector`×67、`std::string`×49、`std::optional`×20、
+>    `std::sort`×7，47 个公开方法；先转它，GameScene 才好办
+> 4. `GameScene`(826) → 5 个
+> 5. `App`(334) / `Window`(158) / `WinMain`(19)：转完 App 后 `AppApi.h` 整条边界立即删除
+> 6. `StrongAiStrategy`(1321)：`std::thread` 后台控制器，注意线程生命周期
+> 7. S8 收尾
 >   是验证新分派最好的单张图）。
 >
 >
