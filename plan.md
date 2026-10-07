@@ -231,6 +231,27 @@
 > - 进度：`src/` 剩 **27 个 `.cpp`**，`check_c_only.py` 残留 210 处；
 >   MinGW x64 exe **707,584 → 701,440 B**。
 >
+> **修订 15（S4g 完成记录，commit `dbe58ae`）——AI 内部数据结构 + 基础策略已纯 C**：
+> - `AiStrategyInternal.h` → C 头 + `AiStrategyInternal.c` 装容器。STL 容器逐一替换：
+>   `std::map<Rank,int> CountRanks` → `AiRankCounts`（`int[16]` 按 rank 索引；map 唯一提供的
+>   就是升序遍历，rank 循环完全等价，而且更快更小）；`std::vector<Rank>` → `AiRankList`；
+>   `std::vector<Candidate>` → `AiCandidateList`；`std::vector<uint64_t> masks` → `AiMaskList`
+>   （**C(16,8)=12870**，定长数组要 100 KB 栈，必须可增长）；`std::set<std::string>` →
+>   `AiKeySet`（FNV-1a 哈希，线性重扫在候选数上是平方级，搜索会明显变慢）。
+> - `BasicAiStrategy.cpp` → `.c`；两个 lambda 改成构建上下文结构 + 两个静态比较函数。
+> - **排序是个必须刻意处理的点**：`std::sort` **不稳定**，且两套工具链用不同算法。若照搬不稳定
+>   排序，在原比较器下打平的候选之间可能选出不同的牌——这是真实的跨工具链分歧。所以候选改用
+>   **稳定插入排序 + 原比较器原样**（不发明新 tie-break，原来能定的现在也定得一样）；掩码用
+>   `qsort`，因为每个掩码互不相同、序是全序。
+> - 删掉两个**确实是死代码**的帮助函数：`CountMaskBits64`、`PossibleFollowCardCount`
+>   （全树定义但从未被调用），没有照搬。
+> - `StrongAiStrategy.cpp` 仍是 C++ 且仍按老形状书写，所以加了一段**明确标注的临时垫片**，
+>   在 C API 之上重建 `Candidate`/`CountRanks`/`GenerateCandidates`/`DeduplicateCandidates`/
+>   `PatternBaseScore`/`UnknownRankCount`/`KickerControlPenalty`。现在改这 ~20 个调用点、等
+>   转 `.c` 时再改一遍是同一份工作做两次；垫片随该文件一起删。
+> - 进度：`src/` 剩 **26 个 `.cpp`**，`check_c_only.py` 残留 205 处；
+>   MinGW x64 exe **701,440 → 693,760 B**。
+>
 >
 
 >
