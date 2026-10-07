@@ -76,6 +76,15 @@ static inline float Progress(float time, float start, float duration)
     return duration <= 0.0f ? 1.0f : Clamp01((time - start) / duration);
 }
 
+/* Clamp01 for the 0..1 case; this is the general one the layouts need. */
+static inline float ClampF(float value, float low, float high)
+{
+    if (value < low) {
+        return low;
+    }
+    return value > high ? high : value;
+}
+
 static inline D2D1_COLOR_F LerpColor(D2D1_COLOR_F from, D2D1_COLOR_F to, float t)
 {
     D2D1_COLOR_F out;

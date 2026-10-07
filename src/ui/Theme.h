@@ -30,6 +30,18 @@ extern "C" {
 /* Runtime form, for colours computed from data rather than written as literals.  C has no
  * default arguments, so callers wanting alpha = 1 pass it explicitly; ui/CppCompat.h restores
  * the one-argument form for the C++ callers. */
+/* A literal colour, as the C++ call sites spell it: {r, g, b, a}. */
+static inline D2D1_COLOR_F ColorF_Make(float r, float g, float b, float a)
+{
+    D2D1_COLOR_F color;
+
+    color.r = r;
+    color.g = g;
+    color.b = b;
+    color.a = a;
+    return color;
+}
+
 static inline D2D1_COLOR_F Rgb(uint32_t hex, float alpha)
 {
     const D2D1_COLOR_F color = PDK_RGBA(hex, alpha);

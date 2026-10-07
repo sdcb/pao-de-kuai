@@ -20,6 +20,7 @@
  */
 
 #include "core/Geometry.h"
+#include "core/Str.h"
 #include "graphics/D2DContext.h"
 #include "ui/Anim.h"
 #include "ui/Icons.h"
@@ -141,6 +142,19 @@ static inline void ChipStyle_Init(ChipStyle *style)
     style->height = 28.0f;
     style->padX = 13.0f;
     style->weight = 400; /* DWRITE_FONT_WEIGHT_NORMAL */
+}
+
+/* Button_Init plus the two fields callers always set; Button has no constructor by design
+ * (see the header comment), so this is the shared way to build one. */
+static inline Button Button_Make(Rect rect, const char *text, ButtonStyle style)
+{
+    Button button;
+
+    Button_Init(&button);
+    button.rect = rect;
+    Str_CopyTo(button.text, PDK_BUTTON_TEXT_CAP, text);
+    button.style = style;
+    return button;
 }
 
 static inline Button Button_Default(void)

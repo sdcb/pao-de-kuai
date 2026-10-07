@@ -43,6 +43,27 @@ typedef struct ViewTransform {
     float offsetY;
 } ViewTransform;
 
+/* The braced-initialiser spellings the C++ call sites use, as functions. */
+static inline Point Point_Make(float x, float y)
+{
+    Point point;
+
+    point.x = x;
+    point.y = y;
+    return point;
+}
+
+static inline Rect Rect_Make(float x, float y, float width, float height)
+{
+    Rect rect;
+
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+    return rect;
+}
+
 static inline bool Rect_Contains(const Rect *rect, float px, float py)
 {
     return px >= rect->x && px <= rect->x + rect->width &&

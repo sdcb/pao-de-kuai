@@ -689,7 +689,7 @@ bool GameScene::OnMouseDown(float x, float y) {
     if (Button_HitTest(&backButton_, x, y)) {
         backButton_.pressT = 1.0f;
         app_.Audio().Play(SOUND_BUTTON_CLICK);
-        app_.PushOverlay(core::Transfer(new overlays::ReturnToMenuOverlay(app_)));
+        app_.PushOverlay(ReturnToMenuOverlay_New(&app_));
         return true;
     }
     if (!InteractionReady()) {
@@ -846,7 +846,7 @@ void GameScene::ConsumeEvents() {
         case game::GameEventType::Talk:
             if (event.player != PLAYER_HUMAN) {
                 app_.Audio().Play(SOUND_AI_TALK);
-                app_.PushOverlay(core::Transfer(new overlays::TalkBubbleOverlay(event.player, event.message)));
+                app_.PushOverlay(TalkBubbleOverlay_New(event.player, event.message.c_str()));
             } else {
                 app_.Audio().Play(SOUND_TURN_PROMPT);
             }

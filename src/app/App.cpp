@@ -195,6 +195,19 @@ bool App::OnMouseUp(float x, float y) {
     return scene != nullptr && Scene_OnMouseUp(scene, x, y);
 }
 
+/* ---- the C ABI converted overlays use (app/AppApi.h); delete when App becomes C ---- */
+
+extern "C" void App_PlaySound(void *app, int soundId)
+{
+    static_cast<App *>(app)->Audio().Play(soundId);
+}
+
+extern "C" void App_CloseTopOverlay(void *app) { static_cast<App *>(app)->CloseTopOverlay(); }
+extern "C" void App_ConfirmExit(void *app) { static_cast<App *>(app)->ConfirmExit(); }
+extern "C" void App_ShowStart(void *app) { static_cast<App *>(app)->ShowStart(); }
+extern "C" void App_RestartCurrentGame(void *app) { static_cast<App *>(app)->RestartCurrentGame(); }
+extern "C" void App_SaveSettings(void *app) { static_cast<App *>(app)->SaveSettings(); }
+
 void App::ShowStart() {
     ChangeScene(core::Transfer(new scenes::StartScene(*this)));
 }
@@ -250,17 +263,17 @@ void App::ShowViewerScene(const std::string& scene, const std::string& overlay, 
     }
 
     if (overlay == "confirm-exit") {
-        PushOverlay(core::Transfer(new overlays::ConfirmExitDialog(*this)));
+        PushOverlay(ConfirmExitDialog_New(this));
     } else if (overlay == "about") {
-        PushOverlay(core::Transfer(new overlays::AboutOverlay(*this)));
+        PushOverlay(AboutOverlay_New(this));
     } else if (overlay == "tip") {
-        PushOverlay(core::Transfer(new overlays::TipOverlay(*this, "推荐先走顺子，少留散牌")));
+        PushOverlay(TipOverlay_New(this, "推荐先走顺子，少留散牌"));
     } else if (overlay == "invalid") {
-        PushOverlay(core::Transfer(new overlays::InvalidMoveToast("牌型或点数压不过上家")));
+        PushOverlay(InvalidMoveToast_New("牌型或点数压不过上家"));
     } else if (overlay == "talk") {
-        PushOverlay(core::Transfer(new overlays::TalkBubbleOverlay(PLAYER_AI1, "哇，李姐你太强了！")));
+        PushOverlay(TalkBubbleOverlay_New(PLAYER_AI1, "哇，李姐你太强了！"));
     } else if (overlay == "return-menu") {
-        PushOverlay(core::Transfer(new overlays::ReturnToMenuOverlay(*this)));
+        PushOverlay(ReturnToMenuOverlay_New(this));
     } else if (overlay == "result-win") {
         stats::RoundRecord record;
         record.winner = PLAYER_HUMAN;
@@ -310,7 +323,7 @@ void App::RequestClose() {
         ConfirmExit();
         return;
     }
-    PushOverlay(core::Transfer(new overlays::ConfirmExitDialog(*this)));
+    PushOverlay(ConfirmExitDialog_New(this));
     audio_.Play(SOUND_PAUSE);
 }
 

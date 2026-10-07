@@ -1,24 +1,20 @@
 #pragma once
 
-#include "core/CppCompat.h"
-#include "rules/CppCompat.h"
+/*
+ * The AI's speech bubble: a paper-coloured rounded plate under the speaker's name plate, with a
+ * tail pointing at their avatar.  Pure C.  It answers the Expired slot (three seconds).
+ */
 
-#include <string>
+#include "core/Overlay.h"
+#include "rules/Card.h"
 
-namespace pdk::overlays {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-class TalkBubbleOverlay final : public core::OverlayClass {
-public:
-    TalkBubbleOverlay(rules::PlayerId player, std::string text);
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool BlocksInputBelow() const override { return false; }
-    bool Expired() const { return elapsed_ > 3.0f; }
+/* Returns an owning handle; a null vtable if the allocation failed. */
+Overlay TalkBubbleOverlay_New(PlayerId player, const char *text);
 
-private:
-    rules::PlayerId player_;
-    std::string text_;
-    float elapsed_{0.0f};
-};
-
-} // namespace pdk::overlays
+#ifdef __cplusplus
+}
+#endif

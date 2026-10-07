@@ -233,6 +233,15 @@ void RenderContext_DrawBitmapRect(RenderContext *context, PDK_ID2D1Bitmap *bitma
 
 void RenderContext_Utf8ToWide(const RenderContext *context, const char *text, WStr *out);
 
+static inline GradientStop GradientStop_Make(float position, D2D1_COLOR_F color)
+{
+    GradientStop stop;
+
+    stop.position = position;
+    stop.color = color;
+    return stop;
+}
+
 static inline TextStyle TextStyle_Default(void)
 {
     TextStyle style;
@@ -244,6 +253,32 @@ static inline TextStyle TextStyle_Default(void)
     style.lineHeight = 0.0f;
     style.wrap = true;
     style.ellipsis = false;
+    return style;
+}
+
+/* The C spelling of the C++ facade's Text(size, weight) / Centered(...) / Kai(size). */
+static inline TextStyle TextStyle_Label(float size, int weight)
+{
+    TextStyle style = TextStyle_Default();
+
+    style.size = size;
+    style.weight = weight;
+    return style;
+}
+
+static inline TextStyle TextStyle_Centered(TextStyle style)
+{
+    style.align = 2;  /* DWRITE_TEXT_ALIGNMENT_CENTER */
+    style.valign = 2; /* DWRITE_PARAGRAPH_ALIGNMENT_CENTER */
+    return style;
+}
+
+static inline TextStyle TextStyle_Kai(float size)
+{
+    TextStyle style = TextStyle_Default();
+
+    style.size = size;
+    style.family = FONT_FAMILY_KAI;
     return style;
 }
 

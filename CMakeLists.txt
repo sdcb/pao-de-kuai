@@ -215,14 +215,14 @@ set(PDK_APP_SOURCES
     src/scenes/LoadingScene.cpp
     src/scenes/StartScene.cpp
     src/scenes/StatsScene.cpp
-    src/overlays/ConfirmExitDialog.cpp
-    src/overlays/AboutOverlay.cpp
-    src/overlays/InvalidMoveToast.cpp
-    src/overlays/ReturnToMenuOverlay.cpp
+    src/overlays/ConfirmExitDialog.c
+    src/overlays/AboutOverlay.c
+    src/overlays/InvalidMoveToast.c
+    src/overlays/ReturnToMenuOverlay.c
     src/overlays/RoundResultOverlay.cpp
     src/overlays/SettingsOverlay.cpp
-    src/overlays/TalkBubbleOverlay.cpp
-    src/overlays/TipOverlay.cpp
+    src/overlays/TalkBubbleOverlay.c
+    src/overlays/TipOverlay.c
     src/ui/CardView.c
     src/ui/Icons.c
     src/ui/Inputs.c
