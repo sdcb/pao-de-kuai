@@ -150,6 +150,27 @@
 >   + `RoundTraceRecorder`。`TurnRecord`/`ExternalAiRequest` 里的 `std::string`/`std::vector` 成员
 >   是主要改动面，`GameState.cpp`（1,348 行）是它们的消费大户。
 >
+> **修订 11（S4c 完成记录，commit `836ab57`）——game 层开始，第一批值类型已纯 C**：
+> - `StrategyMetadata.h`：两个字段都是 `const char*` 字面量（新增 `UnknownStrategyMetadata()`）。
+> - `Player.h`：`char name[PDK_SEAT_NAME_CAP]` + 定长 `Cards hand` + `hasPlayedCards`，
+>   配 `static inline PlayerState_Empty/Init`。常量叫 `PDK_SEAT_NAME_CAP` 而不是
+>   `PDK_PLAYER_NAME_CAP`，因为后者已被 `stats/AppSettings.h` 占用（同名会冲突）。
+> - `TurnRecord.h`：文本成员全是 `char[]`，用新增的 `core/Str.h: Str_CopyTo` 填充
+>   （它替换了我手写在 3 个 C 文件里的同一段拷贝循环）；`optional<HandPattern>` →
+>   值 + `has` 标志；`GameAction.ranks` 从 `std::vector<std::string>` 变成
+>   `char[20][16]` + count，走 `GameAction_Clear/Set/AddRank`；
+>   `TurnDecisionSource/Reason` 的 scoped enum → `TURN_SOURCE_*` / `TURN_REASON_*`。
+> - `TurnRecord.cpp` → `TurnRecord.c`；`PlayerLabel/SourceLabel/ReasonLabel` 返回字面量。
+> - **新增 `src/game/CppCompat.h`（临时）**：把 C 类型与常量以 `using` 重新导出到
+>   `namespace pdk::game`，由 `GameState.h`/`RoundTraceRecorder.h`/`AiStrategy.h` 拉进来，
+>   这样未转换的 C++ 调用点写法不用改。
+> - 踩到的两个真实细节：① `TurnSnapshot` 位置式聚合初始化会因为新插入的 `hasLastPattern`
+>   整体错位，所以改成逐字段赋值；② 测试里 `metadata.strategy == "strong"` 现在是**指针比较**，
+>   5 处改成 `std::string(...) == ...`（doctest 把 `char[64]` 打印成空白是它的 stringify
+>   假象，447 条断言证明数据本身是对的）。
+> - 进度：`src/` 剩 **32 个 `.cpp`**，`check_c_only.py` 残留 244 处；MinGW x64 exe
+>   **726,016 → 717,824 B**。
+>
 >
 
 >
