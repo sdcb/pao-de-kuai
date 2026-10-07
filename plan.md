@@ -171,6 +171,26 @@
 > - 进度：`src/` 剩 **32 个 `.cpp`**，`check_c_only.py` 残留 244 处；MinGW x64 exe
 >   **726,016 → 717,824 B**。
 >
+> **修订 12（S4d 完成记录，commit `98fe024`）——AI 策略接口已纯 C**：
+> - `AiStrategy` 从虚基类变成 `(vtable, user)` 二元组（`ChooseMove`/`Metadata`/`Destroy`）；
+>   两个内置策略改成**自由函数**，不再为了问一手牌而 `make_unique` 一个对象。
+>   内置单例的 `Destroy` 为 NULL，所以只有注入的策略（测试那个暴力策略）需要释放。
+> - `AiContext` 的两个容器成员变定长：`optional<PassObservation>` → 值 + `has` 标志；
+>   每人的 `vector<PassObservation>` → `PassHistory`（数组 + count，上限是一局能过的轮数）。
+>   C 没有数组赋值，所以 4 处整数组拷贝走 `PassObservations_Copy`/`PassHistories_Copy`。
+> - 新增 `AiMoveChoice_MakePass/MakePlay`：`char[]` 成员**只能用字面量做聚合初始化**，
+>   而所有"不要 + 理由"的站点都是 `cond ? "a" : "b"`——C++ 版本因为成员是 `std::string`
+>   才能那么写。
+> - 新增纯 C 的 `AiStrategy.c`（两个 vtable、适配器、`AiStrategy_Release`、Metadata）与
+>   `AiPlayer.h/.c`（座位按值持有 `(vtable, user)` + 所有权标志）。**GameState 必须显式
+>   `AiPlayer_Init` 三个座位**——裸 C 结构的 vtbl 是垃圾值。
+> - `AiStrategy.cpp` → `BasicAiStrategy.cpp`（名字终于和内容一致），成员函数改成命名空间内
+>   帮助函数 + 一个 C 入口；`StrongAiStrategy.cpp` 同样处理。C 入口定义在
+>   `namespace pdk::game` **之外**，否则和头里的 `extern "C"` 声明对不上。
+> - `game/CppCompat.h` 补上 `AiStrategyClass` + `BasicAiStrategy`/`StrongAiStrategy` 包装，
+>   以及 `Borrow`/`Transfer` 两个桥（不接管 / 接管 C++ 策略的所有权）。
+> - 进度：MinGW x64 exe **717,824 → 713,216 B**；`check_c_only.py` 残留 237 处。
+>
 >
 
 >
