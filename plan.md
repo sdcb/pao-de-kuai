@@ -663,6 +663,26 @@
 > 于是 S8 的代码清理就是：删 9 个门面 + `TextRenderer.h` + 两处 `#ifdef __cplusplus` 垫片，
 > 把 `ComPtr.h` 挪进 `tests/`，然后按目标摘 `-static-libstdc++`（见上一条），
 > 接入 CI 门禁，量体积、比截图。
+>
+>
+> **修订 29（S7g 完成记录，commit `7451b37`）——app 外壳纯 C，临时 ABI 被真实 API 吸收**
+> - `App`/`Window`/`WinMain` → C。`src/` 只剩 **1 个 C++ 文件**（`game/StrongAiStrategy.cpp`）。
+>   MinGW x64 exe 622,080 → **593,408 B（余量 86,016 B）**。
+> - **`app/AppApi.h` 删掉了。** 它当初存在的唯一理由是"已转换的场景/覆盖层要驱动还是 C++ 的 App"。
+>   现在那些函数**就是** API：`app/App.h` 用同名声明它们，参数从 `void *` 变成 `App *`。
+>   **12 个场景/覆盖层各只改了一行**（include），因为 C 允许 `void *` 隐式转成 `App *`。
+>   先把这条边界建起来、最后再吸收掉——这正是最后三个文件能转完而不牵动另外 13 个文件的原因。
+> - App 现在直接持有 C 值（`RenderContext`/`AudioEngine`/`SpriteAtlas`/`AppSettings`），
+>   而不是包着它们的 C++ 门面；并把 `&app->renderContext` 直接交给 `Scene_Render`/`Overlay_Render`，
+>   所以场景/覆盖层桥接当初需要的"借用视图"在这条路径上不再出现。
+> - `App::HandleImeMessage` 的 `LPARAM&` → `LPARAM *`；`OnText` 的 `std::wstring` → `const wchar_t *`；
+>   `ShowViewerScene` 的三个 `std::string` → `const char *`。
+> - `tests/scene_viewer/SceneViewer.cpp` **按设计保持 C++**（测试允许是 C++），已改为调用 C API。
+>   它也是 S8 里 `-static-libstdc++` 要留给该目标的原因。
+> - 三链路 15/15 全绿；5 张截图与基线对照全部在预期范围（`ui-start` 0.366、`ui-settings` 0.340、
+>   `ui-game-play` 0.228、`ui-result` 0.457；`ui-game-deal` 4.674，落在它自己底噪的波动带内——
+>   该场景的底噪在多次运行中实测在 0.9~4.3 之间，因为发牌动画快到"差一帧"就能移动大量像素）。
+> - `check_c_only.py` 残留 88 处，其中 74 处是 9 个门面（S8 删除）。
 > 7. S8 收尾
 >
 > **`GameState` 转换勘察（S7d 之后的下一块大石头，1388 行）**
