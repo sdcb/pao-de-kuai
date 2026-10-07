@@ -1,6 +1,6 @@
 # 跑得快 [![QQ](https://img.shields.io/badge/QQ_Group-495782587-52B6EF?style=social&logo=tencent-qq&logoColor=000&logoWidth=20)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=mma4msRKd372Z6dWpmBp4JZ9RL4Jrf8X&authKey=gccTx0h0RaH5b8B8jtuPJocU7MgFRUznqbV%2FLgsKdsK8RqZE%2BOhnETQ7nYVTp1W0&noverify=0&group_code=495782587)
 
-一个 Windows 桌面版单机三人跑得快游戏，为家人使用场景设计，也作为一个开源 C++ 桌面应用项目维护。
+一个 Windows 桌面版单机三人跑得快游戏，为家人使用场景设计，也作为一个开源 C 桌面应用项目维护。
 
 仓库地址：https://github.com/sdcb/pao-de-kuai
 
@@ -10,7 +10,7 @@
 
 ## 技术栈
 
-- C++ / Win32
+- C / Win32
 - Direct2D / DirectWrite / WIC
 - Media Foundation / WASAPI
 - IMM32（设置里的中文输入）
@@ -61,7 +61,9 @@ ctest --preset vs2026-release --output-on-failure
 - `scene_viewer.exe`：测试/调试用场景查看器，可按参数打开指定场景并截图。
 - `unit_tests.exe`：规则、状态和基础 AI 单元测试。
 
-主发布工具链是 MinGW-w64 UCRT x64：直接链接系统 `ucrtbase.dll`，不静态链接 libstdc++/libgcc（`src/` 已是纯 C）。MSVC x64/x86/arm64 作为 CI 验证组合保留，默认 `/MT`。
+主发布工具链是 MinGW-w64 UCRT x64，直接链接系统 `ucrtbase.dll`。MSVC x64/x86/arm64 作为 CI 验证组合保留，默认 `/MT`。
+
+`src/` 正在从 C++ 迁移为纯 C，目前已迁移绝大部分，**还剩 6 个 `.cpp`**（`python tools/check_c_only.py --report` 可查看进度）。迁移完成后会摘掉 MinGW 侧仍然存在的 `-static-libstdc++`/`-static-libgcc`，届时 exe 不再依赖 libstdc++。
 
 ## 运行数据
 
