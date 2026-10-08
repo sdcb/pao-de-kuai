@@ -186,6 +186,30 @@ static bool LocalAiController_HasPendingImpl(void *user)
     return pending;
 }
 
+/*
+ * Publishes a failure result so the caller's next TryGetResult reports it, instead of leaving
+ * `pending` set with nothing ever published.
+ *
+ * Every early exit from StartImpl below has to go through here.  GameState polls TryGetResult once
+ * per tick and the only other thing that clears `pending` is a worker finishing, so a failure that
+ * just returned would stall the AI turn forever.  A published ok=false result is handled: the turn
+ * completes and falls back to PlayLocalAiTurn.  (The old std::thread version threw instead, which
+ * nothing caught either -- but "cannot spawn a worker" must not become a permanent hang.)
+ */
+static void LocalAiController_FailPending(LocalAiShared *shared, const char *message)
+{
+    ExternalAiResult failed;
+
+    memset(&failed, 0, sizeof(failed));
+    failed.source = TURN_SOURCE_LOCAL_AI;
+    Str_CopyTo(failed.errorMessage, PDK_AI_ERROR_CAP, message);
+    EnterCriticalSection(&shared->mutex);
+    shared->pending = false;
+    shared->result = failed;
+    shared->hasResult = true;
+    LeaveCriticalSection(&shared->mutex);
+}
+
 static void LocalAiController_StartImpl(void *user, const ExternalAiRequest *request)
 {
     LocalAiController *controller = (LocalAiController *)user;
@@ -203,17 +227,7 @@ static void LocalAiController_StartImpl(void *user, const ExternalAiRequest *req
     shared = controller->shared;
 
     if (index < 0 || index >= PDK_AI_SEATS || !controller->configured[index]) {
-        ExternalAiResult failed;
-
-        memset(&failed, 0, sizeof(failed));
-        failed.source = TURN_SOURCE_LOCAL_AI;
-        Str_CopyTo(failed.errorMessage, PDK_AI_ERROR_CAP,
-                   "No local AI strategy configured for player");
-        EnterCriticalSection(&shared->mutex);
-        shared->pending = false;
-        shared->result = failed;
-        shared->hasResult = true;
-        LeaveCriticalSection(&shared->mutex);
+        LocalAiController_FailPending(shared, "No local AI strategy configured for player");
         return;
     }
     kind = controller->kinds[index];
@@ -226,6 +240,7 @@ static void LocalAiController_StartImpl(void *user, const ExternalAiRequest *req
 
     task = (LocalAiTask *)malloc(sizeof(LocalAiTask));
     if (task == NULL) {
+        LocalAiController_FailPending(shared, "Out of memory starting the local AI worker");
         return;
     }
     LocalAiShared_AddRef(shared);
@@ -236,6 +251,9 @@ static void LocalAiController_StartImpl(void *user, const ExternalAiRequest *req
 
     thread = CreateThread(NULL, 0, LocalAiWorker, task, 0, NULL);
     if (thread == NULL) {
+        /* Publish before dropping the task's reference, so this cannot depend on the controller
+         * still holding one. */
+        LocalAiController_FailPending(shared, "Could not start the local AI worker thread");
         LocalAiShared_Release(shared);
         free(task);
         return;

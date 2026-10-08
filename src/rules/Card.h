@@ -88,8 +88,13 @@ struct Cards {
     int count;
 
 #ifdef __cplusplus
-    /* ---- TEMPORARY C++ shim: delete with src/rules/CppCompat.h ---- */
+    /* ---- C++ member shim for the test suite (stays; see tools/check_c_only.py) ---- */
     /*
+     * src/ is pure C now, but tests/ is permanently C++ (doctest) and uses the vector-shaped API
+     * below in ~139 places, so this block is not a leftover: it is test support that lives here
+     * because a member cannot be added to the struct from outside.  It is the one documented
+     * exception in tools/check_c_only.py's whitelist.
+     *
      * A zeroing default constructor is not optional: `Cards x;` used to be an empty
      * std::vector, and without this the C struct would leave `count` indeterminate
      * and the first push_back would write out of bounds.  C callers use

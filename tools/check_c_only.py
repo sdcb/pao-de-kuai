@@ -56,10 +56,11 @@ RE_BANNED_INCLUDE = re.compile(
     r"cstring|cmath|cstdlib|climits|cassert|functional|wrl/|string>)\s*[>\"]"
 )
 
-# Compiler branches are only allowed in the shim outlet, plus two documented
-# temporary exceptions: cjson is vendored third-party C, and rules/Card.h carries a
-# `#ifdef __cplusplus` member shim that gives the not-yet-ported C++ translation
-# units the std::vector-shaped Cards API.  Both are deleted when the port finishes.
+# Compiler branches are only allowed in the shim outlet, plus one permanent exception:
+# rules/Card.h carries a `#ifdef __cplusplus` member shim that gives the C++ test suite the
+# std::vector-shaped Cards API it uses in ~139 places.  The port is finished -- src/ is pure C --
+# and the tests are C++ by design, so that block is test support rather than a leftover, and it
+# cannot move out of the header because a member cannot be added to a struct from outside.
 ALLOWED_IFDEF_FILES = {
     os.path.join("graphics", "win_compat.h"),
     os.path.join("graphics", "Com.h"),
