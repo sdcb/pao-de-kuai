@@ -1,13 +1,14 @@
 #pragma once
 
-#include "game/AiStrategy.h"
+#include "game/CppCompat.h"
+#include "rules/CppCompat.h"
 
 #include <algorithm>
 #include <cstdint>
 
 namespace pdk::tests {
 
-class TestWeakAiStrategy final : public game::AiStrategy {
+class TestWeakAiStrategy final : public game::AiStrategyClass {
 public:
     game::AiMoveChoice ChooseMove(const rules::Cards& hand, const game::AiContext& context) override {
         const int n = static_cast<int>(hand.size());
@@ -33,13 +34,8 @@ public:
                 continue;
             }
 
-            choices.push_back(game::AiMoveChoice{
-                false,
-                cards,
-                validation.pattern,
-                "测试弱 AI 选择最低合法牌",
-                0
-            });
+            choices.push_back(game::AiMoveChoice_MakePlay(&cards, &validation.pattern,
+                                                         "测试弱 AI 选择最低合法牌", 0));
         }
 
         if (choices.empty()) {
@@ -47,8 +43,8 @@ public:
         }
 
         std::sort(choices.begin(), choices.end(), [](const game::AiMoveChoice& lhs, const game::AiMoveChoice& rhs) {
-            const bool lhsBomb = lhs.pattern.type == rules::PatternType::Bomb;
-            const bool rhsBomb = rhs.pattern.type == rules::PatternType::Bomb;
+            const bool lhsBomb = lhs.pattern.type == PATTERN_BOMB;
+            const bool rhsBomb = rhs.pattern.type == PATTERN_BOMB;
             if (lhsBomb != rhsBomb) {
                 return !lhsBomb;
             }
@@ -70,21 +66,22 @@ public:
 private:
     static int PatternOrder(rules::PatternType type) {
         switch (type) {
-        case rules::PatternType::Single: return 0;
-        case rules::PatternType::Pair: return 1;
-        case rules::PatternType::TripleWithOne: return 2;
-        case rules::PatternType::TripleWithPair: return 3;
-        case rules::PatternType::ConsecutivePairs: return 4;
-        case rules::PatternType::Straight: return 5;
-        case rules::PatternType::Plane: return 6;
-        case rules::PatternType::Bomb: return 7;
-        case rules::PatternType::Invalid: return 8;
+        case PATTERN_SINGLE: return 0;
+        case PATTERN_PAIR: return 1;
+        case PATTERN_TRIPLE_WITH_ONE: return 2;
+        case PATTERN_TRIPLE_WITH_PAIR: return 3;
+        case PATTERN_CONSECUTIVE_PAIRS: return 4;
+        case PATTERN_STRAIGHT: return 5;
+        case PATTERN_PLANE: return 6;
+        case PATTERN_BOMB: return 7;
+        case PATTERN_INVALID: return 8;
         }
         return 8;
     }
 
     static game::AiMoveChoice PassChoice(const game::AiContext& context) {
-        return game::AiMoveChoice{true, {}, {}, context.leading ? "测试弱 AI 没有可出的牌型" : "测试弱 AI 压牌失败"};
+        return game::AiMoveChoice_MakePass(context.leading ? "测试弱 AI 没有可出的牌型"
+                                                          : "测试弱 AI 压牌失败");
     }
 };
 

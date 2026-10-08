@@ -1,26 +1,30 @@
 #pragma once
 
-#include "app/App.h"
+/*
+ * The Win32 shell: registers the window class, creates the window and pumps messages.
+ *
+ * Pure C.  It holds `App *` and forwards every message to the App_* entry points; the class
+ * methods became static functions taking the Window handle, and the mouse coordinates go through
+ * the C RenderContext the same way they always did.
+ */
 
-#include <string>
+#include "app/App.h"
 
 #include <windows.h>
 
-namespace pdk::app {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-class Window {
-public:
-    bool Create(App& app, const wchar_t* title, int width, int height);
-    int Run();
-    HWND Hwnd() const { return hwnd_; }
+typedef struct Window {
+    HWND hwnd;
+    App *app;
+} Window;
 
-private:
-    static LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
-    LRESULT WndProc(UINT message, WPARAM wParam, LPARAM lParam);
-    void ForwardMouse(UINT message, LPARAM lParam);
+bool Window_Create(Window *window, App *app, const wchar_t *title, int width, int height);
+int Window_Run(Window *window);
+HWND Window_Hwnd(const Window *window);
 
-    HWND hwnd_{};
-    App* app_{};
-};
-
-} // namespace pdk::app
+#ifdef __cplusplus
+}
+#endif

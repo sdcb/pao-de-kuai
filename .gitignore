@@ -3,4 +3,7 @@ stat/
 round-traces/
 *.user
 *.log
-appsettings.json
+/appsettings.json
+
+CMakeUserPresets.json
+__pycache__/

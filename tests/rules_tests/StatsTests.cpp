@@ -1,8 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "rules/Scoring.h"
-#include "stats/AppSettings.h"
-#include "stats/StatStore.h"
+#include "rules/CppCompat.h"
+#include "stats/CppCompat.h"
 
 #include <filesystem>
 #include <fstream>
@@ -37,11 +36,11 @@ TEST_CASE("settings and daily stats use current working directory style json") {
     stats::RoundRecord round;
     round.startedAt = "20:12:31";
     round.endedAt = "20:16:02";
-    round.winner = rules::PlayerId::Player;
+    round.winner = PLAYER_HUMAN;
     round.playerName = "Tester";
     round.scores = {18, -8, -10};
     round.remainingCards = {0, 8, 10};
-    round.bombs = {rules::BombScoreEvent{rules::PlayerId::Player, 20}};
+    round.bombs = {rules::BombScoreEvent{PLAYER_HUMAN, 20}};
     CHECK(store.AppendRound("20260606", round));
 
     const stats::StatSummary day = store.SummarizeDay("20260606");

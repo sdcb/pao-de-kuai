@@ -1,45 +1,23 @@
 #pragma once
 
+/*
+ * The settings modal: player name, master volume, the two seat strategies and the round-trace
+ * switch, plus the save/cancel pair.  Pure C.
+ *
+ * It owns a draft copy of the settings, which is why it fills the most vtable slots of any
+ * overlay -- it is the only one that takes text and IME input.  Enter saves, Esc cancels, and
+ * cancelling restores the volume the app had when the modal opened.
+ */
+
 #include "core/Overlay.h"
-#include "scenes/SceneCommon.h"
-#include "stats/AppSettings.h"
-#include "ui/Inputs.h"
 
-namespace pdk::app {
-class App;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* `app` is an opaque App* (see app/App.h).  Returns an owning handle. */
+Overlay SettingsOverlay_New(void *app);
+
+#ifdef __cplusplus
 }
-
-namespace pdk::overlays {
-
-class SettingsOverlay final : public core::Overlay {
-public:
-    explicit SettingsOverlay(app::App& app);
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool BlocksInputBelow() const override { return true; }
-    bool OnMouseMove(float x, float y) override;
-    bool OnMouseDown(float x, float y) override;
-    bool OnMouseUp(float x, float y) override;
-    bool OnKeyDown(const core::KeyEvent& key) override;
-    bool OnText(const std::wstring& text) override;
-    bool WantsTextInput() const override { return nameField_.Focused(); }
-    void OnImeComposition(const std::wstring& text, int cursor) override;
-    bool TextCaretRect(core::Rect& caret) const override;
-
-private:
-    void Save();
-    void Cancel();
-
-    app::App& app_;
-    stats::AppSettings draft_;
-    float originalVolume_{0.8f};
-    ui::TextField nameField_;
-    ui::Slider volume_;
-    ui::Segmented ai1_;
-    ui::Segmented ai2_;
-    ui::Toggle trace_;
-    std::vector<ui::Button> buttons_;
-    float elapsed_{0.0f};
-};
-
-} // namespace pdk::overlays
+#endif

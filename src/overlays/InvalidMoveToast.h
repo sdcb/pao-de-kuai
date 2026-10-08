@@ -1,22 +1,22 @@
 #pragma once
 
+/*
+ * "That combination cannot beat the table" toast: a cinnabar capsule that fades in, holds for two
+ * seconds and lifts away.  Pure C; it is one of the two overlays that answer the vtable's Expired
+ * slot, which is how App's per-frame sweep drops it (there used to be a dynamic_cast for that).
+ *
+ * The implementation is private, so the header only exposes the constructor.
+ */
+
 #include "core/Overlay.h"
 
-#include <string>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace pdk::overlays {
+/* Returns an owning handle; a null vtable if the allocation failed. */
+Overlay InvalidMoveToast_New(const char *text);
 
-class InvalidMoveToast final : public core::Overlay {
-public:
-    explicit InvalidMoveToast(std::string text);
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool BlocksInputBelow() const override { return false; }
-    bool Expired() const { return elapsed_ > 2.0f; }
-
-private:
-    std::string text_;
-    float elapsed_{0.0f};
-};
-
-} // namespace pdk::overlays
+#ifdef __cplusplus
+}
+#endif

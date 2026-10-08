@@ -1,55 +1,105 @@
 #pragma once
 
-namespace pdk::core {
+/*
+ * Logical layout geometry for the fixed 1280x720 design (AGENTS.md).
+ *
+ * Pure C, but also consumed by the C++ translation units that are still part of
+ * the port, so this header stays inside the common subset of C17 and C++17:
+ * no compound literals, no designated initializers, no member functions.
+ * The old `Rect::Contains` member became `Rect_Contains` and the old default
+ * member initialisers became explicit `*_Identity` helpers, because C has
+ * neither.
+ */
 
-constexpr float LogicalWidth = 1280.0f;
-constexpr float LogicalHeight = 720.0f;
+#include <stdbool.h>
 
-struct Point {
-    float x{};
-    float y{};
-};
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-struct Size {
-    float width{};
-    float height{};
-};
+#define LogicalWidth 1280.0f
+#define LogicalHeight 720.0f
 
-struct Rect {
-    float x{};
-    float y{};
-    float width{};
-    float height{};
+typedef struct Point {
+    float x;
+    float y;
+} Point;
 
-    bool Contains(float px, float py) const {
-        return px >= x && px <= x + width && py >= y && py <= y + height;
-    }
-};
+typedef struct Size {
+    float width;
+    float height;
+} Size;
 
-struct ViewTransform {
-    float scale{1.0f};
-    float offsetX{0.0f};
-    float offsetY{0.0f};
-};
+typedef struct Rect {
+    float x;
+    float y;
+    float width;
+    float height;
+} Rect;
 
-inline ViewTransform ComputeViewTransform(int pixelWidth, int pixelHeight) {
-    const float sx = static_cast<float>(pixelWidth) / LogicalWidth;
-    const float sy = static_cast<float>(pixelHeight) / LogicalHeight;
+typedef struct ViewTransform {
+    float scale;
+    float offsetX;
+    float offsetY;
+} ViewTransform;
+
+/* The braced-initialiser spellings the C++ call sites use, as functions. */
+static inline Point Point_Make(float x, float y)
+{
+    Point point;
+
+    point.x = x;
+    point.y = y;
+    return point;
+}
+
+static inline Rect Rect_Make(float x, float y, float width, float height)
+{
+    Rect rect;
+
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+    return rect;
+}
+
+static inline bool Rect_Contains(const Rect *rect, float px, float py)
+{
+    return px >= rect->x && px <= rect->x + rect->width &&
+           py >= rect->y && py <= rect->y + rect->height;
+}
+
+/* Replacement for `ViewTransform{}`'s old scale{1.0f} default. */
+static inline ViewTransform ViewTransform_Identity(void)
+{
+    ViewTransform out;
+    out.scale = 1.0f;
+    out.offsetX = 0.0f;
+    out.offsetY = 0.0f;
+    return out;
+}
+
+static inline ViewTransform ComputeViewTransform(int pixelWidth, int pixelHeight)
+{
+    ViewTransform out;
+    const float sx = (float)pixelWidth / LogicalWidth;
+    const float sy = (float)pixelHeight / LogicalHeight;
     const float scale = sx < sy ? sx : sy;
-    const float contentW = LogicalWidth * scale;
-    const float contentH = LogicalHeight * scale;
-    return ViewTransform{
-        scale,
-        (static_cast<float>(pixelWidth) - contentW) * 0.5f,
-        (static_cast<float>(pixelHeight) - contentH) * 0.5f
-    };
+    out.scale = scale;
+    out.offsetX = ((float)pixelWidth - LogicalWidth * scale) * 0.5f;
+    out.offsetY = ((float)pixelHeight - LogicalHeight * scale) * 0.5f;
+    return out;
 }
 
-inline Point ToLogical(Point physical, const ViewTransform& transform) {
-    return Point{
-        (physical.x - transform.offsetX) / transform.scale,
-        (physical.y - transform.offsetY) / transform.scale
-    };
+static inline Point ToLogical(Point physical, const ViewTransform *transform)
+{
+    Point out;
+    out.x = (physical.x - transform->offsetX) / transform->scale;
+    out.y = (physical.y - transform->offsetY) / transform->scale;
+    return out;
 }
 
-} // namespace pdk::core
+#ifdef __cplusplus
+}
+#endif

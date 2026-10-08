@@ -1,28 +1,61 @@
 #pragma once
 
-#include <string>
+/*
+ * Strategy identity recorded with every turn.
+ *
+ * Pure C: both fields are pointers to string literals produced by the factories
+ * below, so there is nothing to allocate or free and the struct stays copyable.
+ */
 
-namespace pdk::game {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-struct StrategyMetadata {
-    std::string strategy;
-    std::string strategyVersion;
-};
+typedef struct StrategyMetadata {
+    const char *strategy;
+    const char *strategyVersion;
+} StrategyMetadata;
 
-inline StrategyMetadata HumanStrategyMetadata() {
-    return {"human", "1"};
+static inline StrategyMetadata HumanStrategyMetadata(void)
+{
+    StrategyMetadata metadata;
+    metadata.strategy = "human";
+    metadata.strategyVersion = "1";
+    return metadata;
 }
 
-inline StrategyMetadata BasicStrategyMetadata() {
-    return {"basic", "1"};
+static inline StrategyMetadata BasicStrategyMetadata(void)
+{
+    StrategyMetadata metadata;
+    metadata.strategy = "basic";
+    metadata.strategyVersion = "1";
+    return metadata;
 }
 
-inline StrategyMetadata StrongStrategyMetadata() {
-    return {"strong", "2.1"};
+static inline StrategyMetadata StrongStrategyMetadata(void)
+{
+    StrategyMetadata metadata;
+    metadata.strategy = "strong";
+    metadata.strategyVersion = "2.1";
+    return metadata;
 }
 
-inline StrategyMetadata RulesStrategyMetadata() {
-    return {"rules-forced", "pdk48-v1"};
+static inline StrategyMetadata RulesStrategyMetadata(void)
+{
+    StrategyMetadata metadata;
+    metadata.strategy = "rules-forced";
+    metadata.strategyVersion = "pdk48-v1";
+    return metadata;
 }
 
-} // namespace pdk::game
+static inline StrategyMetadata UnknownStrategyMetadata(void)
+{
+    StrategyMetadata metadata;
+    metadata.strategy = "unknown";
+    metadata.strategyVersion = "unknown";
+    return metadata;
+}
+
+#ifdef __cplusplus
+}
+#endif

@@ -2,41 +2,52 @@
 
 #include "rules/Card.h"
 
-#include <optional>
-#include <string>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace pdk::rules {
-
-enum class PatternType {
-    Invalid,
-    Single,
-    Pair,
-    Straight,
-    ConsecutivePairs,
-    TripleWithOne,
-    TripleWithPair,
-    Plane,
-    Bomb
+enum {
+    PATTERN_INVALID = 0,
+    PATTERN_SINGLE = 1,
+    PATTERN_PAIR = 2,
+    PATTERN_STRAIGHT = 3,
+    PATTERN_CONSECUTIVE_PAIRS = 4,
+    PATTERN_TRIPLE_WITH_ONE = 5,
+    PATTERN_TRIPLE_WITH_PAIR = 6,
+    PATTERN_PLANE = 7,
+    PATTERN_BOMB = 8
 };
 
-struct HandPattern {
-    PatternType type{PatternType::Invalid};
-    Rank mainRank{Rank::Three};
-    int cardCount{0};
-    int groupCount{0};
-    bool lastHandShort{false};
+typedef struct HandPattern {
+    PatternType type;
+    Rank mainRank;
+    int cardCount;
+    int groupCount;
+    bool lastHandShort;
+} HandPattern;
 
-    bool IsValid() const { return type != PatternType::Invalid; }
-};
+bool HandPattern_IsValid(const HandPattern *pattern);
 
-struct PatternResult {
-    HandPattern pattern{};
-    std::string reason;
-};
+/* `reason` is a fixed buffer rather than a string: the longest message in this
+ * file is 24 bytes and hand patterns are produced inside the AI search hot path,
+ * so a heap allocation there would be pure waste (plan.md 2). */
+enum { PATTERN_REASON_CAP = 128 };
 
-PatternResult IdentifyPattern(const Cards& cards, int handSizeBeforePlay = -1, bool allowShortFinal = false);
-std::string PatternName(PatternType type);
-std::string PatternDescription(const HandPattern& pattern);
-bool SameComparisonClass(const HandPattern& lhs, const HandPattern& rhs);
+typedef struct PatternResult {
+    HandPattern pattern;
+    char reason[PATTERN_REASON_CAP];
+} PatternResult;
 
-} // namespace pdk::rules
+/* `handSizeBeforePlay` is the hand size before the play, used to recognise the
+ * "last hand is short of kickers" special case; -1 means unknown.
+ * `allowShortFinal` must only be true when validating a lead (AGENTS.md). */
+PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal);
+
+/* Returns a string literal. */
+const char *PatternName(PatternType type);
+void PatternDescription(const HandPattern *pattern, char *out, int cap);
+bool SameComparisonClass(const HandPattern *lhs, const HandPattern *rhs);
+
+#ifdef __cplusplus
+}
+#endif

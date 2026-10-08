@@ -2,18 +2,22 @@
 
 #include "audio/SoundIds.h"
 
-#include <string_view>
-#include <vector>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace pdk::audio {
-
-struct SoundCatalogEntry {
+typedef struct SoundCatalogEntry {
     SoundId id;
     int resourceId;
-    std::string_view fileName;
+    /* File name of the source mp3, kept for diagnostics; a string literal. */
+    const char *fileName;
     float recommendedVolume;
-};
+} SoundCatalogEntry;
 
-const std::vector<SoundCatalogEntry>& SoundCatalog();
+/* Returns a pointer to a file-scope table and writes its length to `count`
+ * (which may be NULL).  The table is SOUND_COUNT entries, indexed by SoundId. */
+const SoundCatalogEntry *SoundCatalog_Entries(int *count);
 
-} // namespace pdk::audio
+#ifdef __cplusplus
+}
+#endif

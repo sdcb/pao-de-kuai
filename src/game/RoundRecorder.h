@@ -1,19 +1,29 @@
 #pragma once
 
+/*
+ * Appends a finished round to the local per-day statistics file.
+ *
+ * Pure C.  The original class held nothing but a StatStore and its default constructor
+ * already resolved the root to the process current directory, so RoundRecorder_Init
+ * does the same and AppendToday just supplies today's date key.
+ */
+
 #include "stats/StatStore.h"
 
-namespace pdk::game {
+#include <stdbool.h>
 
-class RoundRecorder {
-public:
-    explicit RoundRecorder(stats::StatStore store = stats::StatStore()) : store_(std::move(store)) {}
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-    bool AppendToday(const stats::RoundRecord& record) {
-        return store_.AppendRound(stats::TodayDateKey(), record);
-    }
+typedef struct RoundRecorder {
+    StatStore store;
+} RoundRecorder;
 
-private:
-    stats::StatStore store_;
-};
+/* `root` is the statistics root inside the process current directory. */
+void RoundRecorder_Init(RoundRecorder *recorder);
+bool RoundRecorder_AppendToday(RoundRecorder *recorder, const RoundRecord *record);
 
-} // namespace pdk::game
+#ifdef __cplusplus
+}
+#endif

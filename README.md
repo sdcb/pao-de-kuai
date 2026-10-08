@@ -1,6 +1,6 @@
 # 跑得快 [![QQ](https://img.shields.io/badge/QQ_Group-495782587-52B6EF?style=social&logo=tencent-qq&logoColor=000&logoWidth=20)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=mma4msRKd372Z6dWpmBp4JZ9RL4Jrf8X&authKey=gccTx0h0RaH5b8B8jtuPJocU7MgFRUznqbV%2FLgsKdsK8RqZE%2BOhnETQ7nYVTp1W0&noverify=0&group_code=495782587)
 
-一个 Windows 桌面版单机三人跑得快游戏，为家人使用场景设计，也作为一个开源 C++ 桌面应用项目维护。
+一个 Windows 桌面版单机三人跑得快游戏，为家人使用场景设计，也作为一个开源 C 桌面应用项目维护。
 
 仓库地址：https://github.com/sdcb/pao-de-kuai
 
@@ -10,13 +10,12 @@
 
 ## 技术栈
 
-- C++ / Win32
+- C / Win32
 - Direct2D / DirectWrite / WIC
 - Media Foundation / WASAPI
 - IMM32（设置里的中文输入）
 - cJSON
 - doctest
-- VC-LTL
 - CMake
 
 ## 项目结构
@@ -62,7 +61,11 @@ ctest --preset vs2026-release --output-on-failure
 - `scene_viewer.exe`：测试/调试用场景查看器，可按参数打开指定场景并截图。
 - `unit_tests.exe`：规则、状态和基础 AI 单元测试。
 
-MSVC x64/x86 默认使用 `external/vc-ltl` 中的精简 VC-LTL 源码，在 build 目录生成运行库并将 CRT 链接到系统 `msvcrt.dll` 以减小 exe 体积；仓库不签入 VC-LTL `.lib` 产物，其他架构或缺少构建工具时会自动回退到普通 `/MT`。
+主发布工具链是 MinGW-w64 UCRT x64，直接链接系统 `ucrtbase.dll`。MSVC x64/x86/arm64 作为 CI 验证组合保留，默认 `/MT`。
+
+`src/` 已**全量迁移为 C17**：里面没有任何 `.cpp`，`python tools/check_c_only.py` 会报 `src/ is pure C.`，并作为 CI 门禁在每次构建时校验。C++ 只保留在 `tests/`（doctest 单元测试与 `scene_viewer`），它们的 C++ 适配层位于 `tests/support/`。
+
+发布 exe 不依赖 `msvcrt.dll`、`libstdc++` 或 `libgcc`：CRT 经 `api-ms-win-crt-*` 这组 API set 直连系统 `ucrtbase.dll`。最低系统 Win10 由 `WINVER`/`_WIN32_WINNT` 与实际调用的 Win10 API 决定（PE 版本字段保持工具链默认：把它改高会让加载器拒绝映像，见 plan.md 修订 32）。
 
 ## 运行数据
 
@@ -78,4 +81,3 @@ MIT License. See [LICENSE](LICENSE).
 
 - cJSON：MIT License，见 `external/cjson/LICENSE`。
 - doctest：MIT License，见 `external/doctest/LICENSE.txt`。
-- VC-LTL：Eclipse Public License 2.0，见 `external/vc-ltl/LICENSE`。

@@ -1,28 +1,20 @@
 #pragma once
 
+/*
+ * The hint toast: a dark capsule with a gold sparkle, shown when the player asks for a tip.
+ * Clicking anywhere dismisses it (OnMouseDown closes it and returns false, i.e. the click still
+ * reaches the scene).  Pure C.
+ */
+
 #include "core/Overlay.h"
-#include "scenes/SceneCommon.h"
 
-#include <string>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace pdk::app {
-class App;
+/* `app` is an opaque App* (see app/App.h).  Returns an owning handle. */
+Overlay TipOverlay_New(void *app, const char *text);
+
+#ifdef __cplusplus
 }
-
-namespace pdk::overlays {
-
-class TipOverlay final : public core::Overlay {
-public:
-    TipOverlay(app::App& app, std::string text);
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool BlocksInputBelow() const override { return false; }
-    bool OnMouseDown(float x, float y) override;
-
-private:
-    app::App& app_;
-    std::string text_;
-    float elapsed_{0.0f};
-};
-
-} // namespace pdk::overlays
+#endif

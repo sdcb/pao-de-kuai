@@ -1,52 +1,64 @@
 #pragma once
 
-#include "core/Geometry.h"
+/*
+ * Value tweens, replacing the old std::function-based C++ class (plan.md 2).
+ *
+ * Callbacks are plain function pointers plus a `user` pointer, so a caller that
+ * used to write a capturing lambda now passes a small thunk and the object it
+ * belongs to.  `TweenSet` owns a growable array of tweens and compacts finished
+ * ones out on Update, exactly like the previous std::remove_if pass.
+ */
 
-#include <functional>
-#include <vector>
+#include <stdbool.h>
 
-namespace pdk::core {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-enum class Easing {
-    Linear,
-    OutCubic,
-    InOutCubic,
-    OutBack
-};
+typedef enum Easing {
+    EASING_LINEAR,
+    EASING_OUT_CUBIC,
+    EASING_IN_OUT_CUBIC,
+    EASING_OUT_BACK
+} Easing;
 
 float Ease(Easing easing, float t);
 
-class Tween {
-public:
-    Tween(float from, float to, float duration, Easing easing = Easing::OutCubic);
+typedef struct Tween {
+    float from;
+    float to;
+    float duration;
+    float elapsed;
+    float delay;
+    Easing easing;
+    bool finished;
+    void (*onValue)(void *user, float value);
+    void (*onComplete)(void *user);
+    void *user;
+} Tween;
 
-    void SetDelay(float delay) { delay_ = delay; }
-    void SetOnValue(std::function<void(float)> onValue) { onValue_ = std::move(onValue); }
-    void SetOnComplete(std::function<void()> onComplete) { onComplete_ = std::move(onComplete); }
-    void Update(float dt);
-    bool Finished() const { return finished_; }
+void Tween_Init(Tween *tween, float from, float to, float duration, Easing easing);
+void Tween_SetDelay(Tween *tween, float delay);
+/* Either callback may be NULL.  `user` is passed through unchanged. */
+void Tween_SetCallbacks(Tween *tween, void (*onValue)(void *, float),
+                        void (*onComplete)(void *), void *user);
+void Tween_Update(Tween *tween, float dt);
+bool Tween_Finished(const Tween *tween);
 
-private:
-    float from_{};
-    float to_{};
-    float duration_{};
-    float elapsed_{};
-    float delay_{};
-    Easing easing_{Easing::OutCubic};
-    bool finished_{false};
-    std::function<void(float)> onValue_;
-    std::function<void()> onComplete_;
-};
+typedef struct TweenSet {
+    Tween *items;
+    int count;
+    int cap;
+} TweenSet;
 
-class TweenSet {
-public:
-    void Add(Tween tween);
-    void Update(float dt);
-    bool Empty() const { return tweens_.empty(); }
-    void Clear() { tweens_.clear(); }
+void TweenSet_Init(TweenSet *set);
+void TweenSet_Free(TweenSet *set);
+/* Copies the tween into the set; the caller's copy stays valid but unused. */
+bool TweenSet_Add(TweenSet *set, const Tween *tween);
+void TweenSet_Update(TweenSet *set, float dt);
+bool TweenSet_Empty(const TweenSet *set);
+void TweenSet_Clear(TweenSet *set);
 
-private:
-    std::vector<Tween> tweens_;
-};
-
-} // namespace pdk::core
+#ifdef __cplusplus
+}
+#endif

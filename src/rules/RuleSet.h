@@ -1,18 +1,25 @@
 #pragma once
 
-namespace pdk::rules {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-struct RuleSet {
-    int playerCount{3};
-    int deckSize{48};
-    bool spadeThreeStarts{true};
-    bool firstMoveMustContainSpadeThree{false};
-    bool bombsBeatAnyNonBomb{true};
-    int bombWinnerScore{20};
-    int bombLoserScore{-10};
-    int springLoserPenalty{32};
-};
+/* The fixed rule set of this game.  Nothing here is configurable at runtime;
+ * AGENTS.md treats the rules as frozen, so this exists to keep the constants in
+ * one reviewable place. */
+typedef struct RuleSet {
+    int playerCount;
+    int deckSize;
+    bool spadeThreeStarts;
+    bool firstMoveMustContainSpadeThree;
+    bool bombsBeatAnyNonBomb;
+    int bombWinnerScore;
+    int bombLoserScore;
+    int springLoserPenalty;
+} RuleSet;
 
-RuleSet FixedPaoDeKuaiRuleSet();
+RuleSet FixedPaoDeKuaiRuleSet(void);
 
-} // namespace pdk::rules
+#ifdef __cplusplus
+}
+#endif

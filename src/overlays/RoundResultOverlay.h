@@ -1,29 +1,21 @@
 #pragma once
 
+/*
+ * The end-of-round result panel: the win/lose seal, the score line, the special-event badges and
+ * one row per seat.  Pure C.
+ */
+
 #include "core/Overlay.h"
-#include "scenes/SceneCommon.h"
 #include "stats/DailyStat.h"
 
-namespace pdk::app {
-class App;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* `app` is an opaque App* (see app/App.h).  The record is copied, so the caller keeps its own.
+ * Returns an owning handle. */
+Overlay RoundResultOverlay_New(void *app, const RoundRecord *record);
+
+#ifdef __cplusplus
 }
-
-namespace pdk::overlays {
-
-class RoundResultOverlay final : public core::Overlay {
-public:
-    RoundResultOverlay(app::App& app, stats::RoundRecord record);
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool BlocksInputBelow() const override { return true; }
-    bool OnMouseMove(float x, float y) override;
-    bool OnMouseDown(float x, float y) override;
-
-private:
-    app::App& app_;
-    stats::RoundRecord record_;
-    std::vector<ui::Button> buttons_;
-    float elapsed_{0.0f};
-};
-
-} // namespace pdk::overlays
+#endif

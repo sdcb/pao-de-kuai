@@ -1,27 +1,18 @@
 #pragma once
 
+/*
+ * "Back to the main menu?" modal, pushed when the player leaves a round.  Pure C.
+ */
+
 #include "core/Overlay.h"
-#include "scenes/SceneCommon.h"
 
-namespace pdk::app {
-class App;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* `app` is an opaque App* (see app/App.h).  Returns an owning handle. */
+Overlay ReturnToMenuOverlay_New(void *app);
+
+#ifdef __cplusplus
 }
-
-namespace pdk::overlays {
-
-class ReturnToMenuOverlay final : public core::Overlay {
-public:
-    explicit ReturnToMenuOverlay(app::App& app);
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool BlocksInputBelow() const override { return true; }
-    bool OnMouseMove(float x, float y) override;
-    bool OnMouseDown(float x, float y) override;
-
-private:
-    app::App& app_;
-    std::vector<ui::Button> buttons_;
-    float elapsed_{0.0f};
-};
-
-} // namespace pdk::overlays
+#endif

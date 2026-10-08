@@ -1,35 +1,22 @@
 #pragma once
 
+/*
+ * The main menu: the title block with a fanned straight, the six-button menu, and the parallax
+ * halo behind it all.  Pure C.
+ *
+ * `app` is an opaque App* (see app/App.h).  The returned handle owns its state and frees it
+ * through the scene vtable's Destroy slot.
+ */
+
 #include "core/Scene.h"
-#include "scenes/SceneCommon.h"
 
-#include <string>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace pdk::app {
-class App;
+/* Returns an owning handle. */
+Scene StartScene_New(void *app);
+
+#ifdef __cplusplus
 }
-
-namespace pdk::scenes {
-
-class StartScene final : public core::Scene {
-public:
-    explicit StartScene(app::App& app);
-    void OnEnter() override;
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool OnMouseMove(float x, float y) override;
-    bool OnMouseDown(float x, float y) override;
-
-private:
-    void DrawTitle(graphics::RenderContext& context);
-    void DrawCardFan(graphics::RenderContext& context);
-
-    app::App& app_;
-    std::vector<Button> buttons_;
-    std::string welcome_;
-    float elapsed_{0.0f};
-    core::Point mouse_{640.0f, 360.0f};
-    core::Point parallax_{0.0f, 0.0f};
-};
-
-} // namespace pdk::scenes
+#endif

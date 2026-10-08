@@ -1,38 +1,47 @@
 #pragma once
 
+/*
+ * The in-process AI controller: runs the chosen local strategy on a worker thread so the
+ * UI thread never blocks on the strong strategy's search.
+ *
+ * Pure C.  Two pieces of the old implementation needed real care:
+ *   - `std::thread(...).detach()` with a captured `shared_ptr<SharedState>` kept the
+ *     shared half alive after the controller died.  That is reproduced with an
+ *     explicitly reference-counted LocalAiShared (see LocalAiController.c), because the
+ *     controller can be destroyed while a search is still running.
+ *   - the strategy table was a std::map<PlayerId, LocalAiKind>; there are only three
+ *     seats, so it is a fixed array with a configured flag per seat.
+ */
+
 #include "game/ExternalAiController.h"
 
-#include <map>
-#include <memory>
-#include <mutex>
-#include <optional>
+#include <stdbool.h>
+#include <stdint.h>
 
-namespace pdk::game {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-enum class LocalAiKind {
-    Basic,
-    Strong
+typedef uint8_t LocalAiKind;
+
+enum {
+    LOCAL_AI_BASIC = 0,
+    LOCAL_AI_STRONG = 1
 };
 
-class LocalAiController final : public ExternalAiController {
-public:
-    LocalAiController();
-    ~LocalAiController() override;
+typedef struct LocalAiController LocalAiController;
 
-    void SetStrategy(rules::PlayerId player, LocalAiKind kind);
+LocalAiController *LocalAiController_Create(void);
 
-    bool CanHandle(rules::PlayerId player) const override;
-    StrategyMetadata MetadataFor(rules::PlayerId player) const override;
-    bool HasPending() const override;
-    void Start(ExternalAiRequest request) override;
-    std::optional<ExternalAiResult> TryGetResult() override;
-    void Cancel() override;
+void LocalAiController_SetStrategy(LocalAiController *controller, PlayerId player, LocalAiKind kind);
 
-private:
-    struct SharedState;
+/*
+ * The ExternalAiController interface over this object.  Ownership of the interface --
+ * and therefore of the LocalAiController -- passes to whoever is given it, so call
+ * SetStrategy before handing it to GameState and do not free the controller afterwards.
+ */
+ExternalAiController LocalAiController_Interface(LocalAiController *controller);
 
-    std::map<rules::PlayerId, LocalAiKind> strategies_;
-    std::shared_ptr<SharedState> state_;
-};
-
-} // namespace pdk::game
+#ifdef __cplusplus
+}
+#endif

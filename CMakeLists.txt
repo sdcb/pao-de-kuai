@@ -5,7 +5,7 @@ if(POLICY CMP0091)
 endif()
 
 set(CMAKE_TRY_COMPILE_CONFIGURATION Release)
-set(PDK_MSVC_RUNTIME "MT" CACHE STRING "MSVC runtime library for non-VC-LTL MSVC builds: MT or MD")
+set(PDK_MSVC_RUNTIME "MT" CACHE STRING "MSVC runtime library: MT or MD")
 set_property(CACHE PDK_MSVC_RUNTIME PROPERTY STRINGS MT MD)
 if(PDK_MSVC_RUNTIME STREQUAL "MT")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -16,7 +16,54 @@ else()
 endif()
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version for third-party dependencies")
 
+# Toolchain paths arrive from the presets as `$env{PDK_MINGW_ROOT}/bin/...`, so a
+# Windows-style environment value gives CMake a mixed-separator path
+# ("D:\_\3rd\mingw\bin/gcc.exe").  CMake writes those into CMake*Compiler.cmake
+# as a quoted string, where "\3" is an invalid escape and configuration fails.
+# Normalising before project() keeps the cache files valid.
+foreach(_pdk_path_var CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_RC_COMPILER)
+    if(DEFINED ${_pdk_path_var})
+        file(TO_CMAKE_PATH "${${_pdk_path_var}}" ${_pdk_path_var})
+    endif()
+endforeach()
+
+# C is the primary language for src/ and is expected to compile as standard C17
+# on both MSVC (/std:c17) and MinGW-w64 (-std=c17).  CXX stays because tests/
+# and tests/scene_viewer are C++ (doctest), and RC stays for the embedded
+# resources (rc.exe on MSVC, windres.exe on MinGW).
 project(PaoDeKuai VERSION 1.2 LANGUAGES C CXX RC)
+
+# MinGW toolchain smoke check.  gcc invokes <root>/<triple>/bin/as.exe, which
+# needs libwinpthread-1.dll from <root>/bin; when that directory is missing from
+# PATH the assembler dies with STATUS_DLL_NOT_FOUND (0xC0000135) and gcc prints
+# *no* diagnostics at all -- it just returns 1.  That shows up much later as an
+# inexplicable compile failure, so fail here with an actionable message instead.
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    set(_pdk_smoke_src "${CMAKE_BINARY_DIR}/pdk-toolchain-smoke.c")
+    set(_pdk_smoke_exe "${CMAKE_BINARY_DIR}/pdk-toolchain-smoke.exe")
+    file(WRITE "${_pdk_smoke_src}" "int main(void) { return 0; }\n")
+    execute_process(
+        COMMAND "${CMAKE_C_COMPILER}" -std=c17 -o "${_pdk_smoke_exe}" "${_pdk_smoke_src}"
+        RESULT_VARIABLE _pdk_smoke_result
+        OUTPUT_VARIABLE _pdk_smoke_out
+        ERROR_VARIABLE _pdk_smoke_err
+    )
+    if(NOT _pdk_smoke_result EQUAL 0)
+        message(FATAL_ERROR
+            "MinGW toolchain smoke check failed (exit ${_pdk_smoke_result}).\n"
+            "The most common cause is that <mingw-root>/bin is not on PATH: gcc spawns\n"
+            "<root>/<triple>/bin/as.exe, which needs libwinpthread-1.dll from <root>/bin,\n"
+            "and exits with 0xC0000135 without printing any error of its own.\n"
+            "Compiler: ${CMAKE_C_COMPILER}\n"
+            "stdout: ${_pdk_smoke_out}\n"
+            "stderr: ${_pdk_smoke_err}")
+    endif()
+    file(REMOVE "${_pdk_smoke_src}" "${_pdk_smoke_exe}")
+endif()
+
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
 
 set(PDK_BUILD_REVISION "unknown")
 find_package(Git QUIET)
@@ -34,7 +81,6 @@ if(GIT_FOUND)
 endif()
 
 option(PDK_BUILD_TESTS "Build rule tests" ON)
-option(PDK_USE_VC_LTL "Use vendored VC-LTL CRT libraries for smaller MSVC binaries when available" ON)
 
 set(PDK_EXTERNAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
@@ -45,6 +91,28 @@ if(MSVC)
         "$<$<COMPILE_LANGUAGE:CXX>:/EHsc>"
     )
     add_compile_options("$<$<CONFIG:Release>:/Os>")
+elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    # -finput-charset keeps the UTF-8 sources (including Chinese comments and UI
+    # strings) readable on toolchains whose default is not UTF-8.
+    add_compile_options(
+        "$<$<COMPILE_LANGUAGE:C>:-finput-charset=UTF-8>"
+        "$<$<COMPILE_LANGUAGE:CXX>:-finput-charset=UTF-8>"
+    )
+    # The main release target is the MinGW UCRT build, so release is tuned for
+    # size: -Os plus one function/data per section and a linking --gc-sections
+    # pass.  -flto was measured to give nothing on this project (plan.md 2) and
+    # is deliberately not enabled.  -s strips symbols; there is no separate
+    # "release with symbols" configuration yet.
+    set(CMAKE_C_FLAGS_RELEASE "-Os -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "-Os -DNDEBUG")
+    add_compile_options(
+        "$<$<CONFIG:Release>:-ffunction-sections>"
+        "$<$<CONFIG:Release>:-fdata-sections>"
+    )
+    add_link_options(
+        "$<$<CONFIG:Release>:-Wl,--gc-sections>"
+        "$<$<CONFIG:Release>:-s>"
+    )
 endif()
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -61,203 +129,112 @@ else()
     set(CMAKE_CXX_STANDARD 23)
 endif()
 
-add_library(pdk_vc_ltl INTERFACE)
-if(MSVC AND PDK_USE_VC_LTL)
-    if(NOT PDK_MSVC_RUNTIME STREQUAL "MT")
-        message(FATAL_ERROR "VC-LTL builds require PDK_MSVC_RUNTIME=MT.")
-    endif()
-
-    set(PDK_VC_LTL_VERSION "6.2.9200.0")
-    string(TOLOWER "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}" PDK_MSVC_ARCH)
-    if(PDK_MSVC_ARCH STREQUAL "x64")
-        set(PDK_VC_LTL_PLATFORM "x64")
-    elseif(PDK_MSVC_ARCH STREQUAL "x86")
-        set(PDK_VC_LTL_PLATFORM "Win32")
-    endif()
-
-    if(PDK_VC_LTL_PLATFORM)
-        set(PDK_VC_LTL_ROOT "${PDK_EXTERNAL_DIR}/vc-ltl")
-        set(PDK_VC_LTL_INCLUDE_DIR "${PDK_VC_LTL_ROOT}/TargetPlatform/header")
-        set(PDK_VC_LTL_VERSION_INCLUDE_DIR "${PDK_VC_LTL_ROOT}/TargetPlatform/${PDK_VC_LTL_VERSION}/header")
-        set(PDK_VC_LTL_BUILD_SOURCE_DIR "${CMAKE_BINARY_DIR}/vc-ltl-build/src")
-        set(PDK_VC_LTL_COPY_STAMP "${CMAKE_BINARY_DIR}/vc-ltl-build/copied.stamp")
-        set(PDK_VC_LTL_SHARED_UCRT_LIB "${PDK_VC_LTL_BUILD_SOURCE_DIR}/Tools/${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}/libucrt_shared.lib")
-        set(PDK_VC_LTL_LIBRARY_DIR "${PDK_VC_LTL_BUILD_SOURCE_DIR}/TargetPlatform/${PDK_VC_LTL_VERSION}/lib/${PDK_VC_LTL_PLATFORM}")
-        set(PDK_VC_LTL_UCRT_LIB "${PDK_VC_LTL_LIBRARY_DIR}/libucrt.lib")
-        set(PDK_VC_LTL_VCRUNTIME_LIB "${PDK_VC_LTL_LIBRARY_DIR}/libvcruntime.lib")
-        find_program(PDK_MSBUILD_EXECUTABLE NAMES MSBuild.exe msbuild.exe)
-
-        if(EXISTS "${PDK_VC_LTL_ROOT}/Build.proj"
-            AND EXISTS "${PDK_VC_LTL_ROOT}/Tools/LibMaker.exe"
-            AND EXISTS "${PDK_VC_LTL_ROOT}/Tools/${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}/Build_libucrt_shared.cmd"
-            AND PDK_MSBUILD_EXECUTABLE)
-            file(GLOB_RECURSE PDK_VC_LTL_SOURCE_FILES CONFIGURE_DEPENDS
-                "${PDK_VC_LTL_ROOT}/*"
-            )
-            list(FILTER PDK_VC_LTL_SOURCE_FILES EXCLUDE REGEX "\\.lib$")
-
-            add_custom_command(
-                OUTPUT "${PDK_VC_LTL_COPY_STAMP}"
-                COMMAND "${CMAKE_COMMAND}" -E rm -rf "${PDK_VC_LTL_BUILD_SOURCE_DIR}"
-                COMMAND "${CMAKE_COMMAND}" -E make_directory "${PDK_VC_LTL_BUILD_SOURCE_DIR}"
-                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${PDK_VC_LTL_ROOT}" "${PDK_VC_LTL_BUILD_SOURCE_DIR}"
-                COMMAND "${CMAKE_COMMAND}" -E touch "${PDK_VC_LTL_COPY_STAMP}"
-                DEPENDS ${PDK_VC_LTL_SOURCE_FILES}
-                COMMENT "Copying vendored VC-LTL source for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
-                VERBATIM
-            )
-            add_custom_command(
-                OUTPUT "${PDK_VC_LTL_SHARED_UCRT_LIB}"
-                COMMAND "${CMAKE_COMMAND}" -E chdir "${PDK_VC_LTL_BUILD_SOURCE_DIR}/Tools/${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
-                    cmd /d /s /c "Build_libucrt_shared.cmd >nul"
-                DEPENDS "${PDK_VC_LTL_COPY_STAMP}"
-                COMMENT "Building VC-LTL libucrt_shared for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
-                VERBATIM
-            )
-            add_custom_command(
-                OUTPUT "${PDK_VC_LTL_VCRUNTIME_LIB}"
-                COMMAND "${PDK_MSBUILD_EXECUTABLE}" "${PDK_VC_LTL_BUILD_SOURCE_DIR}/vcruntime.msvcrt/vcruntime.msvcrt.vcxproj"
-                    /nologo /m /v:minimal /clp:ErrorsOnly
-                    /p:Configuration=Static
-                    /p:Platform=${PDK_VC_LTL_PLATFORM}
-                    /p:WindowsTargetPlatformMinVersion=${PDK_VC_LTL_VERSION}
-                    /p:PreferredToolArchitecture=x64
-                    /p:SolutionDir=${PDK_VC_LTL_BUILD_SOURCE_DIR}/
-                DEPENDS "${PDK_VC_LTL_COPY_STAMP}"
-                COMMENT "Building VC-LTL libvcruntime for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
-                VERBATIM
-            )
-            add_custom_command(
-                OUTPUT "${PDK_VC_LTL_UCRT_LIB}"
-                COMMAND "${PDK_MSBUILD_EXECUTABLE}" "${PDK_VC_LTL_BUILD_SOURCE_DIR}/ucrtbase.msvcrt/ucrtbase.msvcrt.vcxproj"
-                    /nologo /m /v:minimal /clp:ErrorsOnly
-                    /p:Configuration=Static
-                    /p:Platform=${PDK_VC_LTL_PLATFORM}
-                    /p:WindowsTargetPlatformMinVersion=${PDK_VC_LTL_VERSION}
-                    /p:PreferredToolArchitecture=x64
-                    /p:SolutionDir=${PDK_VC_LTL_BUILD_SOURCE_DIR}/
-                DEPENDS "${PDK_VC_LTL_COPY_STAMP}" "${PDK_VC_LTL_SHARED_UCRT_LIB}"
-                COMMENT "Building VC-LTL libucrt for ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}"
-                VERBATIM
-            )
-            add_custom_target(pdk_vc_ltl_build DEPENDS "${PDK_VC_LTL_UCRT_LIB}" "${PDK_VC_LTL_VCRUNTIME_LIB}")
-            target_include_directories(pdk_vc_ltl SYSTEM BEFORE INTERFACE
-                "${PDK_VC_LTL_INCLUDE_DIR}"
-                "${PDK_VC_LTL_VERSION_INCLUDE_DIR}"
-            )
-            target_link_directories(pdk_vc_ltl BEFORE INTERFACE "${PDK_VC_LTL_LIBRARY_DIR}")
-            target_compile_definitions(pdk_vc_ltl INTERFACE
-                _LTL_ucrt_module_type=1
-                _LTL_vcruntime_module_type=1
-                _LTL_vccorlib_module_type=1
-            )
-            message(STATUS "VC-LTL enabled from source: ${PDK_VC_LTL_VERSION}/${PDK_VC_LTL_PLATFORM}")
-        else()
-            message(WARNING "VC-LTL requested but its source tree or MSBuild is missing; using normal MSVC /MT runtime.")
-        endif()
-    else()
-        message(STATUS "VC-LTL is not enabled for MSVC target architecture '${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}'.")
-    endif()
-endif()
+# Minimum supported system is Windows 10 (plan.md revision 2 dropped the Win8
+# baseline so that IAudioClient3 and the UCRT API set can be used directly).
+add_library(pdk_win32 INTERFACE)
+target_compile_definitions(pdk_win32 INTERFACE
+    WINVER=0x0A00
+    _WIN32_WINNT=0x0A00
+    UNICODE
+    _UNICODE
+    NOMINMAX
+)
+# The same import libraries on both toolchains; MinGW resolves them to its own
+# lib*.a.  `uuid` is kept for parity even though every GUID comes from
+# src/graphics/iids.c (INITGUID), which is what actually resolves them.
+target_link_libraries(pdk_win32 INTERFACE
+    d2d1 dwrite windowscodecs ole32 uuid shlwapi imm32 avrt
+    mfplat mfreadwrite mfuuid gdi32 user32 dwmapi
+)
 
 add_library(cjson_static STATIC "${PDK_EXTERNAL_DIR}/cjson/cJSON.c")
 target_include_directories(cjson_static PUBLIC "${PDK_EXTERNAL_DIR}/cjson")
 target_compile_definitions(cjson_static PRIVATE CJSON_HIDE_SYMBOLS)
-target_link_libraries(cjson_static PRIVATE pdk_vc_ltl)
+target_link_libraries(cjson_static PRIVATE pdk_win32)
 
 add_library(doctest INTERFACE)
 add_library(doctest::doctest ALIAS doctest)
 target_include_directories(doctest SYSTEM INTERFACE "${PDK_EXTERNAL_DIR}/doctest")
 
+# src/ is pure C.  Every entry below is .c; the C++ remnants live in tests/.
+# Files that are not converted yet keep their .cpp name and are moved here as
+# each stage lands (see docs/c-port-conventions.md).
 set(PDK_CORE_SOURCES
-    src/core/StringUtil.cpp
-    src/core/Tween.cpp
-    src/core/WinFile.cpp
-    src/rules/Card.cpp
-    src/rules/Deck.cpp
-    src/rules/HandPattern.cpp
-    src/rules/MoveValidator.cpp
-    src/rules/PaoDeKuaiRules.cpp
-    src/rules/RuleText.cpp
-    src/rules/Scoring.cpp
-    src/game/AiStrategy.cpp
-    src/game/GameState.cpp
-    src/game/LocalAiController.cpp
-    src/game/RoundRecorder.cpp
-    src/game/RoundTraceRecorder.cpp
-    src/game/StrongAiStrategy.cpp
-    src/game/TurnRecord.cpp
-    src/stats/AppSettings.cpp
-    src/stats/StatStore.cpp
+    src/core/Str.c
+    src/core/Timer.c
+    src/core/Tween.c
+    src/core/WinFile.c
+    src/rules/Card.c
+    src/rules/Deck.c
+    src/rules/HandPattern.c
+    src/rules/MoveValidator.c
+    src/rules/PaoDeKuaiRules.c
+    src/rules/RuleText.c
+    src/rules/Scoring.c
+    src/game/AiStrategyInternal.c
+    src/game/BasicAiStrategy.c
+    src/game/GameState.c
+    src/game/ExternalAiController.c
+    src/game/LocalAiController.c
+    src/game/RoundRecorder.c
+    src/game/RoundTraceRecorder.c
+    src/game/StrongAiStrategy.c
+    src/game/AiPlayer.c
+    src/game/AiStrategy.c
+    src/game/TurnRecord.c
+    src/stats/AppSettings.c
+    src/stats/StatStore.c
 )
 
 add_library(pdk_core STATIC ${PDK_CORE_SOURCES})
 target_include_directories(pdk_core PUBLIC src)
-target_link_libraries(pdk_core PUBLIC cjson_static pdk_vc_ltl)
+target_link_libraries(pdk_core PUBLIC cjson_static pdk_win32)
 target_compile_definitions(pdk_core PRIVATE
     PDK_APP_VERSION="${PROJECT_VERSION}"
     PDK_BUILD_REVISION="${PDK_BUILD_REVISION}"
 )
 
 set(PDK_APP_SOURCES
-    src/app/App.cpp
-    src/app/Dpi.cpp
-    src/app/ImeInput.cpp
-    src/app/Window.cpp
-    src/app/WindowChrome.cpp
-    src/audio/AudioDecoder.cpp
-    src/audio/AudioEngine.cpp
-    src/audio/SoundCatalog.cpp
-    src/graphics/D2DContext.cpp
-    src/graphics/ProceduralTextures.cpp
-    src/graphics/SpriteAtlas.cpp
-    src/graphics/TextRenderer.cpp
-    src/graphics/WicImageLoader.cpp
-    src/resources/CardAtlasData.cpp
-    src/resources/IconAtlasData.cpp
-    src/resources/ResourceLoader.cpp
-    src/scenes/GameScene.cpp
-    src/scenes/HelpScene.cpp
-    src/scenes/LoadingScene.cpp
-    src/scenes/StartScene.cpp
-    src/scenes/StatsScene.cpp
-    src/overlays/ConfirmExitDialog.cpp
-    src/overlays/AboutOverlay.cpp
-    src/overlays/InvalidMoveToast.cpp
-    src/overlays/ReturnToMenuOverlay.cpp
-    src/overlays/RoundResultOverlay.cpp
-    src/overlays/SettingsOverlay.cpp
-    src/overlays/TalkBubbleOverlay.cpp
-    src/overlays/TipOverlay.cpp
-    src/ui/CardView.cpp
-    src/ui/Icons.cpp
-    src/ui/Inputs.cpp
-    src/ui/Widgets.cpp
+    src/app/App.c
+    src/app/Dpi.c
+    src/app/ImeInput.c
+    src/app/Window.c
+    src/app/WindowChrome.c
+    src/audio/AudioDecoder.c
+    src/audio/AudioEngine.c
+    src/audio/SoundCatalog.c
+    src/graphics/D2DContext.c
+    src/graphics/ProceduralTextures.c
+    src/graphics/WicImageLoader.c
+    src/graphics/iids.c
+    src/resources/CardAtlasData.c
+
+    src/resources/ResourceLoader.c
+    src/scenes/GameScene.c
+    src/scenes/HelpScene.c
+    src/scenes/LoadingScene.c
+    src/scenes/StartScene.c
+    src/scenes/StatsScene.c
+    src/overlays/ConfirmExitDialog.c
+    src/overlays/AboutOverlay.c
+    src/overlays/InvalidMoveToast.c
+    src/overlays/ReturnToMenuOverlay.c
+    src/overlays/RoundResultOverlay.c
+    src/overlays/SettingsOverlay.c
+    src/overlays/TalkBubbleOverlay.c
+    src/overlays/TipOverlay.c
+    src/ui/CardView.c
+    src/ui/Icons.c
+    src/ui/Inputs.c
+    src/ui/Widgets.c
 )
 
 add_library(pdk_app STATIC ${PDK_APP_SOURCES})
 target_include_directories(pdk_app PUBLIC src)
-target_link_libraries(pdk_app PUBLIC pdk_core)
-target_compile_definitions(pdk_app PUBLIC
-    WINVER=0x0602
-    _WIN32_WINNT=0x0602
-    UNICODE
-    _UNICODE
-    NOMINMAX
-)
-target_link_libraries(pdk_app PUBLIC
-    d2d1 dwrite windowscodecs ole32 uuid shlwapi imm32 avrt
-    mfplat mfreadwrite mfuuid gdi32 user32 dwmapi
-)
-
-if(TARGET pdk_vc_ltl_build)
-    add_dependencies(cjson_static pdk_vc_ltl_build)
-    add_dependencies(pdk_core pdk_vc_ltl_build)
-    add_dependencies(pdk_app pdk_vc_ltl_build)
-endif()
+target_link_libraries(pdk_app PUBLIC pdk_core pdk_win32)
 
 foreach(target pdk_core pdk_app cjson_static)
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endforeach()
@@ -267,54 +244,74 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_VERSION VERSION_LESS "3.25")
     target_compile_options(pdk_app PUBLIC -std=c++2c)
 endif()
 
-function(pdk_add_vc_ltl_link_dependency target)
-    if(TARGET pdk_vc_ltl_build)
-        add_dependencies(${target} pdk_vc_ltl_build)
-        set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS
-            "${PDK_VC_LTL_UCRT_LIB}"
-            "${PDK_VC_LTL_VCRUNTIME_LIB}"
-        )
-    endif()
-endfunction()
-
-# rc.exe dependency scanning does not see RCDATA/ICON payloads, so list them explicitly.
+# rc.exe dependency scanning does not see RCDATA/ICON payloads, so list them
+# explicitly (rc.exe on MSVC scans the .rc, windres needs them too).
 file(GLOB PDK_AUDIO_RESOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/*.mp3")
 set_source_files_properties(src/resources/resources.rc PROPERTIES OBJECT_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/pao-de-kuai.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/poker-cards.png;${PDK_AUDIO_RESOURCES}"
 )
 
 add_executable(pao_de_kuai WIN32
-    src/app/WinMain.cpp
+    src/app/WinMain.c
     src/resources/resources.rc
 )
 target_link_libraries(pao_de_kuai PRIVATE pdk_app)
-pdk_add_vc_ltl_link_dependency(pao_de_kuai)
 
 add_executable(scene_viewer
     tests/scene_viewer/SceneViewer.cpp
     src/resources/resources.rc
 )
 target_link_libraries(scene_viewer PRIVATE pdk_app)
-pdk_add_vc_ltl_link_dependency(scene_viewer)
 
-foreach(target pao_de_kuai scene_viewer)
-    target_compile_definitions(${target} PRIVATE
-        WINVER=0x0602
-        _WIN32_WINNT=0x0602
-        UNICODE
-        _UNICODE
-        NOMINMAX
-    )
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_link_options(${target} PRIVATE -static-libstdc++ -static-libgcc)
-    endif()
-endforeach()
+# The permanent C++ tests (the doctest suite and the scene viewer) are the only C++ left in the
+# repository, and the C++ shims they use live in tests/support so that src/ is pure C.  Adding this
+# include directory is what lets their existing `#include "game/CppCompat.h"` style paths keep
+# working unchanged.
+target_include_directories(scene_viewer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/support")
 
+# pao_de_kuai is pure C now: src/ has no .cpp at all and the executable links only pdk_app, which
+# is pure C too, so the C++ runtime is not part of it.  scene_viewer stays C++ by design (the UI
+# tests are the one place C++ is still worth having), so it keeps the static C++ runtime.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_options(scene_viewer PRIVATE -static-libstdc++ -static-libgcc)
+endif()
+
+# The PE header keeps the toolchain defaults.  Declaring a Windows 10 subsystem/OS version here
+# (MinGW `-Wl,--major-subsystem-version,10 --major-os-version,10`, MSVC `/SUBSYSTEM:WINDOWS,10.0`)
+# made the loader reject the executable outright with STATUS_INVALID_IMAGE_FORMAT (0xC000007B):
+# it starts, shows "应用程序无法正常启动(0xc000007b)" and dies.  MinGW's default (subsystem 5.2,
+# OS 4.0) and MSVC's (6.0) both load fine.  The Windows 10 requirement is real, but it is enforced
+# by WINVER/_WIN32_WINNT and by the APIs the code calls -- not by this field, which is only a
+# compatibility hint.  Do not "improve" it again without launching pao_de_kuai.exe:
+# scene_viewer is what the ctest suite runs, so a broken pao_de_kuai.exe passes every test.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_link_options(pao_de_kuai PRIVATE -municode)
 endif()
 
 if(PDK_BUILD_TESTS)
+    # ABI gate for the COM shim.  shim_vendored_types.c builds on both
+    # toolchains (it only needs our generated headers); shim_layout_ref.c
+    # additionally compares the flat PDK_* vtables against MinGW-w64's C-mode
+    # SDK headers, which MSVC cannot parse at all.
+    add_executable(shim_layout
+        tests/shim_layout/shim_main.c
+        tests/shim_layout/shim_vendored_types.c
+    )
+    target_link_libraries(shim_layout PRIVATE pdk_win32)
+    target_include_directories(shim_layout PRIVATE src tests/shim_layout)
+    if(NOT MSVC)
+        target_sources(shim_layout PRIVATE tests/shim_layout/shim_layout_ref.c)
+    endif()
+
+    # Decodes every embedded sound effect and checks the 44.1 kHz contract and the
+    # MP3 encoder-delay trim.  The WASAPI path itself still needs a human ear, but
+    # this covers everything up to the mixer on every toolchain and architecture.
+    add_executable(audio_decode
+        tests/audio_decode/AudioDecodeTest.c
+        src/resources/resources.rc
+    )
+    target_link_libraries(audio_decode PRIVATE pdk_app pdk_win32)
+
     add_executable(unit_tests
         tests/rules_tests/TestMain.cpp
         tests/rules_tests/RulesPatternTests.cpp
@@ -324,8 +321,8 @@ if(PDK_BUILD_TESTS)
         tests/rules_tests/DragSelectionTests.cpp
         tests/rules_tests/StatsTests.cpp
     )
-    target_link_libraries(unit_tests PRIVATE pdk_core doctest::doctest)
-    pdk_add_vc_ltl_link_dependency(unit_tests)
+    target_link_libraries(unit_tests PRIVATE pdk_core doctest::doctest pdk_win32)
+target_include_directories(unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/support")
     target_compile_definitions(unit_tests PRIVATE
         DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
         PDK_ENABLE_TEST_HOOKS
@@ -338,10 +335,48 @@ if(PDK_BUILD_TESTS)
     endif()
 
     enable_testing()
+    add_test(NAME shim_layout COMMAND shim_layout)
+    add_test(NAME audio_decode COMMAND audio_decode)
     add_test(NAME unit_tests COMMAND unit_tests)
     add_test(NAME ui_scene_start COMMAND scene_viewer --scene start --screenshot ${CMAKE_BINARY_DIR}/ui-start.jpg --quality 75)
     add_test(NAME ui_overlay_settings COMMAND scene_viewer --scene settings --screenshot ${CMAKE_BINARY_DIR}/ui-settings.jpg --quality 75)
     add_test(NAME ui_scene_game_deal COMMAND scene_viewer --scene game --mock deal --screenshot ${CMAKE_BINARY_DIR}/ui-game-deal.jpg --quality 75)
     add_test(NAME ui_scene_game_play COMMAND scene_viewer --scene game --mock midgame --screenshot ${CMAKE_BINARY_DIR}/ui-game-play.jpg --quality 75)
     add_test(NAME ui_overlay_result COMMAND scene_viewer --scene game --overlay result-win --screenshot ${CMAKE_BINARY_DIR}/ui-result.jpg --quality 75)
+# The four screenshots above are the ones the release notes compare.  These extra cases exist
+# because they were NOT covered by any of them: the about and confirm-exit panels and the
+# invalid-move toast could all crash on startup without a single test going red (that is exactly
+# how a NULL panel style reached a commit once).  They render to their own files so the four
+# baseline screenshots stay stable.
+add_test(NAME ui_scene_stats COMMAND scene_viewer --scene stats --screenshot ${CMAKE_BINARY_DIR}/ui-stats.jpg --quality 75)
+add_test(NAME ui_scene_help COMMAND scene_viewer --scene help --screenshot ${CMAKE_BINARY_DIR}/ui-help.jpg --quality 75)
+add_test(NAME ui_scene_loading COMMAND scene_viewer --scene loading --screenshot ${CMAKE_BINARY_DIR}/ui-loading.jpg --quality 75)
+add_test(NAME ui_overlay_confirm_exit COMMAND scene_viewer --overlay confirm-exit --screenshot ${CMAKE_BINARY_DIR}/ui-confirm-exit.jpg --quality 75)
+add_test(NAME ui_overlay_about COMMAND scene_viewer --overlay about --screenshot ${CMAKE_BINARY_DIR}/ui-about.jpg --quality 75)
+add_test(NAME ui_overlay_return_menu COMMAND scene_viewer --overlay return-menu --screenshot ${CMAKE_BINARY_DIR}/ui-return-menu.jpg --quality 75)
+add_test(NAME ui_overlay_invalid COMMAND scene_viewer --overlay invalid --screenshot ${CMAKE_BINARY_DIR}/ui-invalid.jpg --quality 75)
+
+# The one test that runs the shipping executable.  Everything else runs scene_viewer, so a
+# pao_de_kuai.exe the loader refuses (e.g. a bad PE subsystem version) otherwise passes the whole
+# suite -- which happened once.
+add_test(NAME pao_de_kuai_launch COMMAND pwsh -NoProfile -File
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_launch.ps1" $<TARGET_FILE:pao_de_kuai>)
+
+# Each test gets its own working directory.  The app reads appsettings.json from the current
+# directory, and unit_tests' settings round-trip case WRITES one -- so while both ran in the build
+# directory, running unit_tests first reset the file to defaults and the settings screenshot then
+# showed 基础/off instead of the 强力/on the released baseline was captured with.  That made the
+# "five screenshots match the baseline" check depend on test order, which is not a check at all.
+# The UI cases now run against a pinned fixture so the comparison is reproducible.
+set(PDK_UI_TEST_DIR "${CMAKE_BINARY_DIR}/ui-test-cwd")
+set(PDK_UNIT_TEST_DIR "${CMAKE_BINARY_DIR}/unit-test-cwd")
+file(MAKE_DIRECTORY "${PDK_UI_TEST_DIR}" "${PDK_UNIT_TEST_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/appsettings.json"
+     DESTINATION "${PDK_UI_TEST_DIR}")
+set_tests_properties(unit_tests PROPERTIES WORKING_DIRECTORY "${PDK_UNIT_TEST_DIR}")
+set_tests_properties(
+    ui_scene_start ui_overlay_settings ui_scene_game_deal ui_scene_game_play ui_overlay_result
+    ui_scene_stats ui_scene_help ui_scene_loading ui_overlay_confirm_exit ui_overlay_about
+    ui_overlay_return_menu ui_overlay_invalid
+    PROPERTIES WORKING_DIRECTORY "${PDK_UI_TEST_DIR}")
 endif()

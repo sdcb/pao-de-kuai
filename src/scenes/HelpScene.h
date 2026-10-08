@@ -1,32 +1,22 @@
 #pragma once
 
+/*
+ * The rules page: the shared game rules, the scoring/托管 notes and a small gallery of example
+ * hands drawn with the real card faces.  Pure C.
+ *
+ * `app` is an opaque App* (see app/App.h).  The returned handle owns its state and frees it
+ * through the scene vtable's Destroy slot.
+ */
+
 #include "core/Scene.h"
-#include "scenes/SceneCommon.h"
 
-#include <string_view>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace pdk::app {
-class App;
+/* Returns an owning handle. */
+Scene HelpScene_New(void *app);
+
+#ifdef __cplusplus
 }
-
-namespace pdk::scenes {
-
-class HelpScene final : public core::Scene {
-public:
-    explicit HelpScene(app::App& app);
-    void OnEnter() override;
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool OnMouseMove(float x, float y) override;
-    bool OnMouseDown(float x, float y) override;
-
-private:
-    float DrawBullets(graphics::RenderContext& context, std::string_view text, float x, float y, float width);
-    void DrawPatternGallery(graphics::RenderContext& context, float x, float y, float width);
-
-    app::App& app_;
-    std::vector<Button> buttons_;
-    float elapsed_{0.0f};
-};
-
-} // namespace pdk::scenes
+#endif

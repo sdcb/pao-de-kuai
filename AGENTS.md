@@ -4,22 +4,52 @@
 
 ## 构建与测试基线
 
-- 首选工具链：Visual Studio 2026 / MSVC x64。
-- 先进入 VS2026 x64 开发者命令行。Community、Professional、Enterprise 或 Build Tools 均可，只要环境已初始化。
+> **改造已完成**：`src/` 已经是**纯 C（C17）**——里面没有任何 `.cpp`，
+> `python tools/check_c_only.py` 报 `src/ is pure C.`，并且已接入 CI 门禁。
+> 工具链为**双工具链**：MinGW-w64 UCRT x64 是主发布构建（直连系统 `ucrtbase.dll`，
+> 最低系统 Win10 由 `WINVER`/`_WIN32_WINNT` 与所用 API 决定），MSVC x64/x86/arm64 是 CI 验证
+> 组合；`external/vc-ltl` 已删除。**不要给 `pao_de_kuai` 加 PE 子系统/OS 版本链接选项**——
+> 那会让加载器以 0xC000007B 拒绝映像（plan.md 修订 32），`pao_de_kuai_launch` 用例会抓它。
+> C++ 只存在于 `tests/`（doctest 测试与 `scene_viewer`），其 C++ 适配层在 `tests/support/`。
+> **改 `src/` 之前先读 [`docs/c-port-conventions.md`](docs/c-port-conventions.md) 与
+> [`plan.md`](plan.md)**：新代码不得再引入 C++ 或 `<memory>`/`<string>`/`<vector>` 这类头。
+
+- 主线工具链：**MinGW-w64 UCRT x64**（主发布）与 MSVC x64（CI 验证）。
+  x86 走 MinGW-w64 UCRT x86；CI 另有 MSVC x64/x86/arm64 的 `/MD`、`/MT` 六个组合。
+- MSVC 需要先进入 VS2026 x64 开发者命令行。
 - 常用命令：
 
 ```powershell
+# MinGW（主发布）：<root>\bin 必须在 PATH 上，否则 gcc 会静默失败
+$env:PDK_MINGW_ROOT='D:\_\3rd\mingw64-ucrt'; $env:PDK_MINGW32_ROOT='D:\_\3rd\mingw32-ucrt'
+$env:PATH="D:\_\3rd\mingw64-ucrt\bin;"+$env:PATH
+cmake --preset mingw-ucrt-x64-release
+cmake --build build-mingw-ucrt-x64
+ctest --test-dir build-mingw-ucrt-x64 --output-on-failure
+
+# MSVC x64
 cmake --preset vs2026-release
 cmake --build --preset vs2026-release
 ctest --preset vs2026-release --output-on-failure
 ```
 
-- CMake 配置会给 MSVC 添加 `/utf-8` 和 `/EHsc`；默认运行库为 `/MT`，可用 `-DPDK_MSVC_RUNTIME=MD|MT` 切换。
-- Release 体积优化使用 MSVC 默认 `/O2 /Ob2` 并额外添加 `/Os`。
-- MSVC x64/x86 默认使用 `external/vc-ltl` 中的精简 VC-LTL 源码，在 build 目录生成运行库并把 CRT 链接到系统 `msvcrt.dll`；缺少构建工具或非 x64/x86 架构时自动回退到普通 `/MT`。
-- GitHub Actions 覆盖 8 个 VS2026 组合：x64/x86/arm64 的 `/MD`，x64/x86/arm64 的 `/MT`，以及 x64/x86 的 VC-LTL。
-- 日常构建和测试以 VS2026 为验证基线。
-- `CMakePresets.json` 是项目级配置，应纳入版本控制。个人机器路径应放在 `CMakeUserPresets.json`，不要提交。
+- **MinGW 的 `<root>\bin` 必须在 PATH 上。** gcc 调用 `<root>\<triple>\bin\as.exe`，
+  它依赖 `<root>\bin\libwinpthread-1.dll`；缺了会以 `0xC0000135` 退出且 **gcc 不打印任何
+  诊断**，表现为"编译莫名失败"。`CMakeLists.txt` 在 `project()` 后有链接冒烟检查专门抓它。
+- **本地 DSH 沙箱**：放在工作区内的 exe 无法在真实 `%TEMP%` 建目录（EACCES），会让
+  `unit_tests` 的 temp 目录用例假失败。本地跑 ctest 时把 `TEMP`/`TMP` 指向构建目录。
+- CMake 给 MSVC 加 `/utf-8` 与 `/EHsc`（仅 CXX），C 语言标准统一为 C17
+  （MSVC `/std:c17`、GCC `-std=c17`）。MSVC 运行库默认 `/MT`，`-DPDK_MSVC_RUNTIME=MD|MT` 可切。
+- 体积优化：MSVC `/O2 /Ob2 /Os`；GCC `-Os -ffunction-sections -fdata-sections
+  -Wl,--gc-sections -s`（`-flto` 实测无收益，不开）。
+- VC-LTL 已删除。`src/graphics/{d2d_c.h,dwrite_c.h,iids_gen.h}` 与
+  `tests/shim_layout/ShimLayoutChecks.h` 由 `python tools/gen_com_shim.py` 从 MinGW 头生成，
+  **不要手改**；改完 shim 要重新生成并跑 `shim_layout`。
+- GitHub Actions 覆盖 8 个组合：6 个 VS2026（x64/x86/arm64 × `/MD`、`/MT`）+
+  MinGW UCRT x64（主发布，上传 MinIO）/ x86。CI 每次解析 niXman 的 latest release，
+  按资产名正则选包、用 API `digest` 校验，可用 `PDK_MINGW_TAG` 复现历史构建。
+- `CMakePresets.json` 是项目级配置，应纳入版本控制。个人机器路径放在
+  `CMakeUserPresets.json` 或环境变量里，不要提交。
 
 ## 架构说明
 
@@ -32,22 +62,22 @@ ctest --preset vs2026-release --output-on-failure
 - 视觉风格为“东方雅致”：墨绿丝绒牌桌、香槟金细线、朱红只用于印章/炸弹/危险操作；带音高的音效和配色一样统一在 D 大调五声音阶。
 - 自绘 UI 分三层：`src/graphics/D2DContext.*`（画刷/文字格式缓存、圆角、渐变、变换栈和透明度栈、`MeasureText`）、`src/graphics/ProceduralTextures.*`（CPU 生成的软阴影九宫格和绒面噪点，只依赖 Direct2D 1.0）、`src/ui/`（`Theme` 色板、`Anim` 缓动、`Widgets` 按钮/面板/胶囊/头像/印章/弹窗、`Icons` 矢量图标、`CardView` 牌面渲染）。新界面优先复用 `src/ui/`，不要在场景里直接写纯色矩形。
 - 牌图集加载时额外用 WIC Fant 预缩小 1/2 和 1/4 两级，`CardView` 按目标像素尺寸选级，小牌不会锯齿。
-- 生产源码不要用 `std::lround` 等 `msvcrt.dll` 不导出的 C99 数学函数，VC-LTL 构建会链接失败；需要取整用 `ui::RoundToInt`。
+- 纯 C 的 `src/` 里没有 `snprintf`/流式格式化：数字拼接走 `Str_AppendNumber`/`Str_AppendPaddedNumber`，取整走 `ui/Anim.h` 的 `RoundToInt`（唯一一处取整实现）。定长缓冲区一律用 `Str_CopyTo`，不要 `strncpy`。
 - 运行资源通过 `src/resources/resources.rc` 嵌入。
 - 设置和统计路径基于进程当前工作目录，不基于 exe 所在目录。
 - 应用使用固定 1280x720 逻辑布局。窗口缩放应在场景布局外处理，窗口不应小于 1280x720。
-- Windows 基线尽量保持 Win8 兼容：`WINVER=0x0602`、`_WIN32_WINNT=0x0602`、Direct2D、DirectWrite、WIC、Media Foundation、WASAPI（Win10 上额外使用 `IAudioClient3` 低延迟周期）、IMM32。
+- Windows 基线是 **Win10**：`pdk_win32` 目标设 `WINVER=0x0A00`、`_WIN32_WINNT=0x0A00`（plan.md 修订 1 已放弃 Win8 兼容）。用到 Direct2D、DirectWrite、WIC、Media Foundation、WASAPI（`IAudioClient3` 低延迟周期）、IMM32。
 - 需要处理 `D2DERR_RECREATE_TARGET`：游戏/窗口状态应保留，Direct2D 设备资源和 bitmap 应重建，音频和 CPU 数据应不受影响。
 
 ## 体积约束
 
 - 生产源码 `src/` 不引入 `<filesystem>`、`<fstream>`、`<sstream>`、`fmt` 或 `<random>`。这些依赖对当前静态链接 exe 体积影响明显。
-- 文件和目录操作走 `src/core/WinFile.*`，字符串数字拼接走 `src/core/StringUtil.*`。
-- 需要拼接 UI 文本、日志文件名或提示词时，优先用 `std::string` 追加和 `core::AppendNumber`，不要重新引入流式格式化。
+- 文件和目录操作走 `src/core/WinFile.*`，字符串数字拼接走 `src/core/Str.*`（`Str_AppendNumber` / `Str_AppendPaddedNumber`；原 `StringUtil` 已合并进 `Str`）。
+- 需要拼接 UI 文本、日志文件名或提示词时，优先用 `Str` 追加和 `Str_AppendNumber`，不要重新引入流式格式化。
 - 洗牌和少量随机选择走当前 `std::srand/std::rand` 路径；本项目不是安全随机场景。
 - `std::thread`、`std::mutex`、`std::lock_guard` 可以用于异步网络请求等需要 RAII 的并发代码，不要为了很小体积收益改成裸 `EnterCriticalSection`。
 - 测试代码可按需要使用 `<filesystem>` 等标准库便利设施；上述限制主要针对进入主程序的 `src/`。
-- 第三方依赖只保留精简 vendor 文件：`external/cjson`、`external/doctest`、`external/vc-ltl`。不要重新引入 CMake 下载依赖，也不要在仓库中签入 VC-LTL `.lib` 产物。
+- 第三方依赖只保留精简 vendor 文件：`external/cjson`、`external/doctest`。不要重新引入 CMake 下载依赖，也不要签入 `.lib` 产物。（VC-LTL 已在纯 C 移植中删除，不要加回来。）
 
 ## 产品与 UX 约束
 
@@ -109,17 +139,43 @@ ctest --preset vs2026-release --output-on-failure
 当前 CTest 注册：
 
 ```text
+shim_layout
+audio_decode
 unit_tests
 ui_scene_start
 ui_overlay_settings
 ui_scene_game_deal
 ui_scene_game_play
 ui_overlay_result
+ui_scene_stats
+ui_scene_help
+ui_scene_loading
+ui_overlay_confirm_exit
+ui_overlay_about
+ui_overlay_return_menu
+ui_overlay_invalid
 ```
 
-`rules_tests` 运行 `tests/rules_tests/` 下的 doctest 用例，仍产出单个 `rules_tests.exe`。
+前四个 `ui_*` 渲染的就是发版要比对的 5 张基线截图（`ui-start` / `ui-settings` /
+`ui-game-deal` / `ui-game-play` / `ui-result`）。**后七个是 2026 年补的**：在它们存在之前，
+8 个覆盖层里只有 5 个、6 个场景里只有 4 个有任何测试，于是一个 `NULL` 面板样式在
+`AboutOverlay` 里活了一整个提交——点"关于"就崩，而没有任何测试变红。
+新增的用例各写自己的 jpg，所以基线截图不受影响。
 
-UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到指定场景或覆盖层，更新/渲染固定帧数，然后通过 WIC 保存 JPEG。这些是渲染冒烟测试，不做像素差异比对。
+`shim_layout` 是 COM shim 的 ABI 自检：在 MinGW 下把生成的平铺 PDK vtable 与真实 SDK 的
+C vtable 做 `sizeof`/`offsetof` 静态断言，并在两套工具链上校验 vendored DirectWrite 类型。
+改了 `src/graphics/d2d_c.h`、`dwrite_c.h` 或生成器后必须让它保持绿。
+
+`audio_decode` 解码全部 21 个内嵌音效，检查 44.1 kHz 契约、样本非空、以及 577 样本 MP3
+编码器延迟裁剪的淡入签名（首样本为 0）。它不需要声卡，但 **WASAPI 实际出声仍只能人工确认**。
+
+`rules_tests` 运行 `tests/rules_tests/` 下的 doctest 用例，仍产出单个 `unit_tests.exe`。
+
+UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到指定场景或覆盖层，更新/渲染固定帧数，然后通过 WIC 保存 JPEG。
+
+判据是"与 `build-baseline/` 肉眼无差异"，而 `python tools/compare_screenshots.py <build-dir>` 把它变成可测量的：逐图给平均绝对差/最大通道差/明显不同像素占比，并**按场景**测噪声底（同一 binary 渲染同一场景两次）。**必须跟该场景自己的底噪比**——静态菜单底噪约 0.02，发牌动画本身就有约 4.3，拿两者同一个阈值判断会既藏真回归又造出假回归。截图**逐次运行并不可复现**，字节数漂移不是回归证据。
+
+**测试工作目录是分开的，不要合并回去。** `unit_tests` 的设置往返用例会写 `appsettings.json`，而 UI 截图要从工作目录读它；两者共用一个目录时，先跑谁决定截图长什么样。现在 `unit_tests` 跑在 `unit-test-cwd/`，UI 用例跑在 `ui-test-cwd/`（由 `tests/fixtures/appsettings.json` 播种，该 fixture 必须入库）。
 
 截图模式下 Direct2D 渲染到离屏 WIC 位图（`RenderContext::Initialize(hwnd, true)`），不依赖窗口是否可见；窗口被遮挡或显示器休眠时，HWND 渲染目标会跳过 Present，`BitBlt` 只能截到黑屏。会在 2～3 秒内自动消失的覆盖层（`invalid`、`talk`）和 `loading` 场景会提前截图。
 

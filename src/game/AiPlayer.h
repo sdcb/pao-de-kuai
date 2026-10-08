@@ -1,28 +1,38 @@
 #pragma once
 
+/*
+ * One AI seat: which strategy it runs, and whether this struct owns that strategy.
+ *
+ * Pure C.  The original class owned a unique_ptr<AiStrategy>; here the seat holds the
+ * (vtable, user) pair by value plus an ownership flag, so a seat is still copyable and
+ * the built-in strategies (which own nothing) cost no allocation.
+ */
+
 #include "game/AiStrategy.h"
 
-#include <memory>
-#include <utility>
+#include <stdbool.h>
 
-namespace pdk::game {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-class AiPlayer {
-public:
-    AiPlayer() : strategy_(std::make_unique<BasicAiStrategy>()) {}
+typedef struct AiPlayer {
+    AiStrategy strategy;
+    bool ownsStrategy;
+} AiPlayer;
 
-    AiMoveChoice ChooseMove(const rules::Cards& hand, const AiContext& context) {
-        return strategy_->ChooseMove(hand, context);
-    }
+/* Defaults to the basic strategy, matching the old default constructor. */
+void AiPlayer_Init(AiPlayer *player);
+void AiPlayer_Destroy(AiPlayer *player);
 
-    StrategyMetadata Metadata() const { return strategy_->Metadata(); }
+/* Replaces the strategy, releasing the previous one when this seat owned it.  A
+ * strategy with a NULL vtable falls back to basic, matching the old
+ * `SetStrategy(nullptr)` behaviour. */
+void AiPlayer_SetStrategy(AiPlayer *player, AiStrategy strategy, bool takeOwnership);
 
-    void SetStrategy(std::unique_ptr<AiStrategy> strategy) {
-        strategy_ = strategy ? std::move(strategy) : std::make_unique<BasicAiStrategy>();
-    }
+AiMoveChoice AiPlayer_ChooseMove(AiPlayer *player, const Cards *hand, const AiContext *context);
+StrategyMetadata AiPlayer_Metadata(const AiPlayer *player);
 
-private:
-    std::unique_ptr<AiStrategy> strategy_;
-};
-
-} // namespace pdk::game
+#ifdef __cplusplus
+}
+#endif

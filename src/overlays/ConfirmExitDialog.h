@@ -1,27 +1,18 @@
 #pragma once
 
+/*
+ * "Really quit?" modal: a danger button that exits and a secondary one that stays.  Pure C.
+ */
+
 #include "core/Overlay.h"
-#include "scenes/SceneCommon.h"
 
-namespace pdk::app {
-class App;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* `app` is an opaque App* (see app/App.h).  Returns an owning handle. */
+Overlay ConfirmExitDialog_New(void *app);
+
+#ifdef __cplusplus
 }
-
-namespace pdk::overlays {
-
-class ConfirmExitDialog final : public core::Overlay {
-public:
-    explicit ConfirmExitDialog(app::App& app);
-    void Update(float dt) override;
-    void Render(graphics::RenderContext& context) override;
-    bool BlocksInputBelow() const override { return true; }
-    bool OnMouseMove(float x, float y) override;
-    bool OnMouseDown(float x, float y) override;
-
-private:
-    app::App& app_;
-    std::vector<ui::Button> buttons_;
-    float elapsed_{0.0f};
-};
-
-} // namespace pdk::overlays
+#endif
