@@ -33,8 +33,15 @@ if (-not (Test-Path $Exe)) {
 }
 
 $full = (Resolve-Path $Exe).Path
-$process = Start-Process -FilePath $full -WorkingDirectory (Split-Path -Parent $full) -PassThru `
-    -ErrorAction SilentlyContinue
+# CreateProcess, not Start-Process: Start-Process goes through ShellExecuteEx, whose Attachment
+# Manager zone check pops "打开文件 - 安全警告" for the unsigned exe on some machines and blocks the
+# test until a human clicks it.  CreateProcess does no zone check, and the loader still rejects a
+# bad image exactly the same way, which is all this test is about.
+$startInfo = [System.Diagnostics.ProcessStartInfo]::new($full)
+$startInfo.UseShellExecute = $false
+$startInfo.WorkingDirectory = Split-Path -Parent $full
+$process = $null
+try { $process = [System.Diagnostics.Process]::Start($startInfo) } catch { }
 if (-not $process) {
     Write-Host ("could not be created: {0}" -f $full)
     exit 1
@@ -70,7 +77,9 @@ if ($exited) {
     }
 }
 
-# Always clean up, whatever happened above.
-Get-Process -Name ([System.IO.Path]::GetFileNameWithoutExtension($full)) -ErrorAction SilentlyContinue |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+# Always clean up, whatever happened above -- but only the process this script started, so a game
+# the developer has open is left alone.
+if (-not $process.HasExited) {
+    try { $process.Kill() } catch { }
+}
 exit $verdict
