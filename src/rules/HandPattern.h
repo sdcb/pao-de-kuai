@@ -42,6 +42,11 @@ typedef struct PatternResult {
  * "last hand is short of kickers" special case; -1 means unknown.
  * `allowShortFinal` must only be true when validating a lead (AGENTS.md). */
 PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal);
+/* IdentifyPattern without building a PatternResult, for search loops.  Returns
+ * HandPattern_IsValid(out); when invalid and `reason` is not NULL, *reason points at
+ * the same message IdentifyPattern would copy (a string literal). */
+bool IdentifyPatternOnly(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal,
+                         HandPattern *out, const char **reason);
 
 /* Returns a string literal. */
 const char *PatternName(PatternType type);

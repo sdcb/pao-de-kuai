@@ -3,6 +3,10 @@
 #include "TestHelpers.h"
 #include "rules/CppCompat.h"
 
+#include <array>
+#include <random>
+#include <vector>
+
 using namespace pdk;
 using tests::C;
 
@@ -282,4 +286,90 @@ TEST_CASE("follow existence check uses rules without ai scoring") {
         C(RANK_FIVE), C(RANK_FIVE, SUIT_HEARTS), C(RANK_FIVE, SUIT_DIAMONDS),
         C(RANK_SEVEN), C(RANK_EIGHT)
     }), planeThreeGroups, 8));
+}
+
+TEST_CASE("rank count follow check agrees with the exhaustive subset search") {
+    // HasAnyFollowMove answers from rank counts; HasAnyFollowMoveExhaustive is the
+    // original subset walk through ValidateFollow.  Every AI search depends on the two
+    // agreeing, so compare them on random and deliberately clustered hands against
+    // patterns cut from other random hands.
+    Cards sortedDeck = rules::CreatePaoDeKuaiDeck();
+    std::sort(sortedDeck.items, sortedDeck.items + sortedDeck.count,
+        [](Card lhs, Card rhs) { return lhs.rank < rhs.rank; });
+    std::mt19937 rng(20261019u);
+    std::array<int, PATTERN_BOMB + 1> covered{};
+    int checks = 0;
+    int positives = 0;
+
+    auto randomHand = [&](int size, bool clustered) {
+        Cards source = sortedDeck;
+        if (clustered) {
+            // A window of neighbouring ranks makes triples, bombs, runs and planes common.
+            const int window = 26;
+            const int offset = std::uniform_int_distribution<int>(0, source.count - window)(rng);
+            std::shuffle(source.items + offset, source.items + offset + window, rng);
+            Cards hand;
+            Cards_Clear(&hand);
+            for (int i = 0; i < size && i < window; ++i) {
+                Cards_Push(&hand, source.items[offset + i]);
+            }
+            return hand;
+        }
+        std::shuffle(source.items, source.items + source.count, rng);
+        Cards hand;
+        Cards_Clear(&hand);
+        for (int i = 0; i < size; ++i) {
+            Cards_Push(&hand, source.items[i]);
+        }
+        return hand;
+    };
+
+    for (int deal = 0; deal < 400; ++deal) {
+        // Collect the distinct legal leads of a 10-card hand, short-final ones included.
+        const Cards lead = randomHand(10, deal % 2 == 0);
+        std::vector<HandPattern> patterns;
+        for (int mask = 1; mask < (1 << lead.count); ++mask) {
+            Cards play;
+            Cards_Clear(&play);
+            for (int i = 0; i < lead.count; ++i) {
+                if ((mask & (1 << i)) != 0) {
+                    Cards_Push(&play, lead.items[i]);
+                }
+            }
+            const HandPattern pattern = ::IdentifyPattern(&play, play.count, true).pattern;
+            if (!HandPattern_IsValid(&pattern)) {
+                continue;
+            }
+            const bool seen = std::any_of(patterns.begin(), patterns.end(), [&](const HandPattern& p) {
+                return p.type == pattern.type && p.mainRank == pattern.mainRank &&
+                    p.cardCount == pattern.cardCount && p.groupCount == pattern.groupCount &&
+                    p.lastHandShort == pattern.lastHandShort;
+            });
+            if (!seen) {
+                patterns.push_back(pattern);
+            }
+        }
+        std::shuffle(patterns.begin(), patterns.end(), rng);
+
+        for (std::size_t p = 0; p < patterns.size() && p < 12; ++p) {
+            const int size = std::uniform_int_distribution<int>(1, 16)(rng);
+            const Cards hand = randomHand(size, (deal + static_cast<int>(p)) % 3 != 0);
+            const bool fast = ::HasAnyFollowMove(&hand, &patterns[p], hand.count);
+            const bool exhaustive = ::HasAnyFollowMoveExhaustive(&hand, &patterns[p], hand.count);
+            INFO("deal=" << deal << " pattern type=" << static_cast<int>(patterns[p].type)
+                << " rank=" << static_cast<int>(patterns[p].mainRank)
+                << " cards=" << patterns[p].cardCount << " hand=" << hand.count);
+            REQUIRE(fast == exhaustive);
+            covered[patterns[p].type]++;
+            positives += fast ? 1 : 0;
+            checks++;
+        }
+    }
+
+    for (int type = PATTERN_SINGLE; type <= PATTERN_BOMB; ++type) {
+        INFO("pattern type " << type << " was never tested");
+        CHECK(covered[static_cast<std::size_t>(type)] > 0);
+    }
+    CHECK(positives > checks / 10);
+    CHECK(positives < checks - checks / 10);
 }

@@ -14,6 +14,9 @@
 #include <iostream>
 #include <memory>
 #include <thread>
+#include <atomic>
+#include <exception>
+#include <mutex>
 
 using namespace pdk;
 using tests::C;
@@ -71,9 +74,13 @@ int AiFairnessRoundCount() {
     return parsed > 0 ? parsed : 1000;
 }
 
+// Rounds are independent by default: every round starts from the spade-three holder,
+// so a strong seat is not carried by the previous round's win, and the rounds can run in
+// parallel.  PDK_AI_FAIRNESS_CONTINUOUS=1 restores the old serial mode where the winner
+// leads the next round.
 bool RunContinuousFairnessRounds() {
     const char* value = std::getenv("PDK_AI_FAIRNESS_CONTINUOUS");
-    return value == nullptr || value[0] == '\0' || value[0] != '0';
+    return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 
 bool RunStrongFairnessStrategy() {
@@ -258,6 +265,8 @@ game::AiContext MakeSimContext(
 struct SimRoundResult {
     rules::PlayerId winner{PLAYER_HUMAN};
     rules::PlayerId leader{PLAYER_HUMAN};
+    // Points as the real game scores them (remaining cards, 关 32, bombs).
+    std::array<int, 3> scores{0, 0, 0};
 };
 
 std::string SimPlayerName(rules::PlayerId player) {
@@ -333,6 +342,8 @@ SimRoundResult RunSimRound(
         game::PassHistory_Clear(&passHistory[i]);
     }
     int passCount = 0;
+    RoundScoreInput scoreInput{};
+    int trickBombEvent = -1;
 
     if (trace != nullptr) {
         trace->push_back("initial P: " + SimCardsText(hands[0]));
@@ -367,6 +378,7 @@ SimRoundResult RunSimRound(
                 lastPattern.reset();
                 trickLeader = current;
                 passCount = 0;
+                trickBombEvent = -1;
             } else {
                 current = NextSimPlayer(current);
             }
@@ -381,6 +393,14 @@ SimRoundResult RunSimRound(
         if (!lastPattern) {
             trickLeader = current;
         }
+        if (validation.pattern.type == PATTERN_BOMB && scoreInput.bombCount < BOMB_EVENTS_MAX) {
+            if (lastPattern && lastPattern->type == PATTERN_BOMB && trickBombEvent >= 0) {
+                scoreInput.bombs[trickBombEvent].beaten = true;
+            }
+            trickBombEvent = scoreInput.bombCount;
+            scoreInput.bombs[scoreInput.bombCount++] = BombScoreEvent{current, 20, false};
+        }
+        scoreInput.hasPlayedCards[currentIndex] = true;
         RemoveSimCards(hands[static_cast<std::size_t>(currentIndex)], choice.cards);
         playedCards.insert(playedCards.end(), choice.cards.begin(), choice.cards.end());
         lastPattern = validation.pattern;
@@ -388,7 +408,12 @@ SimRoundResult RunSimRound(
         passCount = 0;
 
         if (hands[static_cast<std::size_t>(currentIndex)].empty()) {
-            return SimRoundResult{current, leader};
+            scoreInput.winner = current;
+            for (int i = 0; i < 3; ++i) {
+                scoreInput.remainingCards[i] = static_cast<int>(hands[static_cast<std::size_t>(i)].size());
+            }
+            const RoundScoreResult score = CalculateRoundScore(&scoreInput);
+            return SimRoundResult{current, leader, {score.scores[0], score.scores[1], score.scores[2]}};
         }
         current = NextSimPlayer(current);
     }
@@ -399,6 +424,7 @@ SimRoundResult RunSimRound(
 
 struct SimSummary {
     std::array<int, 3> wins{0, 0, 0};
+    std::array<long long, 3> scores{0, 0, 0};
     std::array<int, 3> starts{0, 0, 0};
     std::array<std::array<int, 3>, 3> winsByLeader{};
     std::vector<std::array<int, 3>> bucketWins;
@@ -542,14 +568,51 @@ SimSummary RunAutoplayRounds(std::array<game::AiStrategyClass*, 3> strategies, u
     const int listLossesFrom = ListAi1LeaderLossesFromRound();
     const int traceRound = AiFairnessTraceRound();
 
+    // Independent rounds do not depend on each other, so play them on all cores first;
+    // the loop below then tallies them in round order exactly as the serial run did.
+    std::vector<SimRoundResult> independent;
+    if (!continuous) {
+        independent.resize(static_cast<std::size_t>(roundCount), SimRoundResult{PLAYER_HUMAN, PLAYER_HUMAN});
+        std::atomic<int> nextRound{0};
+        std::mutex errorMutex;
+        std::exception_ptr error;
+        auto worker = [&]() {
+            try {
+                for (int round = nextRound++; round < roundCount; round = nextRound++) {
+                    independent[static_cast<std::size_t>(round)] = RunSimRound(
+                        strategies, seedBase + static_cast<unsigned>(round), std::nullopt);
+                }
+            } catch (...) {
+                std::lock_guard<std::mutex> lock(errorMutex);
+                if (!error) {
+                    error = std::current_exception();
+                }
+                nextRound = roundCount;
+            }
+        };
+        const unsigned threadCount = std::max(1u, std::thread::hardware_concurrency());
+        std::vector<std::thread> threads;
+        for (unsigned i = 0; i < threadCount; ++i) {
+            threads.emplace_back(worker);
+        }
+        for (std::thread& thread : threads) {
+            thread.join();
+        }
+        if (error) {
+            std::rethrow_exception(error);
+        }
+    }
+
     for (int round = 0; round < roundCount; ++round) {
         std::vector<std::string> trace;
         std::vector<std::string>* tracePtr = round == traceRound ? &trace : nullptr;
-        const SimRoundResult result = RunSimRound(
-            strategies,
-            seedBase + static_cast<unsigned>(round),
-            continuous ? nextLeader : std::nullopt,
-            tracePtr);
+        const SimRoundResult result = continuous || tracePtr != nullptr
+            ? RunSimRound(
+                strategies,
+                seedBase + static_cast<unsigned>(round),
+                continuous ? nextLeader : std::nullopt,
+                tracePtr)
+            : independent[static_cast<std::size_t>(round)];
         const int winnerIndex = rules::PlayerIndex(result.winner);
         const int leaderIndex = rules::PlayerIndex(result.leader);
         if (round == traceRound) {
@@ -585,6 +648,9 @@ SimSummary RunAutoplayRounds(std::array<game::AiStrategyClass*, 3> strategies, u
         ++summary.wins[static_cast<std::size_t>(winnerIndex)];
         ++summary.starts[static_cast<std::size_t>(leaderIndex)];
         ++summary.winsByLeader[static_cast<std::size_t>(leaderIndex)][static_cast<std::size_t>(winnerIndex)];
+        for (std::size_t i = 0; i < 3; ++i) {
+            summary.scores[i] += result.scores[i];
+        }
         if (roundCount >= 200) {
             const std::size_t bucket = static_cast<std::size_t>(round / 100);
             if (summary.bucketWins.size() <= bucket) {
@@ -738,6 +804,8 @@ TEST_CASE("disabled strong ai beats basic over 1000 autoplay rounds" * doctest::
         roundCount);
     const std::array<int, 3>& wins = summary.wins;
 
+    std::cout << "AI1 vs Basic scores: Player=" << summary.scores[0] << ", AI1=" << summary.scores[1]
+        << ", AI2=" << summary.scores[2] << "\n";
     std::cout << "AI1 vs Basic wins: Player=" << wins[0] << ", AI1=" << wins[1] << ", AI2=" << wins[2]
         << "; leaders: Player=" << summary.starts[0] << ", AI1=" << summary.starts[1] << ", AI2=" << summary.starts[2]
         << "; by leader P=(" << summary.winsByLeader[0][0] << ", " << summary.winsByLeader[0][1] << ", " << summary.winsByLeader[0][2]

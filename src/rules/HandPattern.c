@@ -61,37 +61,28 @@ static Rank MaxRank(const Rank *ranks, int count)
     return best;
 }
 
-static void SetReason(PatternResult *result, const char *reason)
+/*
+ * The identification core reports a reason as a pointer to a string literal; only the
+ * public IdentifyPattern copies it into PatternResult.  The AI searches identify tens
+ * of thousands of subsets per decision and almost all of them are invalid, so building
+ * and zero-padding a 128-byte reason for each one was a real share of their cost.
+ */
+static bool Invalid(const char *reason, const char **outReason)
 {
-    if (reason == NULL) {
-        result->reason[0] = '\0';
-        return;
-    }
-    strncpy(result->reason, reason, PATTERN_REASON_CAP - 1);
-    result->reason[PATTERN_REASON_CAP - 1] = '\0';
+    *outReason = reason;
+    return false;
 }
 
-static PatternResult Invalid(const char *reason)
+static bool Valid(PatternType type, Rank rank, int count, bool lastShort, int groupCount,
+                  HandPattern *out)
 {
-    PatternResult result;
-
-    memset(&result, 0, sizeof(result));
-    result.pattern.type = PATTERN_INVALID;
-    SetReason(&result, reason);
-    return result;
-}
-
-static PatternResult Valid(PatternType type, Rank rank, int count, bool lastShort, int groupCount)
-{
-    PatternResult result;
-
-    memset(&result, 0, sizeof(result));
-    result.pattern.type = type;
-    result.pattern.mainRank = rank;
-    result.pattern.cardCount = count;
-    result.pattern.groupCount = groupCount;
-    result.pattern.lastHandShort = lastShort;
-    return result;
+    memset(out, 0, sizeof(*out));
+    out->type = type;
+    out->mainRank = rank;
+    out->cardCount = count;
+    out->groupCount = groupCount;
+    out->lastHandShort = lastShort;
+    return true;
 }
 
 bool HandPattern_IsValid(const HandPattern *pattern)
@@ -103,7 +94,7 @@ bool HandPattern_IsValid(const HandPattern *pattern)
  * the highest (groupCount, max rank) score, matching the original. */
 static bool TryIdentifyPlane(const RankCounts *counts, int total,
                              int handSizeBeforePlay, bool allowShortFinal,
-                             PatternResult *out)
+                             HandPattern *out)
 {
     Rank tripleRanks[RANK_TWO + 1];
     int tripleCount = 0;
@@ -141,56 +132,57 @@ static bool TryIdentifyPlane(const RankCounts *counts, int total,
             score = groupCount * 100 + RankValue(MaxRank(&tripleRanks[start], runCount));
             if (score > bestScore) {
                 bestScore = score;
-                *out = Valid(PATTERN_PLANE, MaxRank(&tripleRanks[start], runCount),
-                             total, lastShort, groupCount);
+                Valid(PATTERN_PLANE, MaxRank(&tripleRanks[start], runCount),
+                      total, lastShort, groupCount, out);
             }
         }
     }
     return bestScore != PDK_SCORE_MIN;
 }
 
-PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal)
+static bool Identify(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal,
+                     HandPattern *out, const char **reason)
 {
     RankCounts counts;
     int total;
 
     if (cards->count == 0) {
-        return Invalid("没有选择牌");
+        return Invalid("没有选择牌", reason);
     }
 
     CountRanks(cards, &counts);
     total = cards->count;
 
     if (total == 1) {
-        return Valid(PATTERN_SINGLE, cards->items[0].rank, total, false, 0);
+        return Valid(PATTERN_SINGLE, cards->items[0].rank, total, false, 0, out);
     }
 
     if (total == 2 && counts.distinct == 1) {
-        return Valid(PATTERN_PAIR, cards->items[0].rank, total, false, 0);
+        return Valid(PATTERN_PAIR, cards->items[0].rank, total, false, 0, out);
     }
 
     if (total == 3 && counts.distinct == 1) {
         if (allowShortFinal && handSizeBeforePlay == 3) {
-            return Valid(PATTERN_TRIPLE_WITH_ONE, cards->items[0].rank, total, true, 0);
+            return Valid(PATTERN_TRIPLE_WITH_ONE, cards->items[0].rank, total, true, 0, out);
         }
-        return Invalid("三张主体只能三带二，最后一手牌不足时除外");
+        return Invalid("三张主体只能三带二，最后一手牌不足时除外", reason);
     }
 
     if (total == 4) {
         if (counts.distinct == 1) {
             const Rank rank = cards->items[0].rank;
             if (rank == RANK_ACE || rank == RANK_TWO) {
-                return Invalid("没有 A 或 2 炸弹");
+                return Invalid("没有 A 或 2 炸弹", reason);
             }
-            return Valid(PATTERN_BOMB, rank, total, false, 0);
+            return Valid(PATTERN_BOMB, rank, total, false, 0, out);
         }
 
         for (int rank = RANK_THREE; rank <= RANK_TWO; ++rank) {
             if (counts.count[rank] == 3) {
                 if (allowShortFinal && handSizeBeforePlay == total) {
-                    return Valid(PATTERN_TRIPLE_WITH_ONE, (Rank)rank, total, true, 0);
+                    return Valid(PATTERN_TRIPLE_WITH_ONE, (Rank)rank, total, true, 0, out);
                 }
-                return Invalid("三张主体只能三带二，最后一手牌不足时除外");
+                return Invalid("三张主体只能三带二，最后一手牌不足时除外", reason);
             }
         }
     }
@@ -198,16 +190,13 @@ PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool a
     if (total == 5) {
         for (int rank = RANK_THREE; rank <= RANK_TWO; ++rank) {
             if (counts.count[rank] == 3) {
-                return Valid(PATTERN_TRIPLE_WITH_PAIR, (Rank)rank, total, false, 0);
+                return Valid(PATTERN_TRIPLE_WITH_PAIR, (Rank)rank, total, false, 0, out);
             }
         }
     }
 
-    {
-        PatternResult plane;
-        if (TryIdentifyPlane(&counts, total, handSizeBeforePlay, allowShortFinal, &plane)) {
-            return plane;
-        }
+    if (TryIdentifyPlane(&counts, total, handSizeBeforePlay, allowShortFinal, out)) {
+        return true;
     }
 
     if (total >= 5 && counts.distinct == cards->count) {
@@ -219,7 +208,7 @@ PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool a
             }
         }
         if (IsConsecutive(ranks, rankCount)) {
-            return Valid(PATTERN_STRAIGHT, MaxRank(ranks, rankCount), total, false, 0);
+            return Valid(PATTERN_STRAIGHT, MaxRank(ranks, rankCount), total, false, 0, out);
         }
     }
 
@@ -238,11 +227,48 @@ PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool a
             pairRanks[pairCount++] = (Rank)rank;
         }
         if (allPairs && pairCount >= 2 && IsConsecutive(pairRanks, pairCount)) {
-            return Valid(PATTERN_CONSECUTIVE_PAIRS, MaxRank(pairRanks, pairCount), total, false, 0);
+            return Valid(PATTERN_CONSECUTIVE_PAIRS, MaxRank(pairRanks, pairCount), total, false, 0, out);
         }
     }
 
-    return Invalid("牌型不符合当前固定跑得快规则");
+    return Invalid("牌型不符合当前固定跑得快规则", reason);
+}
+
+PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal)
+{
+    PatternResult result;
+    const char *reason = NULL;
+
+    memset(&result, 0, sizeof(result));
+    if (!Identify(cards, handSizeBeforePlay, allowShortFinal, &result.pattern, &reason)) {
+        /* Same bytes as before: the invalid pattern is all zero and the reason is
+         * NUL-padded, which the memset already provides. */
+        memset(&result.pattern, 0, sizeof(result.pattern));
+        result.pattern.type = PATTERN_INVALID;
+        for (int i = 0; reason != NULL && reason[i] != '\0' && i + 1 < PATTERN_REASON_CAP; ++i) {
+            result.reason[i] = reason[i];
+        }
+    }
+    return result;
+}
+
+bool IdentifyPatternOnly(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal,
+                         HandPattern *out, const char **reason)
+{
+    const char *why = NULL;
+
+    if (!Identify(cards, handSizeBeforePlay, allowShortFinal, out, &why)) {
+        memset(out, 0, sizeof(*out));
+        out->type = PATTERN_INVALID;
+        if (reason != NULL) {
+            *reason = why;
+        }
+        return false;
+    }
+    if (reason != NULL) {
+        *reason = NULL;
+    }
+    return true;
 }
 
 const char *PatternName(PatternType type)

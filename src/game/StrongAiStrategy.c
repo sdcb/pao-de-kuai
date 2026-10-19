@@ -6,7 +6,6 @@
 
 #include <windows.h>
 
-#include <process.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +17,7 @@
  * Pure C (plan.md S8).  What replaced what:
  *
  *   - the two `static std::mutex` around the memo tables became SRWLOCK with
- *     SRWLOCK_INIT.  This is where losing RAII actually bites, so the rule followed
+ *     SRWLOCK_INIT (lookups take it shared, inserts exclusive).  This is where losing RAII actually bites, so the rule followed
  *     here is that no function ever holds the lock across a possible exit: every
  *     AcquireSRWLockExclusive sits in a tiny helper whose only way out is the matching
  *     ReleaseSRWLockExclusive (FollowCache_Lookup/_Store, LeadCountCache_Lookup/_Store),
@@ -27,11 +26,9 @@
  *   - the four `std::atomic<int>` work counters became `volatile LONG` driven by
  *     InterlockedIncrement / InterlockedExchangeAdd.  InterlockedIncrement returns the
  *     *new* value, so an `x.fetch_add(1)` is written `(int)InterlockedIncrement(&x) - 1`.
- *   - the two `std::array<std::thread, 8>` pools became _beginthreadex plus
- *     WaitForMultipleObjects, with the calling thread running the same work loop it ran
- *     before (`worker();`).  StartWorkers/JoinWorkers own the handle lifetime so the
- *     CloseHandle calls happen at exactly one point per pool, including when a thread
- *     could not be created.
+ *   - the two `std::array<std::thread, 8>` pools became 8 submissions of one system
+ *     thread-pool work item (RunWorkers), with the calling thread running the same work
+ *     loop it ran before (`worker();`) and then waiting for the callbacks.
  *   - `std::vector<Candidate>` -> the growable AiCandidateList, `std::map<Rank,int>` ->
  *     AiRankCounts, `std::optional` -> value + bool, `std::sort` -> a stable insertion
  *     sort (std::sort is unstable and the two toolchains order equal elements
@@ -183,14 +180,17 @@ static void FollowCache_Insert(FollowCache *cache, const FollowKey *key, bool va
     }
 }
 
-/* The only two entry points, so the lock cannot be leaked by a caller's early return. */
+/* The only two entry points, so the lock cannot be leaked by a caller's early return.
+ * Lookups only read the table, so they take the lock shared: the rollout workers hit
+ * these tables constantly and almost always find the key, and an exclusive lookup made
+ * all of them queue behind each other.  Inserts (which may rehash) stay exclusive. */
 static bool FollowCache_Lookup(const FollowKey *key, bool *value)
 {
     bool found;
 
-    AcquireSRWLockExclusive(&g_followCacheLock);
+    AcquireSRWLockShared(&g_followCacheLock);
     found = FollowCache_Find(&g_followCache, key, value);
-    ReleaseSRWLockExclusive(&g_followCacheLock);
+    ReleaseSRWLockShared(&g_followCacheLock);
     return found;
 }
 
@@ -306,9 +306,9 @@ static bool LeadCountCache_Lookup(uint64_t key, int *value)
 {
     bool found;
 
-    AcquireSRWLockExclusive(&g_leadCountCacheLock);
+    AcquireSRWLockShared(&g_leadCountCacheLock);
     found = LeadCountCache_Find(&g_leadCountCache, key, value);
-    ReleaseSRWLockExclusive(&g_leadCountCacheLock);
+    ReleaseSRWLockShared(&g_leadCountCacheLock);
     return found;
 }
 
@@ -322,33 +322,52 @@ static void LeadCountCache_Store(uint64_t key, int value)
 /* ---- worker pools ------------------------------------------------------ */
 
 /*
- * Both pools are "N threads plus the calling thread", pull work from a shared counter
- * and are joined before returning.  The handle array is owned here, so a failed
- * _beginthreadex cannot leak a handle and the CloseHandle loop runs exactly once.
+ * Both pools are "N helpers plus the calling thread", pull work from a shared counter
+ * and are joined before returning.  The helpers come from the process-wide system thread
+ * pool: this runs once per candidate, and creating and joining 8 fresh threads every time
+ * cost about as much as the rollouts themselves.  The pool is safe for concurrent
+ * submitters, and because the calling thread always works too, nested or concurrent
+ * callers cannot deadlock waiting for a free pool thread.
+ *
+ * A helper that only starts after the calling thread has drained the counter finds no
+ * work and returns; WaitForThreadpoolWorkCallbacks still waits for it, so the task on
+ * the caller's stack outlives every callback.  If the work object cannot be created the
+ * calling thread simply does all the work, as it did when _beginthreadex failed.
  */
-static int StartWorkers(HANDLE *handles, int maxWorkers,
-                        unsigned(__stdcall *start)(void *), void *parameter)
+typedef void (*WorkerFn)(void *parameter);
+
+typedef struct PoolJob {
+    WorkerFn run;
+    void *parameter;
+} PoolJob;
+
+static VOID CALLBACK PoolJobCallback(PTP_CALLBACK_INSTANCE instance, PVOID context,
+                                     PTP_WORK work)
 {
-    int created = 0;
+    const PoolJob *job = (const PoolJob *)context;
 
-    for (int i = 0; i < maxWorkers; ++i) {
-        const uintptr_t raw = _beginthreadex(NULL, 0, start, parameter, 0, NULL);
-
-        if (raw == 0) {
-            break;
-        }
-        handles[created++] = (HANDLE)raw;
-    }
-    return created;
+    (void)instance;
+    (void)work;
+    job->run(job->parameter);
 }
 
-static void JoinWorkers(HANDLE *handles, int count)
+static void RunWorkers(int helpers, WorkerFn run, void *parameter)
 {
-    if (count > 0) {
-        WaitForMultipleObjects((DWORD)count, handles, TRUE, INFINITE);
+    PoolJob job;
+    PTP_WORK work;
+
+    job.run = run;
+    job.parameter = parameter;
+    work = CreateThreadpoolWork(PoolJobCallback, &job, NULL);
+    if (work != NULL) {
+        for (int i = 0; i < helpers; ++i) {
+            SubmitThreadpoolWork(work);
+        }
     }
-    for (int i = 0; i < count; ++i) {
-        CloseHandle(handles[i]);
+    run(parameter); /* the calling thread works too, like worker() did */
+    if (work != NULL) {
+        WaitForThreadpoolWorkCallbacks(work, FALSE);
+        CloseThreadpoolWork(work);
     }
 }
 
@@ -577,6 +596,13 @@ static bool CachedHasAnyFollowMove(const Cards *hand, const HandPattern *previou
     FollowKey key;
     bool value = false;
 
+    /* Away from planes HasAnyFollowMove reads the rank counts and is cheaper than a
+     * locked table lookup; only the plane case still walks subsets and is worth
+     * remembering. */
+    if (previous->type != PATTERN_PLANE) {
+        return HasAnyFollowMove(hand, previous, handSizeBeforePlay);
+    }
+
     key.handMask = CardSetMask(hand);
     key.pattern = PatternKey(previous);
     key.handSize = handSizeBeforePlay;
@@ -607,6 +633,9 @@ static bool ComputeMinimumLeadCount(const Cards *cards, int *out)
     const int inf = 99;
     AiMaskList legalMasks;
     int *dp = NULL;
+    int *byLowest = NULL;
+    int bucketStart[CARDS_MAX + 2];
+    int bucketFill[CARDS_MAX + 1];
     int result = 8;
     bool ok = false;
 
@@ -617,13 +646,12 @@ static bool ComputeMinimumLeadCount(const Cards *cards, int *out)
     }
 
     /*
-     * Every subset that is a legal lead, in ascending mask order.  The C++ version then
-     * built legalByCard[card] lists and scanned one of them per DP step; scanning this
-     * array for membership of the lowest remaining card reproduces exactly that list,
-     * in the same order, without the vector of vectors.
+     * Every subset that is a legal lead, in ascending mask order.  IdentifyPatternOnly is
+     * ValidateLead's test without building the reason text for the many invalid subsets.
      */
     for (int mask = 1; mask <= fullMask; ++mask) {
         Cards play;
+        HandPattern pattern;
 
         Cards_Clear(&play);
         for (int i = 0; i < n; ++i) {
@@ -631,11 +659,45 @@ static bool ComputeMinimumLeadCount(const Cards *cards, int *out)
                 Cards_Push(&play, cards->items[i]);
             }
         }
-        if (ValidateLead(&play, n).ok) {
+        if (IdentifyPatternOnly(&play, n, true, &pattern, NULL)) {
             if (!AiMaskList_Push(&legalMasks, (uint64_t)mask)) {
                 goto cleanup;
             }
         }
+    }
+
+    /*
+     * A lead that removes the lowest remaining card and fits inside `remaining` has that
+     * card as its own lowest card, so the DP step only has to scan the leads bucketed
+     * under it rather than the whole list.  The minimum over the bucket is the minimum
+     * the full scan found, since every skipped lead failed the `first` test anyway.
+     */
+    byLowest = (int *)malloc(sizeof(int) * (size_t)(legalMasks.count > 0 ? legalMasks.count : 1));
+    if (byLowest == NULL) {
+        goto cleanup;
+    }
+    memset(bucketStart, 0, sizeof(bucketStart));
+    for (int i = 0; i < legalMasks.count; ++i) {
+        const int legal = (int)legalMasks.items[i];
+        int low = 0;
+
+        while ((legal & (1 << low)) == 0) {
+            ++low;
+        }
+        bucketStart[low + 1]++;
+    }
+    for (int i = 0; i < n; ++i) {
+        bucketStart[i + 1] += bucketStart[i];
+        bucketFill[i] = bucketStart[i];
+    }
+    for (int i = 0; i < legalMasks.count; ++i) {
+        const int legal = (int)legalMasks.items[i];
+        int low = 0;
+
+        while ((legal & (1 << low)) == 0) {
+            ++low;
+        }
+        byLowest[bucketFill[low]++] = legal;
     }
 
     for (int i = 0; i <= fullMask; ++i) {
@@ -649,12 +711,9 @@ static bool ComputeMinimumLeadCount(const Cards *cards, int *out)
         while ((remaining & (1 << first)) == 0) {
             ++first;
         }
-        for (int i = 0; i < legalMasks.count; ++i) {
-            const int legal = (int)legalMasks.items[i];
+        for (int i = bucketStart[first]; i < bucketStart[first + 1]; ++i) {
+            const int legal = byLowest[i];
 
-            if ((legal & (1 << first)) == 0) {
-                continue;
-            }
             if ((legal & remaining) == legal) {
                 const int candidate = 1 + dp[remaining ^ legal];
 
@@ -669,6 +728,7 @@ static bool ComputeMinimumLeadCount(const Cards *cards, int *out)
     result = dp[fullMask];
     ok = true;
 cleanup:
+    free(byLowest);
     free(dp);
     AiMaskList_Free(&legalMasks);
     if (ok) {
@@ -1332,7 +1392,7 @@ typedef struct RolloutMaskTask {
     int limit;
 } RolloutMaskTask;
 
-static unsigned __stdcall RolloutMaskWorker(void *parameter)
+static void RolloutMaskWorker(void *parameter)
 {
     RolloutMaskTask *task = (RolloutMaskTask *)parameter;
     int localTotal = 0;
@@ -1350,13 +1410,12 @@ static unsigned __stdcall RolloutMaskWorker(void *parameter)
     }
     InterlockedExchangeAdd(task->total, (LONG)localTotal);
     InterlockedExchangeAdd(task->count, (LONG)localCount);
-    return 0;
 }
 
 /* False stands for the old std::nullopt. */
 static bool EnumeratedRolloutBonus(const AiCandidate *candidate, const AiContext *context,
                                    const Cards *unknown, int self, int next, int other,
-                                   int nextCards, bool parallelEvaluation, int *outScore)
+                                   int nextCards, int *outScore)
 {
     const int n = unknown->count;
     RolloutScoreContext scoreContext;
@@ -1388,13 +1447,14 @@ static bool EnumeratedRolloutBonus(const AiCandidate *candidate, const AiContext
     scoreContext.nextCards = nextCards;
     scoreContext.n = n;
 
-    if (parallelEvaluation) {
+    /* Always parallel: the old serial branch (taken for the 5-sample searches) only
+     * existed because spawning threads cost more than it saved.  The sums are integer
+     * and order independent, so the score is the one the serial loop produced. */
+    {
         volatile LONG nextMask = 0;
         volatile LONG parallelTotal = 0;
         volatile LONG parallelCount = 0;
         RolloutMaskTask task;
-        HANDLE handles[PDK_STRONG_WORKERS];
-        int handleCount;
 
         task.scoreContext = &scoreContext;
         task.nextMask = &nextMask;
@@ -1402,15 +1462,9 @@ static bool EnumeratedRolloutBonus(const AiCandidate *candidate, const AiContext
         task.count = &parallelCount;
         task.limit = limit;
 
-        handleCount = StartWorkers(handles, PDK_STRONG_WORKERS, RolloutMaskWorker, &task);
-        RolloutMaskWorker(&task); /* the calling thread works too, like worker() did */
-        JoinWorkers(handles, handleCount);
+        RunWorkers(PDK_STRONG_WORKERS, RolloutMaskWorker, &task);
         total = (int)parallelTotal;
         count = (int)parallelCount;
-    } else {
-        for (int mask = 0; mask < limit; ++mask) {
-            ScoreRolloutMask(&scoreContext, mask, &total, &count);
-        }
     }
 
     if (count == 0) {
@@ -1513,7 +1567,7 @@ typedef struct FastSampleTask {
     volatile LONG *nextTask;
 } FastSampleTask;
 
-static unsigned __stdcall FastSampleWorker(void *parameter)
+static void FastSampleWorker(void *parameter)
 {
     FastSampleTask *task = (FastSampleTask *)parameter;
 
@@ -1521,7 +1575,7 @@ static unsigned __stdcall FastSampleWorker(void *parameter)
         const int index = (int)InterlockedIncrement(task->nextTask) - 1;
 
         if (index >= task->sampleContext->validCount) {
-            return 0;
+            return;
         }
         RunFastSample(task->sampleContext,
                       task->sampleContext->validAttemptIndices[index]);
@@ -1567,7 +1621,7 @@ static int FastRolloutBonus(const AiCandidate *candidate, const AiContext *conte
 
         if (EnumeratedRolloutBonus(candidate, context, unknown, sampleContext.self,
                                    sampleContext.next, sampleContext.other, nextCards,
-                                   sampleCount > 5, &enumerated)) {
+                                   &enumerated)) {
             return enumerated;
         }
     }
@@ -1609,18 +1663,16 @@ static int FastRolloutBonus(const AiCandidate *candidate, const AiContext *conte
         }
     }
 
-    if (sampleCount > 5) {
+    /* Every sample writes only its own slot, so running them on the pool gives the same
+     * scores as the serial loop; it used to be reserved for the 9-sample searches. */
+    if (sampleContext.validCount > 1) {
         volatile LONG nextTask = 0;
         FastSampleTask task;
-        HANDLE handles[PDK_STRONG_WORKERS];
-        int handleCount;
 
         task.sampleContext = &sampleContext;
         task.nextTask = &nextTask;
 
-        handleCount = StartWorkers(handles, PDK_STRONG_WORKERS, FastSampleWorker, &task);
-        FastSampleWorker(&task); /* the calling thread works too, like worker() did */
-        JoinWorkers(handles, handleCount);
+        RunWorkers(PDK_STRONG_WORKERS, FastSampleWorker, &task);
     } else {
         for (int i = 0; i < sampleContext.validCount; ++i) {
             RunFastSample(&sampleContext, validAttemptIndices[i]);
