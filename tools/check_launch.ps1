@@ -37,11 +37,64 @@ $full = (Resolve-Path $Exe).Path
 # Manager zone check pops "打开文件 - 安全警告" for the unsigned exe on some machines and blocks the
 # test until a human clicks it.  CreateProcess does no zone check, and the loader still rejects a
 # bad image exactly the same way, which is all this test is about.
-$startInfo = [System.Diagnostics.ProcessStartInfo]::new($full)
-$startInfo.UseShellExecute = $false
-$startInfo.WorkingDirectory = Split-Path -Parent $full
-$process = $null
-try { $process = [System.Diagnostics.Process]::Start($startInfo) } catch { }
+#
+# It is called directly rather than through ProcessStartInfo because only STARTUPINFO can ask for
+# SW_SHOWNOACTIVATE, and .NET does not reliably forward WindowStyle without ShellExecute.  wWinMain
+# hands that to ShowWindow, so the window comes up visible (MainWindowTitle needs that) but never
+# takes the foreground from whatever the developer is typing into.
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class PdkLaunch {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct STARTUPINFOW {
+        public int cb; public string lpReserved, lpDesktop, lpTitle;
+        public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+        public short wShowWindow, cbReserved2; public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwProcessId, dwThreadId; }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateProcessW(string app, string cmd, IntPtr pa, IntPtr ta, bool inherit,
+        int flags, IntPtr env, string cwd, ref STARTUPINFOW si, out PROCESS_INFORMATION pi);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll")] static extern bool GetExitCodeProcess(IntPtr h, out int code);
+    // Returns the running process, or null with exitCode set when the image died before it could
+    // be attached to (exitCode stays 0 if CreateProcess itself failed).  The raw handle is held
+    // until then, so a loader rejection's 0xC000007B is never lost to the race.
+    public static System.Diagnostics.Process Start(string exe, string cwd, out int exitCode) {
+        exitCode = 0;
+        var si = new STARTUPINFOW();
+        si.cb = Marshal.SizeOf(typeof(STARTUPINFOW));
+        si.dwFlags = 0x1;      // STARTF_USESHOWWINDOW
+        si.wShowWindow = 4;    // SW_SHOWNOACTIVATE
+        PROCESS_INFORMATION pi;
+        if (!CreateProcessW(exe, "\"" + exe + "\"", IntPtr.Zero, IntPtr.Zero, false, 0, IntPtr.Zero,
+                            cwd, ref si, out pi)) {
+            return null;
+        }
+        System.Diagnostics.Process process = null;
+        try {
+            process = System.Diagnostics.Process.GetProcessById(pi.dwProcessId);
+        } catch (ArgumentException) {
+            GetExitCodeProcess(pi.hProcess, out exitCode);
+        }
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        return process;
+    }
+}
+'@
+$earlyExit = 0
+$process = [PdkLaunch]::Start($full, (Split-Path -Parent $full), [ref]$earlyExit)
+if (-not $process -and $earlyExit -eq -1073741701) {
+    Write-Host ("{0} : LOADER REJECTED the image (0xC000007B / STATUS_INVALID_IMAGE_FORMAT)" -f $full)
+    exit 1
+}
+if (-not $process -and $earlyExit -ne 0) {
+    Write-Host ("{0} : exited 0x{1:X8}" -f $full, $earlyExit)
+    exit 1
+}
 if (-not $process) {
     Write-Host ("could not be created: {0}" -f $full)
     exit 1
