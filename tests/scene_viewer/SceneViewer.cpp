@@ -107,6 +107,40 @@ bool SaveJpeg(IWICBitmapSource* source, const std::wstring& path, float quality)
     return ok;
 }
 
+// Screenshot mode renders into a WIC bitmap, so the HWND would otherwise stay blank for the whole
+// run.  Copy each frame to the window with GDI so whoever runs the tests can see what is captured;
+// the screenshot itself still comes from the bitmap, so an occluded window does not matter.
+void ShowOnWindow(IWICBitmap* bitmap, HWND hwnd) {
+    if (!bitmap || !hwnd) {
+        return;
+    }
+    UINT width = 0;
+    UINT height = 0;
+    bitmap->GetSize(&width, &height);
+    const WICRect rect{0, 0, static_cast<INT>(width), static_cast<INT>(height)};
+    pdk::graphics::ComPtr<IWICBitmapLock> lock;
+    UINT size = 0;
+    BYTE* pixels = nullptr;
+    if (FAILED(bitmap->Lock(&rect, WICBitmapLockRead, lock.ReleaseAndGetAddressOf())) ||
+        FAILED(lock->GetDataPointer(&size, &pixels))) {
+        return;
+    }
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = static_cast<LONG>(width);
+    info.bmiHeader.biHeight = -static_cast<LONG>(height); // top-down, like the WIC bitmap
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    RECT client{};
+    GetClientRect(hwnd, &client);
+    HDC dc = GetDC(hwnd);
+    SetStretchBltMode(dc, HALFTONE);
+    StretchDIBits(dc, 0, 0, client.right - client.left, client.bottom - client.top, 0, 0,
+                  static_cast<int>(width), static_cast<int>(height), pixels, &info, DIB_RGB_COLORS, SRCCOPY);
+    ReleaseDC(hwnd, dc);
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -151,6 +185,7 @@ int main(int argc, char** argv) {
         App_Resize(&app, 1280, 720);
         App_Update(&app, FrameTimer_Tick(&timer));
         App_Render(&app);
+        ShowOnWindow(RenderContext_OffscreenBitmap(App_RenderContext(&app)), Window_Hwnd(&window));
         Sleep(16);
     }
 
