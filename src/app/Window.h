@@ -21,7 +21,10 @@ typedef struct Window {
     App *app;
 } Window;
 
-bool Window_Create(Window *window, App *app, const wchar_t *title, int width, int height);
+/* showCommand is the ShowWindow command: wWinMain passes its own, so a launcher's STARTUPINFO
+ * (e.g. "start minimized", or a test asking not to be activated) is honoured. */
+bool Window_Create(Window *window, App *app, const wchar_t *title, int width, int height,
+                   int showCommand);
 int Window_Run(Window *window);
 HWND Window_Hwnd(const Window *window);
 

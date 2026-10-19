@@ -151,7 +151,10 @@ int main(int argc, char** argv) {
     Window window;
     App_Init(&app);
     memset(&window, 0, sizeof(window));
-    if (!Window_Create(&window, &app, L"scene_viewer", 1280, 720)) {
+    // ctest runs these while the developer is typing elsewhere: show the window so the frames can be
+    // watched, but never activate it, or it would take the foreground and swallow their keystrokes.
+    if (!Window_Create(&window, &app, L"scene_viewer", 1280, 720,
+                       args.screenshot.empty() ? SW_SHOW : SW_SHOWNOACTIVATE)) {
         CoUninitialize();
         return 1;
     }

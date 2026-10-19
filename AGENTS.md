@@ -179,6 +179,8 @@ UI 测试会运行 `scene_viewer.exe`，创建 1280x720 真实窗口，切换到
 
 截图模式下 Direct2D 渲染到离屏 WIC 位图（`RenderContext::Initialize(hwnd, true)`），不依赖窗口是否可见；窗口被遮挡或显示器休眠时，HWND 渲染目标会跳过 Present，`BitBlt` 只能截到黑屏。会在 2～3 秒内自动消失的覆盖层（`invalid`、`talk`）和 `loading` 场景会提前截图。
 
+**测试窗口不抢焦点。** 截图模式下 `scene_viewer` 以 `SW_SHOWNOACTIVATE` 显示窗口，并每帧用 GDI 把离屏位图贴上去，人能看到画面，但键盘输入留在开发者正在用的窗口。`pao_de_kuai_launch` 用 `CreateProcessW` + `STARTUPINFO(SW_SHOWNOACTIVATE)` 拉起发布版 exe（不走 ShellExecute，所以也不会弹"打开文件 - 安全警告"），`wWinMain` 会把 `showCommand` 原样交给 `Window_Create`。不要把这两处改回 `SW_SHOW` / `Start-Process`。
+
 `scene_viewer` 支持：
 
 ```text

@@ -16,7 +16,8 @@ static LRESULT CALLBACK Window_StaticWndProc(HWND hwnd, UINT message, WPARAM wPa
 static LRESULT Window_WndProc(Window *window, UINT message, WPARAM wParam, LPARAM lParam);
 static void Window_ForwardMouse(Window *window, UINT message, LPARAM lParam);
 
-bool Window_Create(Window *window, App *app, const wchar_t *title, int width, int height)
+bool Window_Create(Window *window, App *app, const wchar_t *title, int width, int height,
+                   int showCommand)
 {
     WNDCLASSEXW wc;
     RECT rect;
@@ -48,7 +49,7 @@ bool Window_Create(Window *window, App *app, const wchar_t *title, int width, in
         return false;
     }
     ApplyWindowChrome(window->hwnd);
-    ShowWindow(window->hwnd, SW_SHOW);
+    ShowWindow(window->hwnd, showCommand);
     UpdateWindow(window->hwnd);
     return true;
 }
