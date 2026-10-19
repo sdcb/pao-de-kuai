@@ -3,6 +3,7 @@
 
 #include "core/Str.h"
 #include "rules/Deck.h"
+#include "rules/Scoring.h"
 
 #include <windows.h>
 
@@ -1317,6 +1318,68 @@ typedef struct RolloutScoreContext {
     int n;
 } RolloutScoreContext;
 
+/*
+ * How a finished rollout is scored (StrongAI 2.2).  Tuned on two strong AIs against a
+ * basic player over 4000 independent rounds per setting, then confirmed on 4000 rounds
+ * from unseen seeds, where the player's total went from -6124 to -10020.
+ *
+ *   - Outcome: the old table scored `next` winning at -2300 but `other` at -700.  For
+ *     AI2 `next` is AI1, so AI2 preferred the human going out to its fellow AI -- the
+ *     single biggest leak in the recorded games (it would not feed a one-card AI1).
+ *     The two AIs now play as a team against the human: the teammate going out is a
+ *     mild plus, the human going out is the full loss.  A human seat (autoplay) treats
+ *     both AIs as opponents.
+ *   - Points: winning with the opponents on 12 cards and losing on 1 card used to score
+ *     the same.  Each outcome now also carries the round points `self` makes, weighted
+ *     so a few cards matter but never outweigh the win/loss itself.
+ */
+enum {
+    PDK_ROLLOUT_TEAM_WIN = 600,
+    PDK_ROLLOUT_POINT_WEIGHT = 150
+};
+
+/* The points `seat` collects when the rollout ends with `winner` out, scored like the
+ * real round: the winner takes every loser's remaining cards, a single last card is free,
+ * and a loser who never played (still 16 cards) pays 32. */
+static int SeatPoints(const RolloutState *state, int seat, int winner)
+{
+    if (winner < 0) {
+        return 0;
+    }
+    if (winner == seat) {
+        int points = 0;
+
+        for (int i = 0; i < PDK_AI_SEATS; ++i) {
+            const int left = state->hands[i].count;
+
+            if (i != seat) {
+                points += left >= 16 ? 32 : (left == 1 ? 0 : left);
+            }
+        }
+        return points;
+    }
+    {
+        const int left = state->hands[seat].count;
+
+        return left >= 16 ? -32 : (left == 1 ? 0 : -left);
+    }
+}
+
+/* The score of one finished rollout from `self`'s point of view. */
+static int RolloutOutcomeScore(const RolloutState *state, const AiContext *context,
+                               int self, int winner)
+{
+    const int human = PlayerIndex(PLAYER_HUMAN);
+    int score = 0;
+
+    if (winner == self) {
+        score = self == context->roundLeaderIndex ? 3800 : 2600;
+    } else if (winner >= 0) {
+        score = self != human && winner != human ? PDK_ROLLOUT_TEAM_WIN : -2300;
+    }
+    return score + PDK_ROLLOUT_POINT_WEIGHT * SeatPoints(state, self, winner);
+}
+
 static int ScoreRolloutDistribution(const AiCandidate *candidate,
                                     const AiContext *context,
                                     int self, int next, int other,
@@ -1324,7 +1387,6 @@ static int ScoreRolloutDistribution(const AiCandidate *candidate,
 {
     RolloutState state;
     int winner;
-    int selfWinScore;
 
     memset(&state, 0, sizeof(state));
     state.hands[self] = candidate->remainder;
@@ -1342,14 +1404,7 @@ static int ScoreRolloutDistribution(const AiCandidate *candidate,
     PassHistories_Copy(state.passHistory, context->passHistory, PDK_AI_SEATS);
 
     winner = RolloutWinner(&state, self);
-    selfWinScore = self == context->roundLeaderIndex ? 3800 : 2600;
-    if (winner == self) {
-        return selfWinScore;
-    }
-    if (winner >= 0) {
-        return winner == other ? -700 : -2300;
-    }
-    return 0;
+    return RolloutOutcomeScore(&state, context, self, winner);
 }
 
 /* The C++ `scoreMask` lambda; it only ever writes through its two out parameters. */
@@ -1520,7 +1575,6 @@ static void RunFastSample(const FastSampleContext *sampleContext, int sample)
     Cards otherHand;
     RolloutState state;
     int winner;
-    int selfWinScore;
 
     ShuffleSample(&shuffled, MixSeed(sampleContext->seed, (uint32_t)(sample + 17)));
     Cards_Clear(&nextHand);
@@ -1554,12 +1608,8 @@ static void RunFastSample(const FastSampleContext *sampleContext, int sample)
     PassHistories_Copy(state.passHistory, sampleContext->context->passHistory, PDK_AI_SEATS);
 
     winner = RolloutWinner(&state, sampleContext->self);
-    selfWinScore = sampleContext->self == sampleContext->context->roundLeaderIndex ? 3800 : 2600;
-    if (winner == sampleContext->self) {
-        sampleContext->sampleScores[sample] = selfWinScore;
-    } else if (winner >= 0) {
-        sampleContext->sampleScores[sample] = winner == sampleContext->other ? -700 : -2300;
-    }
+    sampleContext->sampleScores[sample] = RolloutOutcomeScore(
+        &state, sampleContext->context, sampleContext->self, winner);
 }
 
 typedef struct FastSampleTask {
@@ -1691,6 +1741,31 @@ static int FastRolloutBonus(const AiCandidate *candidate, const AiContext *conte
 
 /* ---- strong adjustments ------------------------------------------------ */
 
+/* The two AI seats play together against the human (see RolloutOutcomeScore). */
+static bool TeamMode(const AiContext *context)
+{
+    return context->currentPlayerIndex != PlayerIndex(PLAYER_HUMAN);
+}
+
+/* The other AI seat, or -1 when this seat is the human's (autoplay). */
+static int TeammateIndex(const AiContext *context)
+{
+    if (!TeamMode(context)) {
+        return -1;
+    }
+    return 3 - context->currentPlayerIndex - PlayerIndex(PLAYER_HUMAN);
+}
+
+/* Cards left in the hand that threatens to go out: the human's when the two AIs play as
+ * a team, otherwise the smallest opponent hand. */
+static int ThreatCards(const AiContext *context)
+{
+    if (TeamMode(context)) {
+        return context->remainingCards[PlayerIndex(PLAYER_HUMAN)];
+    }
+    return context->minOpponentRemainingCards;
+}
+
 static bool ShouldUseRollout(const AiCandidate *candidate, const AiContext *context)
 {
     return candidate->remainder.count <= 10 || context->minOpponentRemainingCards <= 8;
@@ -1700,10 +1775,12 @@ static int StrongPostRolloutAdjustment(const AiCandidate *candidate,
                                       const AiContext *context)
 {
     int score = -Ai_KickerControlPenalty(candidate) * 10;
-    const bool anyOpponentSingle = context->minOpponentRemainingCards == 1;
+    const int threat = ThreatCards(context);
+    const bool anyOpponentSingle = threat == 1;
     const bool singleBlocker = candidate->pattern.type == PATTERN_SINGLE &&
         (context->leading ||
          (!context->leading && context->previous.type == PATTERN_SINGLE));
+    const int teammate = TeammateIndex(context);
 
     if (anyOpponentSingle && singleBlocker && candidate->remainder.count > 0) {
         score += RankValue(candidate->pattern.mainRank) * 180;
@@ -1711,6 +1788,33 @@ static int StrongPostRolloutAdjustment(const AiCandidate *candidate,
             score += 1100;
         } else if (candidate->pattern.mainRank <= RANK_TEN) {
             score -= 900;
+        }
+    }
+    if (candidate->remainder.count > 0) {
+        /* A hand of one or two cards can only follow a single or a pair (no bomb fits),
+         * so a lead with more cards than the threat holds is one it can never answer. */
+        if (context->leading && threat <= 2 && candidate->pattern.cardCount > threat) {
+            score += 900;
+        }
+        if (context->leading && threat == 2 && candidate->pattern.type == PATTERN_SINGLE) {
+            score += RankValue(candidate->pattern.mainRank) * 120;
+            if (candidate->pattern.mainRank <= RANK_TEN) {
+                score -= 600;
+            }
+        }
+        if (context->leading && threat == 2 && candidate->pattern.type == PATTERN_PAIR) {
+            score += RankValue(candidate->pattern.mainRank) * 60 - 500;
+        }
+        /* Feed a teammate who is next and down to one card: our lowest single is the
+         * lead it is most likely to beat. */
+        if (teammate >= 0 && candidate->pattern.type == PATTERN_SINGLE &&
+            NextIndex(context->currentPlayerIndex) == teammate &&
+            context->remainingCards[teammate] == 1) {
+            if (context->leading) {
+                score += 1500 + (RankValue(RANK_TWO) - RankValue(candidate->pattern.mainRank)) * 150;
+            } else {
+                score -= RankValue(candidate->pattern.mainRank) * 150;
+            }
         }
     }
     return score;
@@ -1727,6 +1831,38 @@ static bool IsPreferredEarlyLead(PatternType type)
 static int StrongAdjustment(const AiCandidate *candidate, const AiContext *context)
 {
     int score = 0;
+
+    if (context->leading && candidate->remainder.count > 0) {
+        const int threat = ThreatCards(context);
+        const int teammate = TeammateIndex(context);
+
+        /* Keep the leads the threat cannot answer, and the feeding single, inside the
+         * handful of candidates that reach the rollout. */
+        if (threat <= 2 && candidate->pattern.cardCount > threat) {
+            score += 1500;
+        }
+        if (teammate >= 0 && candidate->pattern.type == PATTERN_SINGLE &&
+            NextIndex(context->currentPlayerIndex) == teammate &&
+            context->remainingCards[teammate] == 1) {
+            score += 2500 + (RankValue(RANK_TWO) - RankValue(candidate->pattern.mainRank)) * 100;
+        }
+    }
+
+    /* Splitting a bomb throws away a sure +20/-10/-10 and the control it gives. */
+    if (candidate->remainder.count > 0 &&
+        candidate->pattern.type != PATTERN_BOMB) {
+        AiRankCounts played;
+        AiRankCounts kept;
+
+        AiRankCounts_Build(&candidate->cards, &played);
+        AiRankCounts_Build(&candidate->remainder, &kept);
+        for (Rank rank = RANK_THREE; rank <= RANK_KING; ++rank) {
+            if (played.count[rank] > 0 && played.count[rank] + kept.count[rank] == 4) {
+                score -= 2200;
+                break;
+            }
+        }
+    }
 
     if (context->leading && candidate->pattern.type == PATTERN_BOMB &&
         candidate->remainder.count > 0 && candidate->remainder.count <= 8) {
@@ -2037,7 +2173,8 @@ static AiMoveChoice ChooseStrongMove(const Cards *hand, const AiContext *context
     }
     SortCandidates(candidates.items, planLimit, StrongCandidateLess);
 
-    useStrongLeadPlanner = context->leading && context->ownRemainingCards >= 9;
+    useStrongLeadPlanner = context->leading && context->ownRemainingCards >= 9 &&
+        ThreatCards(context) > 2;
     rolloutLimit = context->leading ? 8 : 4;
     if (rolloutLimit > candidates.count) {
         rolloutLimit = candidates.count;
@@ -2104,7 +2241,7 @@ static AiMoveChoice ChooseStrongMove(const Cards *hand, const AiContext *context
     SortCandidates(candidates.items, rolloutLimit, StrongCandidateLess);
 
     best = &candidates.items[0];
-    if (context->leading && context->ownRemainingCards >= 9) {
+    if (useStrongLeadPlanner) {
         const int plannerLimit = candidates.count < 8 ? candidates.count : 8;
         long long bestSelectionScore = -0x7fffffffffffffffLL;
 

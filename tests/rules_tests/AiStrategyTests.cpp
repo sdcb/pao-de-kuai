@@ -483,3 +483,48 @@ TEST_CASE("strong ai midgame lead does not split a pair when a singleton is avai
         CHECK(choice.pattern.mainRank != RANK_FOUR);
     }
 }
+
+TEST_CASE("strong ai feeds the other ai when it is next with one card left") {
+    // AI2 leads and AI1 (next in turn) has one card: the lowest single gives AI1 the best
+    // chance to go out, which is a win for the AI side.
+    game::StrongAiStrategy ai;
+    const rules::Cards hand = MakeCards({
+        C(RANK_THREE),
+        C(RANK_SEVEN),
+        C(RANK_NINE),
+        C(RANK_QUEEN),
+        C(RANK_KING),
+        C(RANK_ACE)
+    });
+    game::AiContext context = LeadContext(static_cast<int>(hand.size()), 1, 1);
+    context.currentPlayerIndex = rules::PlayerIndex(PLAYER_AI2);
+    context.roundLeaderIndex = rules::PlayerIndex(PLAYER_AI2);
+    game::SetRemainingCards(context, 8, 1, static_cast<int>(hand.size()));
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == PATTERN_SINGLE);
+    CHECK(choice.pattern.mainRank == RANK_THREE);
+}
+
+TEST_CASE("strong ai leads a pattern a two-card human cannot follow") {
+    game::StrongAiStrategy ai;
+    const rules::Cards hand = MakeCards({
+        C(RANK_THREE),
+        C(RANK_FOUR),
+        C(RANK_FIVE),
+        C(RANK_SIX),
+        C(RANK_SEVEN),
+        C(RANK_EIGHT, SUIT_HEARTS)
+    });
+    game::AiContext context = LeadContext(static_cast<int>(hand.size()), 2, 2);
+    context.currentPlayerIndex = rules::PlayerIndex(PLAYER_AI1);
+    context.roundLeaderIndex = rules::PlayerIndex(PLAYER_AI1);
+    game::SetRemainingCards(context, 2, static_cast<int>(hand.size()), 9);
+
+    const game::AiMoveChoice choice = ai.ChooseMove(hand, context);
+
+    CHECK_FALSE(choice.pass);
+    CHECK(choice.pattern.type == PATTERN_STRAIGHT);
+}
