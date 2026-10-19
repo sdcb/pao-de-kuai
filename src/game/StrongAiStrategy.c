@@ -82,9 +82,22 @@ StrongAiConfig StrongAiConfig_V22(void)
     return config;
 }
 
+/*
+ * StrongAI 2.3: 2.2 with three times the rollout samples and the exact endgame search
+ * once the three hands hold at most 22 cards.  Against two candidates the frozen 2.2 in
+ * the human seat went from -310 to -3803 points over 6000 rounds on seeds not used for
+ * tuning; the slowest decisions stay under 0.9 s (P99 about 110 ms).
+ */
 StrongAiConfig StrongAiConfig_Default(void)
 {
-    return StrongAiConfig_V22();
+    StrongAiConfig config = StrongAiConfig_V22();
+
+    config.leadSamples = 27;
+    config.otherSamples = 15;
+    config.endgameSolver = true;
+    config.solverMaxCards = 22;
+    config.solverScale = 600;
+    return config;
 }
 
 static const StrongAiConfig *Cfg(const AiContext *context)

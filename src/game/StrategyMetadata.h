@@ -36,7 +36,7 @@ static inline StrategyMetadata StrongStrategyMetadata(void)
 {
     StrategyMetadata metadata;
     metadata.strategy = "strong";
-    metadata.strategyVersion = "2.2";
+    metadata.strategyVersion = "2.3";
     return metadata;
 }
 
