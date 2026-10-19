@@ -1,5 +1,6 @@
 #include "game/AiStrategy.h"
 #include "game/AiStrategyInternal.h"
+#include "game/EndgameSolver.h"
 
 #include "core/Str.h"
 #include "rules/Deck.h"
@@ -47,9 +48,61 @@
  */
 
 enum { PDK_STRONG_WORKERS = 8 };
-/* The parallel sample pool is only entered with sampleCount 9 or 5; the cap below is
- * defensive so the fixed buffers cannot be overrun if a third call site appears. */
+/* The parallel sample pool is entered with config->leadSamples or ->otherSamples; the cap
+ * keeps a mistuned configuration from overrunning the fixed buffers. */
 enum { PDK_STRONG_SAMPLE_CAP = 64 };
+
+/* ---- configuration ----------------------------------------------------- */
+
+StrongAiConfig StrongAiConfig_V22(void)
+{
+    StrongAiConfig config;
+
+    memset(&config, 0, sizeof(config));
+    config.teamPlay = true;
+    config.teamWinScore = 600;
+    config.pointWeight = 150;
+    config.endgameDefense = true;
+    config.bombSplitPenalty = true;
+    config.leadSamples = 9;
+    config.otherSamples = 5;
+    config.leadRolloutLimit = 8;
+    config.followRolloutLimit = 4;
+    config.leadRolloutRemainder = 10;
+    config.leadRolloutOpponentCards = 8;
+    config.followRolloutRemainder = 8;
+    config.rolloutPolicy = 0;
+    config.endgameSolver = false;
+    config.solverMaxCards = 18;
+    config.solverSamples = 12;
+    config.solverNodes = 20000;
+    config.solverScale = 300;
+    config.pairRunPenalty = 0;
+    config.springRescueBonus = 0;
+    return config;
+}
+
+StrongAiConfig StrongAiConfig_Default(void)
+{
+    return StrongAiConfig_V22();
+}
+
+static const StrongAiConfig *Cfg(const AiContext *context)
+{
+    static StrongAiConfig defaults;
+    static volatile LONG ready = 0;
+
+    if (context->strongConfig != NULL) {
+        return context->strongConfig;
+    }
+    /* Every thread computes the same value, so a racing first call is harmless; the
+     * flag only saves recomputing it. */
+    if (ready == 0) {
+        defaults = StrongAiConfig_Default();
+        InterlockedExchange(&ready, 1);
+    }
+    return &defaults;
+}
 
 /* ---- the two memo tables ---------------------------------------------- */
 
@@ -1116,6 +1169,7 @@ typedef struct RolloutState {
     OptionalPassObservation passObservations[PDK_AI_SEATS];
     PassHistory passHistory[PDK_AI_SEATS];
     int passCount;
+    const StrongAiConfig *config;
 } RolloutState;
 
 static void RemoveRolloutCards(Cards *hand, const Cards *cards)
@@ -1176,6 +1230,7 @@ static void RolloutContext(const RolloutState *state, AiContext *context)
     context->playedCards = state->playedCards;
     PassObservations_Copy(context->passObservations, state->passObservations, PDK_AI_SEATS);
     PassHistories_Copy(context->passHistory, state->passHistory, PDK_AI_SEATS);
+    context->strongConfig = state->config;
 }
 
 static int StrongAdjustment(const AiCandidate *candidate, const AiContext *context);
@@ -1232,6 +1287,24 @@ static AiMoveChoice ChooseRolloutMove(const Cards *hand, const AiContext *contex
     return choice;
 }
 
+/* Which seats play the strong rollout policy (StrongAiConfig.rolloutPolicy). */
+static bool RolloutSeatIsStrong(const RolloutState *state, int strongIndex, int seat)
+{
+    const int human = PlayerIndex(PLAYER_HUMAN);
+
+    if (seat == strongIndex) {
+        return true;
+    }
+    switch (state->config != NULL ? state->config->rolloutPolicy : 0) {
+    case 1:
+        return state->config->teamPlay && strongIndex != human && seat != human;
+    case 2:
+        return true;
+    default:
+        return false;
+    }
+}
+
 /*
  * `state` used to be taken by value and std::moved in; every caller discards its own copy
  * right afterwards, so mutating it in place is the same run of the rollout.
@@ -1246,7 +1319,7 @@ static int RolloutWinner(RolloutState *state, int strongIndex)
         int handSizeBefore;
 
         memset(&choice, 0, sizeof(choice));
-        if (state->currentIndex == strongIndex) {
+        if (RolloutSeatIsStrong(state, strongIndex, state->currentIndex)) {
             RolloutContext(state, &rolloutContext);
             choice = ChooseRolloutMove(hand, &rolloutContext, true);
         } else {
@@ -1333,11 +1406,6 @@ typedef struct RolloutScoreContext {
  *     the same.  Each outcome now also carries the round points `self` makes, weighted
  *     so a few cards matter but never outweigh the win/loss itself.
  */
-enum {
-    PDK_ROLLOUT_TEAM_WIN = 600,
-    PDK_ROLLOUT_POINT_WEIGHT = 150
-};
-
 /* The points `seat` collects when the rollout ends with `winner` out, scored like the
  * real round: the winner takes every loser's remaining cards, a single last card is free,
  * and a loser who never played (still 16 cards) pays 32. */
@@ -1375,9 +1443,53 @@ static int RolloutOutcomeScore(const RolloutState *state, const AiContext *conte
     if (winner == self) {
         score = self == context->roundLeaderIndex ? 3800 : 2600;
     } else if (winner >= 0) {
-        score = self != human && winner != human ? PDK_ROLLOUT_TEAM_WIN : -2300;
+        score = state->config->teamPlay && self != human && winner != human
+            ? state->config->teamWinScore
+            : -2300;
     }
-    return score + PDK_ROLLOUT_POINT_WEIGHT * SeatPoints(state, self, winner);
+    return score + state->config->pointWeight * SeatPoints(state, self, winner);
+}
+
+/* Whether the exact endgame search replaces the rollout for this candidate. */
+static bool SolverEligible(const StrongAiConfig *config, const AiCandidate *candidate,
+                           int unknownCount)
+{
+    return config->endgameSolver &&
+           candidate->remainder.count > 0 &&
+           candidate->remainder.count + unknownCount <= config->solverMaxCards;
+}
+
+/*
+ * Scores a dealt rollout start by solving it exactly instead of playing it out.  The
+ * solver returns the human seat's points under best play by everyone; the AI seats play
+ * as a team, so an AI's score is minus that, the human seat's (autoplay) plus that.
+ * False when the deal is too big for the node budget; the caller then rolls out.
+ */
+static bool SolverOutcomeScore(const RolloutState *state, int self, int *score)
+{
+    const StrongAiConfig *config = state->config;
+    const int human = PlayerIndex(PLAYER_HUMAN);
+    EndgamePosition position;
+    int value;
+
+    memset(&position, 0, sizeof(position));
+    for (int seat = 0; seat < 3; ++seat) {
+        for (int i = 0; i < state->hands[seat].count; ++i) {
+            position.counts[seat][state->hands[seat].items[i].rank]++;
+        }
+        /* Everybody starts with 16 cards, so a full hand has never played. */
+        position.played[seat] = seat == self || state->hands[seat].count < 16;
+    }
+    position.current = state->currentIndex;
+    position.lastMover = state->lastMoveIndex;
+    position.hasLast = state->hasLastPattern;
+    position.last = state->lastPattern;
+    position.passCount = state->passCount;
+    if (!Endgame_Solve(&position, human, config->solverNodes, &value)) {
+        return false;
+    }
+    *score = (self == human ? value : -value) * config->solverScale;
+    return true;
 }
 
 static int ScoreRolloutDistribution(const AiCandidate *candidate,
@@ -1402,6 +1514,7 @@ static int ScoreRolloutDistribution(const AiCandidate *candidate,
     Cards_Append(&state.playedCards, &candidate->cards);
     PassObservations_Copy(state.passObservations, context->passObservations, PDK_AI_SEATS);
     PassHistories_Copy(state.passHistory, context->passHistory, PDK_AI_SEATS);
+    state.config = Cfg(context);
 
     winner = RolloutWinner(&state, self);
     return RolloutOutcomeScore(&state, context, self, winner);
@@ -1564,6 +1677,7 @@ typedef struct FastSampleContext {
     int other;
     int *sampleScores;
     unsigned char *sampleValid;
+    bool solve; /* score each deal with the exact endgame search */
 } FastSampleContext;
 
 /* The C++ `runSample` lambda.  Each task index is unique, so the two array writes below
@@ -1606,7 +1720,12 @@ static void RunFastSample(const FastSampleContext *sampleContext, int sample)
     PassObservations_Copy(state.passObservations, sampleContext->context->passObservations,
                           PDK_AI_SEATS);
     PassHistories_Copy(state.passHistory, sampleContext->context->passHistory, PDK_AI_SEATS);
+    state.config = Cfg(sampleContext->context);
 
+    if (sampleContext->solve &&
+        SolverOutcomeScore(&state, sampleContext->self, &sampleContext->sampleScores[sample])) {
+        return;
+    }
     winner = RolloutWinner(&state, sampleContext->self);
     sampleContext->sampleScores[sample] = RolloutOutcomeScore(
         &state, sampleContext->context, sampleContext->self, winner);
@@ -1666,7 +1785,15 @@ static int FastRolloutBonus(const AiCandidate *candidate, const AiContext *conte
         return 0;
     }
 
-    if (ShouldUseExactRolloutEnumeration(unknown->count, nextCards)) {
+    sampleContext.solve = SolverEligible(Cfg(context), candidate, unknown->count);
+    if (sampleContext.solve) {
+        /* Exact search per deal: a fixed number of sampled deals, never the full
+         * enumeration, keeps the cost bounded. */
+        sampleCount = Cfg(context)->solverSamples;
+        if (sampleCount > PDK_STRONG_SAMPLE_CAP) {
+            sampleCount = PDK_STRONG_SAMPLE_CAP;
+        }
+    } else if (ShouldUseExactRolloutEnumeration(unknown->count, nextCards)) {
         int enumerated = 0;
 
         if (EnumeratedRolloutBonus(candidate, context, unknown, sampleContext.self,
@@ -1744,7 +1871,7 @@ static int FastRolloutBonus(const AiCandidate *candidate, const AiContext *conte
 /* The two AI seats play together against the human (see RolloutOutcomeScore). */
 static bool TeamMode(const AiContext *context)
 {
-    return context->currentPlayerIndex != PlayerIndex(PLAYER_HUMAN);
+    return Cfg(context)->teamPlay && context->currentPlayerIndex != PlayerIndex(PLAYER_HUMAN);
 }
 
 /* The other AI seat, or -1 when this seat is the human's (autoplay). */
@@ -1768,7 +1895,10 @@ static int ThreatCards(const AiContext *context)
 
 static bool ShouldUseRollout(const AiCandidate *candidate, const AiContext *context)
 {
-    return candidate->remainder.count <= 10 || context->minOpponentRemainingCards <= 8;
+    const StrongAiConfig *config = Cfg(context);
+
+    return candidate->remainder.count <= config->leadRolloutRemainder ||
+           context->minOpponentRemainingCards <= config->leadRolloutOpponentCards;
 }
 
 static int StrongPostRolloutAdjustment(const AiCandidate *candidate,
@@ -1790,7 +1920,7 @@ static int StrongPostRolloutAdjustment(const AiCandidate *candidate,
             score -= 900;
         }
     }
-    if (candidate->remainder.count > 0) {
+    if (Cfg(context)->endgameDefense && candidate->remainder.count > 0) {
         /* A hand of one or two cards can only follow a single or a pair (no bomb fits),
          * so a lead with more cards than the threat holds is one it can never answer. */
         if (context->leading && threat <= 2 && candidate->pattern.cardCount > threat) {
@@ -1832,7 +1962,7 @@ static int StrongAdjustment(const AiCandidate *candidate, const AiContext *conte
 {
     int score = 0;
 
-    if (context->leading && candidate->remainder.count > 0) {
+    if (Cfg(context)->endgameDefense && context->leading && candidate->remainder.count > 0) {
         const int threat = ThreatCards(context);
         const int teammate = TeammateIndex(context);
 
@@ -1848,8 +1978,33 @@ static int StrongAdjustment(const AiCandidate *candidate, const AiContext *conte
         }
     }
 
+    if (Cfg(context)->pairRunPenalty > 0 && context->leading &&
+        candidate->pattern.type == PATTERN_PAIR && candidate->remainder.count > 0 &&
+        candidate->pattern.mainRank < RANK_ACE) {
+        AiRankCounts kept;
+        const Rank rank = candidate->pattern.mainRank;
+
+        /* A pair next to another pair could have gone out as a run of pairs. */
+        AiRankCounts_Build(&candidate->remainder, &kept);
+        if ((rank > RANK_THREE && kept.count[rank - 1] >= 2) ||
+            (rank + 1 < RANK_TWO && kept.count[rank + 1] >= 2)) {
+            score -= Cfg(context)->pairRunPenalty;
+        }
+    }
+
+    if (Cfg(context)->springRescueBonus > 0 && context->leading &&
+        candidate->pattern.type == PATTERN_SINGLE && candidate->remainder.count > 0) {
+        const int teammate = TeammateIndex(context);
+
+        if (teammate >= 0 && NextIndex(context->currentPlayerIndex) == teammate &&
+            context->remainingCards[teammate] >= 16) {
+            score += Cfg(context)->springRescueBonus -
+                (RankValue(candidate->pattern.mainRank) - RankValue(RANK_THREE)) * 80;
+        }
+    }
+
     /* Splitting a bomb throws away a sure +20/-10/-10 and the control it gives. */
-    if (candidate->remainder.count > 0 &&
+    if (Cfg(context)->bombSplitPenalty && candidate->remainder.count > 0 &&
         candidate->pattern.type != PATTERN_BOMB) {
         AiRankCounts played;
         AiRankCounts kept;
@@ -2106,6 +2261,7 @@ static const Cards *UnknownCache_Get(UnknownCache *cache, const Cards *hand,
 
 static AiMoveChoice ChooseStrongMove(const Cards *hand, const AiContext *context)
 {
+    const StrongAiConfig *config = Cfg(context);
     AiCandidateList candidates;
     AiMoveChoice choice;
     UnknownCache unknown;
@@ -2174,8 +2330,8 @@ static AiMoveChoice ChooseStrongMove(const Cards *hand, const AiContext *context
     SortCandidates(candidates.items, planLimit, StrongCandidateLess);
 
     useStrongLeadPlanner = context->leading && context->ownRemainingCards >= 9 &&
-        ThreatCards(context) > 2;
-    rolloutLimit = context->leading ? 8 : 4;
+        (!config->endgameDefense || ThreatCards(context) > 2);
+    rolloutLimit = context->leading ? config->leadRolloutLimit : config->followRolloutLimit;
     if (rolloutLimit > candidates.count) {
         rolloutLimit = candidates.count;
     }
@@ -2203,8 +2359,9 @@ static AiMoveChoice ChooseStrongMove(const Cards *hand, const AiContext *context
             continue;
         }
         useFollowRollout = !context->leading &&
-            context->currentTrickPassCount > 0 &&
-            candidate->remainder.count <= 8;
+            ((context->currentTrickPassCount > 0 &&
+              candidate->remainder.count <= config->followRolloutRemainder) ||
+             SolverEligible(config, candidate, UnknownCache_Get(&unknown, hand, context)->count));
         plannerCandidatePlan = useStrongLeadPlanner && candidate->remainder.count <= 12
             ? MinimumLeadCount(&candidate->remainder)
             : 99;
@@ -2214,7 +2371,7 @@ static AiMoveChoice ChooseStrongMove(const Cards *hand, const AiContext *context
             (context->leading ? ShouldUseRollout(candidate, context) : useFollowRollout)) {
             const int rolloutBonus = FastRolloutBonus(
                 candidate, context, UnknownCache_Get(&unknown, hand, context),
-                useStrongLeadPlanner ? 9 : 5);
+                useStrongLeadPlanner ? config->leadSamples : config->otherSamples);
 
             candidate->score = rolloutBonus * 24 + candidate->score / 120;
             replacedByRollout = true;
@@ -2290,4 +2447,13 @@ cleanup:
 AiMoveChoice StrongAiStrategy_ChooseMove(const Cards *hand, const AiContext *context)
 {
     return ChooseStrongMove(hand, context);
+}
+
+AiMoveChoice StrongAiStrategy_ChooseMoveWithConfig(const Cards *hand, const AiContext *context,
+                                                   const StrongAiConfig *config)
+{
+    AiContext configured = *context;
+
+    configured.strongConfig = config;
+    return ChooseStrongMove(hand, &configured);
 }

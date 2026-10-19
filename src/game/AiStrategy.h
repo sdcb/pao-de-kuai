@@ -134,6 +134,51 @@ static inline AiMoveChoice AiMoveChoice_MakePlay(const Cards *cards, const HandP
     return choice;
 }
 
+/*
+ * Every tunable of the strong strategy in one place.  The game always plays with
+ * StrongAiConfig_Default(); the tests build other configurations to compare a candidate
+ * against a frozen earlier version (StrongAiConfig_V22) in the same process.
+ */
+typedef struct StrongAiConfig {
+    /* Rollout outcome scoring (see RolloutOutcomeScore). */
+    bool teamPlay;           /* the two AI seats play together against the human */
+    int teamWinScore;        /* score of the teammate going out */
+    int pointWeight;         /* weight of the round points in a rollout outcome */
+    /* Heuristics. */
+    bool endgameDefense;     /* leads a 1-2 card threat cannot answer, feeding a teammate */
+    bool bombSplitPenalty;
+    /* Search budget. */
+    int leadSamples;         /* rollout samples when the lead planner is active */
+    int otherSamples;        /* rollout samples otherwise */
+    int leadRolloutLimit;    /* candidates that get a rollout when leading */
+    int followRolloutLimit;  /* ... and when following */
+    int leadRolloutRemainder;     /* lead rollouts once our remainder is at most this */
+    int leadRolloutOpponentCards; /* ... or an opponent is down to at most this */
+    int followRolloutRemainder;   /* follow rollouts once our remainder is at most this */
+    /* Who plays the strong rollout policy inside a rollout: 0 only the deciding seat
+     * (others play basic), 1 also its teammate, 2 every seat. */
+    int rolloutPolicy;
+    /* Exact endgame search (EndgameSolver) in place of the rollout once every hand is
+     * small: used when the three hands hold at most solverMaxCards cards after the
+     * candidate, with solverSamples deals of the unknown cards, solverNodes nodes per
+     * deal (a deal that needs more falls back to the rollout), and the human seat's
+     * points scaled by solverScale into rollout-score units. */
+    bool endgameSolver;
+    int solverMaxCards;
+    int solverSamples;
+    int solverNodes;
+    int solverScale;
+    /* Leading a pair that could have joined a run of pairs costs this much (0 = off). */
+    int pairRunPenalty;
+    /* Leading a low single to a next-seat teammate who has not played yet, so it can
+     * escape the 32-point spring, earns this much (0 = off). */
+    int springRescueBonus;
+} StrongAiConfig;
+
+StrongAiConfig StrongAiConfig_Default(void);
+/* StrongAI 2.2 exactly, kept as the reference opponent for tuning. */
+StrongAiConfig StrongAiConfig_V22(void);
+
 typedef struct AiContext {
     bool leading;
     HandPattern previous;
@@ -149,6 +194,9 @@ typedef struct AiContext {
     Cards playedCards;
     OptionalPassObservation passObservations[PDK_AI_SEATS];
     PassHistory passHistory[PDK_AI_SEATS];
+    /* Strong strategy tuning; NULL means StrongAiConfig_Default().  Only the strong
+     * strategy reads it. */
+    const StrongAiConfig *strongConfig;
 
 #ifdef __cplusplus
     /* ---- TEMPORARY C++ shim: delete with src/game/CppCompat.h ---- */
@@ -199,6 +247,9 @@ AiStrategy StrongAiStrategy_Instance(void);
 AiMoveChoice BasicAiStrategy_ChooseMove(const Cards *hand, const AiContext *context);
 StrategyMetadata BasicAiStrategy_Metadata(void);
 AiMoveChoice StrongAiStrategy_ChooseMove(const Cards *hand, const AiContext *context);
+/* Same, with an explicit configuration instead of context->strongConfig. */
+AiMoveChoice StrongAiStrategy_ChooseMoveWithConfig(const Cards *hand, const AiContext *context,
+                                                   const StrongAiConfig *config);
 StrategyMetadata StrongAiStrategy_Metadata(void);
 
 #ifdef __cplusplus

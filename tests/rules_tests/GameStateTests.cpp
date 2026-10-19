@@ -333,13 +333,16 @@ SimRoundResult RunSimRound(
     const std::array<game::AiStrategyClass*, 3>& strategies,
     unsigned seed,
     std::optional<rules::PlayerId> requestedLeader,
-    std::vector<std::string>* trace = nullptr) {
+    std::vector<std::string>* trace = nullptr,
+    int rotation = 0) {
     rules::Cards deck = rules::CreatePaoDeKuaiDeck();
     rules::Shuffle(deck, seed);
 
+    // `rotation` hands seat i the cards seat (i + rotation) % 3 would get, so playing a
+    // deal in all three rotations gives every seat every hand (duplicate format).
     std::array<rules::Cards, 3> hands;
     for (std::size_t i = 0; i < deck.size(); ++i) {
-        hands[i % 3].push_back(deck[i]);
+        hands[(i % 3 + 3 - static_cast<std::size_t>(rotation % 3)) % 3].push_back(deck[i]);
     }
 
     std::vector<rules::Cards> leaderHands{hands[0], hands[1], hands[2]};
@@ -496,6 +499,123 @@ private:
     std::unique_ptr<game::AiStrategyClass> inner_;
 };
 
+// A strong AI with an explicit configuration, so a candidate and the frozen 2.2
+// reference can sit at the same table.
+class ConfiguredStrongAi final : public game::AiStrategyClass {
+public:
+    explicit ConfiguredStrongAi(const ::StrongAiConfig& config) : config_(config) {}
+
+    game::AiMoveChoice ChooseMove(const rules::Cards& hand, const game::AiContext& context) override {
+        return ::StrongAiStrategy_ChooseMoveWithConfig(&hand, &context, &config_);
+    }
+
+    game::StrategyMetadata Metadata() const override { return ::StrongStrategyMetadata(); }
+
+private:
+    ::StrongAiConfig config_;
+};
+
+// The production defaults with "key=value,key=value" overrides from PDK_AI_CANDIDATE,
+// so a sweep can try settings without rebuilding.
+::StrongAiConfig CandidateConfig() {
+    ::StrongAiConfig config = ::StrongAiConfig_Default();
+    const char* value = std::getenv("PDK_AI_CANDIDATE");
+    if (value == nullptr) {
+        return config;
+    }
+    const std::string text(value);
+    std::size_t start = 0;
+    while (start < text.size()) {
+        std::size_t end = text.find(',', start);
+        if (end == std::string::npos) {
+            end = text.size();
+        }
+        const std::string item = text.substr(start, end - start);
+        const std::size_t eq = item.find('=');
+        if (eq != std::string::npos) {
+            const std::string key = item.substr(0, eq);
+            const int number = std::atoi(item.c_str() + eq + 1);
+            if (key == "teamPlay") config.teamPlay = number != 0;
+            else if (key == "teamWinScore") config.teamWinScore = number;
+            else if (key == "pointWeight") config.pointWeight = number;
+            else if (key == "endgameDefense") config.endgameDefense = number != 0;
+            else if (key == "bombSplitPenalty") config.bombSplitPenalty = number != 0;
+            else if (key == "leadSamples") config.leadSamples = number;
+            else if (key == "otherSamples") config.otherSamples = number;
+            else if (key == "leadRolloutLimit") config.leadRolloutLimit = number;
+            else if (key == "followRolloutLimit") config.followRolloutLimit = number;
+            else if (key == "leadRolloutRemainder") config.leadRolloutRemainder = number;
+            else if (key == "leadRolloutOpponentCards") config.leadRolloutOpponentCards = number;
+            else if (key == "followRolloutRemainder") config.followRolloutRemainder = number;
+            else if (key == "rolloutPolicy") config.rolloutPolicy = number;
+            else if (key == "endgameSolver") config.endgameSolver = number != 0;
+            else if (key == "solverMaxCards") config.solverMaxCards = number;
+            else if (key == "solverSamples") config.solverSamples = number;
+            else if (key == "solverNodes") config.solverNodes = number;
+            else if (key == "solverScale") config.solverScale = number;
+            else if (key == "pairRunPenalty") config.pairRunPenalty = number;
+            else if (key == "springRescueBonus") config.springRescueBonus = number;
+            else FAIL("unknown PDK_AI_CANDIDATE key " << key);
+        }
+        start = end + 1;
+    }
+    return config;
+}
+
+struct LineupResult {
+    std::array<long long, 3> scores{0, 0, 0};
+    std::array<int, 3> wins{0, 0, 0};
+    int rounds{0};
+};
+
+// Plays `deals` independent deals, each in all three seat rotations, on all cores.
+LineupResult RunLineup(const std::array<game::AiStrategyClass*, 3>& strategies, unsigned seedBase, int deals) {
+    const int total = deals * 3;
+    std::vector<SimRoundResult> results(static_cast<std::size_t>(total));
+    std::atomic<int> next{0};
+    std::mutex errorMutex;
+    std::exception_ptr error;
+    auto worker = [&]() {
+        try {
+            for (int i = next++; i < total; i = next++) {
+                results[static_cast<std::size_t>(i)] = RunSimRound(
+                    strategies, seedBase + static_cast<unsigned>(i / 3), std::nullopt, nullptr, i % 3);
+            }
+        } catch (...) {
+            std::lock_guard<std::mutex> lock(errorMutex);
+            if (!error) {
+                error = std::current_exception();
+            }
+            next = total;
+        }
+    };
+    std::vector<std::thread> threads;
+    for (unsigned i = 0; i < std::max(1u, std::thread::hardware_concurrency()); ++i) {
+        threads.emplace_back(worker);
+    }
+    for (std::thread& thread : threads) {
+        thread.join();
+    }
+    if (error) {
+        std::rethrow_exception(error);
+    }
+    LineupResult lineup;
+    for (const SimRoundResult& result : results) {
+        for (std::size_t i = 0; i < 3; ++i) {
+            lineup.scores[i] += result.scores[i];
+        }
+        ++lineup.wins[static_cast<std::size_t>(rules::PlayerIndex(result.winner))];
+    }
+    lineup.rounds = total;
+    return lineup;
+}
+
+void PrintLineup(const char* name, const LineupResult& lineup) {
+    std::cout << "lineup " << name << " rounds=" << lineup.rounds
+        << " scores P=" << lineup.scores[0] << " A1=" << lineup.scores[1] << " A2=" << lineup.scores[2]
+        << " wins P=" << lineup.wins[0] << " A1=" << lineup.wins[1] << " A2=" << lineup.wins[2] << "\n";
+}
+
 void PrintTiming(const char* name, AiTimingStats& stats) {
     std::cout << name
         << " calls=" << stats.calls
@@ -509,9 +629,10 @@ void PrintTiming(const char* name, AiTimingStats& stats) {
 void RunRotatedStrongTimingDiagnostic(const char* title) {
     const int roundCount = StrongTimingRoundCount();
     const int roundsPerRotation = std::max(1, roundCount / 3);
-    TimedAiStrategy timed0(std::make_unique<game::StrongAiStrategy>());
-    TimedAiStrategy timed1(std::make_unique<game::StrongAiStrategy>());
-    TimedAiStrategy timed2(std::make_unique<game::StrongAiStrategy>());
+    const ::StrongAiConfig config = CandidateConfig();
+    TimedAiStrategy timed0(std::make_unique<ConfiguredStrongAi>(config));
+    TimedAiStrategy timed1(std::make_unique<ConfiguredStrongAi>(config));
+    TimedAiStrategy timed2(std::make_unique<ConfiguredStrongAi>(config));
     std::array<TimedAiStrategy*, 3> timed{&timed0, &timed1, &timed2};
     SimSummary summary;
     std::array<int, 3> strategyWins{0, 0, 0};
@@ -854,6 +975,40 @@ TEST_CASE("disabled strong ai beats basic over 1000 autoplay rounds" * doctest::
     if (!ai2IsStrong) {
         CHECK(wins[rules::PlayerIndex(PLAYER_AI1)] >= minStrongWins);
         CHECK(summary.scores[static_cast<std::size_t>(rules::PlayerIndex(PLAYER_AI1))] > 0);
+    }
+}
+
+bool RunAiDuel() {
+    const char* value = std::getenv("PDK_RUN_AI_DUEL");
+    return value != nullptr && value[0] != '\0' && value[0] != '0';
+}
+
+// Tuning yardstick.  "expert": the human seat is played by the frozen StrongAI 2.2 (a
+// strong player who treats both AIs as opponents) against two candidate AIs; the
+// candidate is better the lower the expert's points.  "basic": a basic player against
+// two candidates, as a regression guard.  PDK_AI_DUEL_DEALS deals (default 1000), each
+// in three seat rotations, from PDK_AI_FAIRNESS_SEED.
+TEST_CASE("disabled strong ai duel against a frozen 2.2 expert" * doctest::skip(!RunAiDuel())) {
+    const char* dealsText = std::getenv("PDK_AI_DUEL_DEALS");
+    const int deals = dealsText != nullptr && std::atoi(dealsText) > 0 ? std::atoi(dealsText) : 1000;
+    const unsigned seed = FairnessSeedBase();
+    const char* lineupText = std::getenv("PDK_AI_DUEL_LINEUP");
+    const std::string lineup = lineupText != nullptr ? lineupText : "expert,basic";
+
+    ConfiguredStrongAi expert(::StrongAiConfig_V22());
+    ConfiguredStrongAi candidate1(CandidateConfig());
+    ConfiguredStrongAi candidate2(CandidateConfig());
+    game::BasicAiStrategy basic;
+
+    if (lineup.find("expert") != std::string::npos) {
+        const LineupResult result = RunLineup({&expert, &candidate1, &candidate2}, seed, deals);
+        PrintLineup("expert", result);
+        CHECK(result.scores[0] + result.scores[1] + result.scores[2] == 0);
+    }
+    if (lineup.find("basic") != std::string::npos) {
+        const LineupResult result = RunLineup({&basic, &candidate1, &candidate2}, seed, deals);
+        PrintLineup("basic", result);
+        CHECK(result.scores[0] + result.scores[1] + result.scores[2] == 0);
     }
 }
 

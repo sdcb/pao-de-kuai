@@ -47,6 +47,10 @@ PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool a
  * the same message IdentifyPattern would copy (a string literal). */
 bool IdentifyPatternOnly(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal,
                          HandPattern *out, const char **reason);
+/* The same identification from a rank-count vector (count[rank] for rank 3..15); suits
+ * never affect a pattern.  Used by searches that represent hands as counts. */
+bool IdentifyPatternCounts(const uint8_t count[RANK_TWO + 1], int handSizeBeforePlay,
+                           bool allowShortFinal, HandPattern *out);
 
 /* Returns a string literal. */
 const char *PatternName(PatternType type);

@@ -173,6 +173,7 @@ set(PDK_CORE_SOURCES
     src/rules/Scoring.c
     src/game/AiStrategyInternal.c
     src/game/BasicAiStrategy.c
+    src/game/EndgameSolver.c
     src/game/GameState.c
     src/game/ExternalAiController.c
     src/game/LocalAiController.c
@@ -318,6 +319,7 @@ if(PDK_BUILD_TESTS)
         tests/rules_tests/ScoringTests.cpp
         tests/rules_tests/GameStateTests.cpp
         tests/rules_tests/AiStrategyTests.cpp
+        tests/rules_tests/EndgameSolverTests.cpp
         tests/rules_tests/DragSelectionTests.cpp
         tests/rules_tests/StatsTests.cpp
     )

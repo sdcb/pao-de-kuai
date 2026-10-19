@@ -140,37 +140,48 @@ static bool TryIdentifyPlane(const RankCounts *counts, int total,
     return bestScore != PDK_SCORE_MIN;
 }
 
-static bool Identify(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal,
-                     HandPattern *out, const char **reason)
+/* The rank of a selection that holds a single rank (distinct == 1). */
+static Rank OnlyRank(const RankCounts *counts)
 {
-    RankCounts counts;
-    int total;
+    for (int rank = RANK_THREE; rank <= RANK_TWO; ++rank) {
+        if (counts->count[rank] > 0) {
+            return (Rank)rank;
+        }
+    }
+    return RANK_THREE;
+}
 
-    if (cards->count == 0) {
+/*
+ * The rules work on rank counts only (suits never matter), so this is the whole of
+ * pattern identification; Identify and IdentifyPatternCounts are thin front ends.
+ */
+static bool IdentifyCounts(const RankCounts *countsIn, int total, int handSizeBeforePlay,
+                           bool allowShortFinal, HandPattern *out, const char **reason)
+{
+    const RankCounts counts = *countsIn;
+
+    if (total == 0) {
         return Invalid("没有选择牌", reason);
     }
 
-    CountRanks(cards, &counts);
-    total = cards->count;
-
     if (total == 1) {
-        return Valid(PATTERN_SINGLE, cards->items[0].rank, total, false, 0, out);
+        return Valid(PATTERN_SINGLE, OnlyRank(&counts), total, false, 0, out);
     }
 
     if (total == 2 && counts.distinct == 1) {
-        return Valid(PATTERN_PAIR, cards->items[0].rank, total, false, 0, out);
+        return Valid(PATTERN_PAIR, OnlyRank(&counts), total, false, 0, out);
     }
 
     if (total == 3 && counts.distinct == 1) {
         if (allowShortFinal && handSizeBeforePlay == 3) {
-            return Valid(PATTERN_TRIPLE_WITH_ONE, cards->items[0].rank, total, true, 0, out);
+            return Valid(PATTERN_TRIPLE_WITH_ONE, OnlyRank(&counts), total, true, 0, out);
         }
         return Invalid("三张主体只能三带二，最后一手牌不足时除外", reason);
     }
 
     if (total == 4) {
         if (counts.distinct == 1) {
-            const Rank rank = cards->items[0].rank;
+            const Rank rank = OnlyRank(&counts);
             if (rank == RANK_ACE || rank == RANK_TWO) {
                 return Invalid("没有 A 或 2 炸弹", reason);
             }
@@ -199,7 +210,7 @@ static bool Identify(const Cards *cards, int handSizeBeforePlay, bool allowShort
         return true;
     }
 
-    if (total >= 5 && counts.distinct == cards->count) {
+    if (total >= 5 && counts.distinct == total) {
         Rank ranks[RANK_TWO + 1];
         int rankCount = 0;
         for (int rank = RANK_THREE; rank <= RANK_TWO; ++rank) {
@@ -232,6 +243,38 @@ static bool Identify(const Cards *cards, int handSizeBeforePlay, bool allowShort
     }
 
     return Invalid("牌型不符合当前固定跑得快规则", reason);
+}
+
+static bool Identify(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal,
+                     HandPattern *out, const char **reason)
+{
+    RankCounts counts;
+
+    CountRanks(cards, &counts);
+    return IdentifyCounts(&counts, cards->count, handSizeBeforePlay, allowShortFinal, out, reason);
+}
+
+bool IdentifyPatternCounts(const uint8_t count[RANK_TWO + 1], int handSizeBeforePlay,
+                           bool allowShortFinal, HandPattern *out)
+{
+    RankCounts counts;
+    const char *reason = NULL;
+    int total = 0;
+
+    memset(&counts, 0, sizeof(counts));
+    for (int rank = RANK_THREE; rank <= RANK_TWO; ++rank) {
+        counts.count[rank] = count[rank];
+        total += count[rank];
+        if (count[rank] > 0) {
+            ++counts.distinct;
+        }
+    }
+    if (!IdentifyCounts(&counts, total, handSizeBeforePlay, allowShortFinal, out, &reason)) {
+        memset(out, 0, sizeof(*out));
+        out->type = PATTERN_INVALID;
+        return false;
+    }
+    return true;
 }
 
 PatternResult IdentifyPattern(const Cards *cards, int handSizeBeforePlay, bool allowShortFinal)
