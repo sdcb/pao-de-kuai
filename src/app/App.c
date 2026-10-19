@@ -466,7 +466,6 @@ void App_BuildWelcomeText(App *app, char *out, int cap)
     StatStore store;
     StatSummary today;
     char date[PDK_DATE_KEY_CAP];
-    char number[24];
 
     if (cap <= 0) {
         return;
@@ -488,8 +487,7 @@ void App_BuildWelcomeText(App *app, char *out, int cap)
         if (today.scores[0] > 0) {
             App_AppendText(out, cap, "+");
         }
-        App_AppendNumber(number, (int)sizeof(number), today.scores[0]);
-        App_AppendText(out, cap, number);
+        App_AppendNumber(out, cap, today.scores[0]);
         App_AppendText(out, cap, " \xE5\x88\x86");
     }
 }
